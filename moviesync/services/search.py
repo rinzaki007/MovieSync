@@ -12,6 +12,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from .filename_rules import parse_tv_episode
 from .resource_sources import ResourceSourceManager
 from .storage_targets import StorageTargetManager
 from .transfer_outcome import is_uncertain_transfer_message
@@ -52,6 +53,56 @@ def _detect_resolution(name: str) -> str:
         if re.search(pattern, text):
             return label
     return "未知"
+
+
+def _episode_coverage(files: list[dict[str, Any]], source_id: str, resource_sources) -> str:
+    """Summarize only episode numbers that can be parsed; never infer missing episodes."""
+    by_season: dict[int, set[int]] = {}
+    unseasoned: set[int] = set()
+    parser = getattr(resource_sources, "parse_tv_episode", None)
+
+    for item in files:
+        name = str(item.get("file_name") or "")
+        try:
+            season, episode = parser(source_id, name) if callable(parser) else parse_tv_episode(name)
+        except Exception:
+            season, episode = parse_tv_episode(name)
+        if episode is None:
+            continue
+        if season is None:
+            unseasoned.add(episode)
+        else:
+            by_season.setdefault(int(season), set()).add(int(episode))
+
+    def format_numbers(numbers: set[int]) -> str:
+        ordered = sorted(numbers)
+        if not ordered:
+            return ""
+        parts: list[str] = []
+        start = previous = ordered[0]
+        for number in ordered[1:]:
+            if number == previous + 1:
+                previous = number
+                continue
+            parts.append(f"E{start:02d}" if start == previous else f"E{start:02d}-E{previous:02d}")
+            start = previous = number
+        parts.append(f"E{start:02d}" if start == previous else f"E{start:02d}-E{previous:02d}")
+        return "、".join(parts)
+
+    unique_count = len(unseasoned) + sum(len(numbers) for numbers in by_season.values())
+    if not unique_count:
+        return "集数暂未识别"
+
+    summary = [
+        f"S{season:02d} {format_numbers(numbers)}"
+        for season, numbers in sorted(by_season.items())
+    ]
+    if unseasoned:
+        summary.append(f"未标季 {format_numbers(unseasoned)}")
+    if len(summary) > 3:
+        extra_seasons = max(0, len(summary) - 3)
+        summary = summary[:3] + [f"另有 {extra_seasons} 组"]
+    return " · ".join(summary) + f"（共 {unique_count} 集）"
 
 
 class SearchService:
@@ -332,6 +383,11 @@ class SearchService:
                     for video in videos:
                         resolution = video["resolution"]
                         resolutions[resolution] = resolutions.get(resolution, 0) + 1
+                    episode_coverage = _episode_coverage(
+                        videos,
+                        str(source.get("source_id") or ""),
+                        self.resource_sources,
+                    )
         
                     total_size = sum(int(v.get("size") or 0) for v in videos)
                     seen_resource_keys.add(resource_key)
@@ -349,6 +405,7 @@ class SearchService:
                         "url": str(source.get("url") or ""),
                         "files": videos,
                         "file_count": len(videos),
+                        "episode_coverage": episode_coverage,
                         "total_size": total_size,
                         "total_size_text": _format_size(total_size),
                         "resolutions": resolutions,
