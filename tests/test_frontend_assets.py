@@ -40,3 +40,19 @@ def test_fontawesome_is_served_only_from_local_assets():
     assert (LOCAL_FONT_AWESOME / "webfonts" / "fa-solid-900.woff2").is_file()
     assert (LOCAL_FONT_AWESOME / "webfonts" / "fa-regular-400.woff2").is_file()
     assert (LOCAL_FONT_AWESOME / "webfonts" / "fa-brands-400.woff2").is_file()
+
+
+def test_homepage_does_not_pin_a_specific_storage_provider():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    homepage = (root / "templates" / "index.html").read_text(encoding="utf-8")
+    task_center = (root / "static" / "js" / "task-center.js").read_text(encoding="utf-8")
+
+    assert "pan.quark.cn" not in homepage
+    assert "storage.list_destination_files" in task_center
+    assert "item.id === task.targetId" in task_center
+    assert "转存主目录" in task_center
+    assert "maxDepth = 4" in task_center
+    assert "maxItems = 400" in task_center
+    assert "task.targetId === 'quark'" not in task_center
