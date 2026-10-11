@@ -206,10 +206,10 @@ def test_subscription_monitors_selected_channel_shares(tmp_path):
 
     ok, message = manager.check_subscription_now(sub["id"])
     assert ok is True
-    assert "成功追更 2 项" in message
-    assert storage.transfers == [("share1", ["ep1"]), ("share2", ["ep2"])]
+    assert "成功追更 1 项" in message
+    assert storage.transfers == [("share2", ["ep2"])]
 
-    storage.shares["share3"] = [
+    storage.shares["share3"] =
         {"fid": "ep3", "file_name": "Show.S01E03.mkv"},
     ]
     manager.resource_sources.shares.append(
@@ -1717,6 +1717,6 @@ def test_channel_subscription_resolves_multiple_shares_concurrently(tmp_path):
     ok, message = manager.check_subscription_now(sub["id"])
 
     assert ok is True
-    assert "成功追更 1 项" in message
-    assert storage.transfers == [("share2", ["ep2"])]
+    assert "成功追更 2 项" in message
+    assert storage.transfers == [("share1", ["ep1"]), ("share2", ["ep2"])]
 
