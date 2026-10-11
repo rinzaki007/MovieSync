@@ -9,6 +9,7 @@ import hashlib
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from .resource_sources import ResourceSourceManager
@@ -207,80 +208,120 @@ class SearchService:
         candidates: list[dict] = []
         seen_resource_keys: set[tuple[str, str]] = set()
 
-        for source in discovered:
-            resource_id = str(
-                source.get("resource_id") or source.get("share_id") or source.get("pwd_id") or ""
-            ).strip()
-            resource_type = str(source.get("resource_type") or "").strip().lower()
-            resource_key = (resource_type, resource_id)
-            if not resource_id or resource_key in seen_resource_keys:
-                continue
-            resource = {
-                **source,
-                "resource_id": resource_id,
-                **({"storage_target_id": selected_target_id} if selected_target_id else {}),
-            }
-            if source.get("pwd_id"):
-                resource["pwd_id"] = str(source.get("pwd_id") or "").strip()
-            files, _stoken, err, storage_target_id = self._get_resource_files(resource)
-            if err or not files:
-                self.logger.debug(
-                    "资源源 %s 命中 %s 但解析失败: %s",
-                    source.get("source_name") or source.get("source_id"),
-                    resource_id,
-                    err,
-                )
-                continue
+        # 分享解析涉及网盘网络请求，按小批次并发执行。批次内仍按原始顺序
+        # 消费结果，保证候选排序稳定，并在达到上限后立即停止后续请求。
+        batch_size = 10
+        with ThreadPoolExecutor(max_workers=batch_size) as executor:
+            for batch_start in range(0, len(discovered), batch_size):
+                batch = discovered[batch_start : batch_start + batch_size]
 
-            videos = [
-                {
-                    "fid": f.get("fid"),
-                    "file_name": f.get("file_name", ""),
-                    "size": f.get("size", 0),
-                    "size_text": _format_size(f.get("size", 0)),
-                    "resolution": _detect_resolution(f.get("file_name", "")),
+                def resolve_source(source):
+                    resource_id = str(
+                        source.get("resource_id") or source.get("share_id") or source.get("pwd_id") or ""
+                    ).strip()
+                    if not resource_id:
+                        return None
+                    resource = {
+                        **source,
+                        "resource_id": resource_id,
+                        **({"storage_target_id": selected_target_id} if selected_target_id else {}),
+                    }
+                    if source.get("pwd_id"):
+                        resource["pwd_id"] = str(source.get("pwd_id") or "").strip()
+                    try:
+                        return self._get_resource_files(resource)
+                    except Exception as exc:
+                        self.logger.warning(
+                            "资源源 %s 分享解析失败，跳过此候选: %s",
+                            source.get("source_name") or source.get("source_id") or "未知来源",
+                            exc,
+                        )
+                        return ([], None, "分享解析失败", selected_target_id)
+
+                resolved_batch = list(executor.map(resolve_source, batch))
+                resolved_by_source = {
+                    id(source): resolved
+                    for source, resolved in zip(batch, resolved_batch, strict=True)
+                    if resolved is not None
                 }
-                for f in files
-                if f.get("fid")
-                and str(f.get("file_name", "")).lower().endswith(VIDEO_EXTENSIONS)
-            ][:MAX_VIDEO_FILES_PER_CANDIDATE]
 
-            if not videos:
-                continue
-
-            resolutions = {}
-            for video in videos:
-                resolution = video["resolution"]
-                resolutions[resolution] = resolutions.get(resolution, 0) + 1
-
-            total_size = sum(int(v.get("size") or 0) for v in videos)
-            seen_resource_keys.add(resource_key)
-            candidates.append({
-                "source_id": source.get("source_id", "unknown"),
-                "source_name": source.get("source_name", "未知来源"),
-                "cover": str(movie.get("cover", "") if isinstance(movie, dict) else "").strip()[:1000],
-                "storage_target_id": storage_target_id,
-                "resource_type": resource_type,
-                "resource_id": resource_id,
-                "channel": source.get("channel", ""),
-                "channel_id": source.get("channel_id", ""),
-                **({"pwd_id": str(source.get("pwd_id") or "").strip()} if source.get("pwd_id") else {}),
-                "password": str(source.get("password") or source.get("passcode") or ""),
-                "url": str(source.get("url") or ""),
-                "files": videos,
-                "file_count": len(videos),
-                "total_size": total_size,
-                "total_size_text": _format_size(total_size),
-                "resolutions": resolutions,
-                "summary": (
-                    f"来源: [{source.get('source_name', '未知来源')}] | "
-                    f"频道: [{source.get('channel', '')}] | "
-                    f"{len(videos)} 个视频 | {_format_size(total_size)}"
-                ),
-            })
-            if len(candidates) >= MAX_CANDIDATES_PER_MOVIE:
-                break
-
+                for source in batch:
+                    resource_id = str(
+                        source.get("resource_id") or source.get("share_id") or source.get("pwd_id") or ""
+                    ).strip()
+                    resource_type = str(source.get("resource_type") or "").strip().lower()
+                    resource_key = (resource_type, resource_id)
+                    if not resource_id or resource_key in seen_resource_keys:
+                        continue
+                    resource = {
+                        **source,
+                        "resource_id": resource_id,
+                        **({"storage_target_id": selected_target_id} if selected_target_id else {}),
+                    }
+                    if source.get("pwd_id"):
+                        resource["pwd_id"] = str(source.get("pwd_id") or "").strip()
+                    resolved = resolved_by_source.get(id(source))
+                    if resolved is None:
+                        files, _stoken, err, storage_target_id = [], None, "资源标识无效", selected_target_id
+                    else:
+                        files, _stoken, err, storage_target_id = resolved
+                    if err or not files:
+                        self.logger.debug(
+                            "资源源 %s 命中 %s 但解析失败: %s",
+                            source.get("source_name") or source.get("source_id"),
+                            resource_id,
+                            err,
+                        )
+                        continue
+        
+                    videos = [
+                        {
+                            "fid": f.get("fid"),
+                            "file_name": f.get("file_name", ""),
+                            "size": f.get("size", 0),
+                            "size_text": _format_size(f.get("size", 0)),
+                            "resolution": _detect_resolution(f.get("file_name", "")),
+                        }
+                        for f in files
+                        if f.get("fid")
+                        and str(f.get("file_name", "")).lower().endswith(VIDEO_EXTENSIONS)
+                    ][:MAX_VIDEO_FILES_PER_CANDIDATE]
+        
+                    if not videos:
+                        continue
+        
+                    resolutions = {}
+                    for video in videos:
+                        resolution = video["resolution"]
+                        resolutions[resolution] = resolutions.get(resolution, 0) + 1
+        
+                    total_size = sum(int(v.get("size") or 0) for v in videos)
+                    seen_resource_keys.add(resource_key)
+                    candidates.append({
+                        "source_id": source.get("source_id", "unknown"),
+                        "source_name": source.get("source_name", "未知来源"),
+                        "cover": str(movie.get("cover", "") if isinstance(movie, dict) else "").strip()[:1000],
+                        "storage_target_id": storage_target_id,
+                        "resource_type": resource_type,
+                        "resource_id": resource_id,
+                        "channel": source.get("channel", ""),
+                        "channel_id": source.get("channel_id", ""),
+                        **({"pwd_id": str(source.get("pwd_id") or "").strip()} if source.get("pwd_id") else {}),
+                        "password": str(source.get("password") or source.get("passcode") or ""),
+                        "url": str(source.get("url") or ""),
+                        "files": videos,
+                        "file_count": len(videos),
+                        "total_size": total_size,
+                        "total_size_text": _format_size(total_size),
+                        "resolutions": resolutions,
+                        "summary": (
+                            f"来源: [{source.get('source_name', '未知来源')}] | "
+                            f"频道: [{source.get('channel', '')}] | "
+                            f"{len(videos)} 个视频 | {_format_size(total_size)}"
+                        ),
+                    })
+                if len(candidates) >= MAX_CANDIDATES_PER_MOVIE:
+                    break
         self.logger.info("《%s》检索完成，有效候选=%s", title, len(candidates))
         return candidates
 
