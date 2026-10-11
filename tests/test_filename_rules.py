@@ -69,3 +69,22 @@ def test_legacy_nested_unbounded_magic_regex_is_skipped_at_runtime():
         {"pattern": r"(.+)+$", "replace": r"\\1"},
     ) == (None, None)
 
+
+
+
+def test_episode_parser_supports_season_episode_separator_variants():
+    assert parse_tv_episode("Show.S02.E07.mkv") == (2, 7)
+    assert parse_tv_episode("Show.S02_EP07.mkv") == (2, 7)
+    assert parse_tv_episode("Show.S 02 E 07.mkv") == (2, 7)
+    assert parse_tv_episode("Show.S02EP007.mkv") == (2, 7)
+
+
+def test_episode_parser_supports_chinese_season_and_episode_names():
+    assert parse_tv_episode("某某剧 第2季第7集.mkv") == (2, 7)
+    assert parse_tv_episode("某某剧 第 12 季 第 103 话.mp4") == (12, 103)
+
+
+def test_episode_parser_does_not_mistake_year_or_resolution_for_episode():
+    assert parse_tv_episode("Show.2024.1080p.WEB-DL.mkv") == (None, None)
+    assert parse_tv_episode("Show.2160p.2023.mkv") == (None, None)
+    assert parse_tv_episode("Show.S02.2024.mkv") == (None, None)
