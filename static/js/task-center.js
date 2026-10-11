@@ -659,10 +659,39 @@ async function searchTaskCandidates() {
             box.innerHTML = '<div class="rounded-xl border border-amber-900/50 bg-amber-950/20 p-5 text-center text-xs text-amber-300">没有找到匹配资源，请换个剧名，或检查已启用的资源来源。</div>';
             return;
         }
-        document.getElementById('candidate-hint').textContent = '找到 ' + candidates.length + ' 个可用源';
+        const initiallyVisibleCandidates = 5;
+        document.getElementById('candidate-hint').textContent =
+            '找到 ' + candidates.length + ' 个可用源；默认展示前 ' +
+            Math.min(candidates.length, initiallyVisibleCandidates) +
+            ' 个，其余可展开查看（按搜索顺序展示，不代表推荐排名）';
         box.innerHTML = '';
+
+        const candidateRows = document.createElement('div');
+        candidateRows.className = 'space-y-3';
+        if (candidates.length > initiallyVisibleCandidates) {
+            const toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'w-full rounded-xl border border-slate-700 bg-slate-900/70 px-4 py-3 text-xs font-medium text-slate-300 transition hover:border-purple-700 hover:text-white';
+            toggle.setAttribute('aria-expanded', 'false');
+            toggle.textContent = '展开其余 ' + (candidates.length - initiallyVisibleCandidates) + ' 个资源';
+            toggle.onclick = () => {
+                const expanded = toggle.getAttribute('aria-expanded') === 'true';
+                candidateRows.querySelectorAll('.smart-follow-candidate-extra').forEach(row => {
+                    row.classList.toggle('hidden', expanded);
+                });
+                toggle.setAttribute('aria-expanded', String(!expanded));
+                toggle.textContent = expanded
+                    ? '展开其余 ' + (candidates.length - initiallyVisibleCandidates) + ' 个资源'
+                    : '收起其余资源';
+            };
+            box.appendChild(toggle);
+        }
+
         candidates.forEach((candidate, index) => {
             const row = document.createElement('div');
+            if (index >= initiallyVisibleCandidates) {
+                row.classList.add('smart-follow-candidate-extra', 'hidden');
+            }
             const files = Array.isArray(candidate.files) ? candidate.files : [];
             const resolutions = Object.keys(candidate.resolutions || {});
             const resolutionText = resolutions.length ? resolutions.join(' / ') : [...new Set(files.map(f => f.resolution).filter(Boolean))].join(' / ') || '未知';
@@ -729,8 +758,9 @@ async function searchTaskCandidates() {
                     ? '已选择 ' + selectedFids.size + ' 集；后续有新集时，系统会继续检查并自动转存。'
                     : '至少选择 1 集作为首次处理基线。';
             };
-            box.appendChild(row);
+            candidateRows.appendChild(row);
         });
+        box.appendChild(candidateRows);
 
     } catch (err) {
         if (requestId === candidateSearchSequence) {
