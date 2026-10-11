@@ -4,8 +4,7 @@ import logging
 
 import pytest
 
-from moviesync.cards import CardRegistry
-from moviesync.card_plugins import CardFilePluginManager
+from moviesync import card_plugins, cards
 
 
 CARD_SOURCE = b'''from moviesync.cards import Card, CardManifest
@@ -21,8 +20,8 @@ def create_card(context):
 
 
 def _manager(tmp_path):
-    registry = CardRegistry()
-    manager = CardFilePluginManager(
+    registry = cards.CardRegistry()
+    manager = card_plugins.CardFilePluginManager(
         plugin_dir=tmp_path / "cards",
         registry=registry,
         logger=logging.getLogger("test.card_plugins"),
