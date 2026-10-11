@@ -980,6 +980,10 @@ class SubscriptionManager:
                     else _parse_tv_episode(file_name)
                 )
                 if episode is None:
+                    # Keep the channel watermark unchanged while a video file
+                    # remains unclassified. Otherwise the incremental scan could
+                    # permanently skip a share before recognition rules improve.
+                    scan_complete = False
                     continue
                 is_selected_initial = (
                     resource_id == selected_pwd_id and fid in initial_file_keys
