@@ -284,6 +284,39 @@ class ResourceSourceManager:
             self.logger.exception("资源源 %s 增量频道检索异常: %s", source.card_id, exc)
             return {"items": [], "cursor": None, "complete": False}
 
+    def search_channel_history(
+        self,
+        source_id: str,
+        channel: object,
+        title: str,
+        before_post_id: object = None,
+    ) -> dict[str, Any]:
+        """Scan one bounded older-history batch through the configured source card."""
+        config = self.config_store.load()
+        source = self.sources.get(str(source_id))
+        if not source:
+            return {"items": [], "cursor": None, "complete": False}
+        cards = config.get("cards") if isinstance(config, dict) else {}
+        card = cards.get(source.card_id) if isinstance(cards, dict) else {}
+        if isinstance(card, dict) and not card.get("enabled", True):
+            return {"items": [], "cursor": None, "complete": False}
+        search_history = getattr(source, "search_channel_history", None)
+        if not callable(search_history):
+            return {"items": [], "cursor": None, "complete": False}
+        try:
+            state = search_history(channel, str(title or "").strip(), self._card_config(config, source.card_id), before_post_id=before_post_id)
+            if not isinstance(state, dict) or not isinstance(state.get("items"), list):
+                raise TypeError("资源卡片 search_channel_history 必须返回包含 items 的对象")
+            return {
+                "items": [{**item, "source_id": source.card_id, "source_name": self._source_name(source)}
+                          for item in state["items"] if isinstance(item, dict)],
+                "cursor": state.get("cursor"),
+                "complete": bool(state.get("complete")),
+            }
+        except Exception as exc:
+            self.logger.exception("资源源 %s 历史回填异常: %s", source.card_id, exc)
+            return {"items": [], "cursor": None, "complete": False}
+
     def check_all(self) -> list[dict[str, Any]]:
         config = self.config_store.load()
         cards = config.get("cards") if isinstance(config, dict) else {}
