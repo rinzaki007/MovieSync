@@ -106,3 +106,31 @@ def test_initial_scan_does_not_advance_cursor_when_page_limit_is_reached():
     assert state["cursor"] is None
     assert state["complete"] is False
     assert len(client.http.session.urls) == MAX_CHANNEL_PAGES
+
+
+def test_history_backfill_scans_older_posts_and_marks_end_of_history():
+    client = make_client([
+        FakeResponse(page(
+            (10, "Show S01E10 https://pan.quark.cn/s/share10"),
+            (9, "Show S01E09 https://pan.quark.cn/s/share9"),
+        )),
+        FakeResponse(page()),
+    ])
+
+    state = client.search_channel_history("demo_channel", "Show", before_post_id=11)
+
+    assert [item["pwd_id"] for item in state["items"]] == ["share10", "share9"]
+    assert state["cursor"] == 9
+    assert state["complete"] is True
+    assert "before=11" in client.http.session.urls[0]
+    assert "before=9" in client.http.session.urls[1]
+
+
+def test_history_backfill_does_not_advance_cursor_on_http_error():
+    client = make_client([FakeResponse("blocked", status_code=503)])
+
+    state = client.search_channel_history("demo_channel", "Show", before_post_id=100)
+
+    assert state["items"] == []
+    assert state["cursor"] is None
+    assert state["complete"] is False

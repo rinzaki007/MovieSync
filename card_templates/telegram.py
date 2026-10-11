@@ -173,6 +173,25 @@ class TelegramResourceSource(ResourceSourceCard):
             }
         return search_updates(configured, title, after_post_id=after_post_id)
 
+    def search_channel_history(
+        self,
+        channel: object,
+        title: str,
+        config: dict,
+        before_post_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Scan older channel history in bounded batches for Smart Follow."""
+        channels = _normalize_channels(config.get("channels", []))
+        channel_id = (str(channel.get("id") or "").strip().lstrip("@")
+                      if isinstance(channel, dict) else str(channel or "").strip().lstrip("@"))
+        configured = next((item for item in channels if item["id"].casefold() == channel_id.casefold()), None)
+        if not configured:
+            return {"items": [], "cursor": None, "complete": False}
+        search_history = getattr(self.client, "search_channel_history", None)
+        if not callable(search_history):
+            return {"items": [], "cursor": None, "complete": False}
+        return search_history(configured, title, before_post_id=before_post_id)
+
     def close(self) -> None:
         """Release the HTTP session owned by this card."""
         http = getattr(self.client, "http", None)

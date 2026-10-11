@@ -18,6 +18,7 @@ QUARK_RE = re.compile(r"(?:https?://)?(?:pan\.)?quark\.cn/s/([A-Za-z0-9]{1,128})
 MAX_SEARCH_MESSAGES = 100
 MAX_SHARES_PER_CHANNEL = 50
 MAX_CHANNEL_PAGES = 6
+MAX_HISTORY_PAGES = 2
 TG_HEADERS = {"User-Agent": "Mozilla/5.0"}
 
 
@@ -98,6 +99,76 @@ class TelegramClient:
             after_post_id=after_post_id,
             include_scan_state=True,
         )
+
+    def search_channel_history(
+        self,
+        channel: object,
+        title: str,
+        before_post_id: int | None = None,
+    ) -> dict:
+        """Scan a small older-history batch, returning a safe backfill cursor."""
+        if isinstance(channel, dict):
+            channel_id = normalize_channel_id(channel.get("id"))
+            channel_name = str(channel.get("name") or channel_id).strip()
+        else:
+            channel_id = normalize_channel_id(channel)
+            channel_name = channel_id
+        if not channel_id or not str(title or "").strip():
+            return {"items": [], "cursor": None, "complete": False}
+        try:
+            before_post_id = int(before_post_id) if before_post_id is not None else None
+        except (TypeError, ValueError, OverflowError):
+            before_post_id = None
+
+        title = str(title).strip()
+        simple_target = self._simplify(title)
+        results: list[dict] = []
+        seen_shares: set[str] = set()
+        before = str(before_post_id) if before_post_id is not None else None
+        oldest_seen: int | None = None
+
+        for page_index in range(MAX_HISTORY_PAGES + 1):
+            url = f"https://t.me/s/{quote(channel_id)}"
+            if before:
+                url += f"?before={quote(before)}"
+            try:
+                response = self.http.session.get(url, timeout=8)
+            except Exception:
+                return {"items": results, "cursor": None, "complete": False}
+            if response.status_code != 200:
+                return {"items": results, "cursor": None, "complete": False}
+
+            messages = BeautifulSoup(response.text, "html.parser").select("div.tgme_widget_message")
+            if not messages:
+                return {"items": results, "cursor": oldest_seen, "complete": True}
+            if page_index == MAX_HISTORY_PAGES:
+                return {"items": results, "cursor": oldest_seen, "complete": False}
+
+            oldest_page_id: int | None = None
+            for message in messages:
+                match = re.search(r"/(\d+)$", str(message.get("data-post") or ""))
+                if not match:
+                    continue
+                post_id = int(match.group(1))
+                oldest_page_id = post_id if oldest_page_id is None else min(oldest_page_id, post_id)
+                oldest_seen = post_id if oldest_seen is None else min(oldest_seen, post_id)
+                text_node = message.select_one("div.tgme_widget_message_text")
+                if not text_node:
+                    continue
+                plain_text = text_node.get_text(" ", strip=True)
+                if title not in plain_text and (not simple_target or simple_target not in self._simplify(plain_text)):
+                    continue
+                for raw in [anchor.get("href", "") for anchor in message.select("a[href]")] + [plain_text]:
+                    for pwd_id in QUARK_RE.findall(raw or ""):
+                        if pwd_id in seen_shares:
+                            continue
+                        seen_shares.add(pwd_id)
+                        results.append({"channel": channel_name, "channel_id": channel_id, "pwd_id": pwd_id})
+            if oldest_page_id is None:
+                return {"items": results, "cursor": oldest_seen, "complete": False}
+            before = str(oldest_page_id)
+
+        return {"items": results, "cursor": oldest_seen, "complete": False}
 
     def _search_channel(
         self,
