@@ -793,6 +793,35 @@ class SubscriptionManager:
                 current["channel_scan_cursor"] = value
                 self.store.write(subscriptions)
 
+    def _save_channel_history_cursor(self, sub: dict, cursor: object, complete: bool) -> None:
+        """Persist older-history progress only after the batch was handled safely."""
+        with self.lock:
+            subscriptions = self._load_subscriptions()
+            current = next((item for item in subscriptions if item.get("id") == sub.get("id")), None)
+            if current is None:
+                return
+            changed = False
+            if cursor is not None:
+                try:
+                    value = int(cursor)
+                except (TypeError, ValueError, OverflowError):
+                    value = 0
+                if value > 0:
+                    previous = current.get("channel_history_before")
+                    try:
+                        previous_value = int(previous) if previous is not None else None
+                    except (TypeError, ValueError, OverflowError):
+                        previous_value = None
+                    # Backfill moves toward older (smaller) Telegram post IDs.
+                    if previous_value is None or value < previous_value:
+                        current["channel_history_before"] = value
+                        changed = True
+            if complete and not current.get("channel_history_complete"):
+                current["channel_history_complete"] = True
+                changed = True
+            if changed:
+                self.store.write(subscriptions)
+
     def _check_channel_subscription(self, sub: dict) -> tuple[bool, str]:
         source_id = str(sub.get("source_id") or "").strip()
         channel = str(sub.get("channel") or "").strip()
@@ -800,6 +829,9 @@ class SubscriptionManager:
         self._set_status(sub, "running", "searching", "正在搜刮频道资源…")
         scan_cursor = None
         scan_complete = False
+        history_cursor = None
+        history_complete = False
+        history_state = {"items": [], "cursor": None, "complete": False}
         if self.resource_sources:
             incremental_search = getattr(
                 self.resource_sources, "search_channel_updates", None
@@ -821,6 +853,19 @@ class SubscriptionManager:
                 sources = self.resource_sources.search_channel(source_id, channel, title)
         else:
             sources = []
+        if self.resource_sources and not sub.get("channel_history_complete"):
+            history_search = getattr(self.resource_sources, "search_channel_history", None)
+            if callable(history_search):
+                history_before = sub.get("channel_history_before")
+                if history_before is None:
+                    history_before = scan_cursor or sub.get("channel_scan_cursor")
+                history_state = history_search(source_id, channel, title, history_before)
+                if isinstance(history_state, dict):
+                    history_cursor = history_state.get("cursor")
+                    history_complete = bool(history_state.get("complete"))
+                    history_items = history_state.get("items", [])
+                    if isinstance(history_items, list):
+                        sources = [*(sources if isinstance(sources, list) else []), *history_items]
         if not isinstance(sources, list):
             sources = []
             scan_complete = False
@@ -878,6 +923,8 @@ class SubscriptionManager:
         if not sources:
             if scan_complete:
                 self._save_channel_scan_cursor(sub, scan_cursor)
+            if not resolution_errors:
+                self._save_channel_history_cursor(sub, history_cursor, history_complete)
             return self._finish(sub, True, f"《{title}》频道暂未发现新资源", success_keys=[])
 
         tracked = {
@@ -1023,6 +1070,8 @@ class SubscriptionManager:
                 )
             if scan_complete:
                 self._save_channel_scan_cursor(sub, scan_cursor)
+            if not resolution_errors:
+                self._save_channel_history_cursor(sub, history_cursor, history_complete)
             return self._finish(sub, True, f"《{title}》暂无新更新", success_keys=[])
 
         target_fid = _normalize_fid(sub.get("target_fid"))
@@ -1094,6 +1143,7 @@ class SubscriptionManager:
 
         if scan_complete:
             self._save_channel_scan_cursor(sub, scan_cursor)
+        self._save_channel_history_cursor(sub, history_cursor, history_complete)
         return self._finish(
             sub,
             True,
