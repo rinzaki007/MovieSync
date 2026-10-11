@@ -235,6 +235,55 @@ class ResourceSourceManager:
             return []
 
 
+    def search_channel_updates(
+        self,
+        source_id: str,
+        channel: object,
+        title: str,
+        after_post_id: object = None,
+    ) -> dict[str, Any]:
+        """Discover recent channel shares and return a safe persistent scan cursor."""
+        config = self.config_store.load()
+        source = self.sources.get(str(source_id))
+        if not source:
+            return {"items": [], "cursor": None, "complete": False}
+        cards = config.get("cards") if isinstance(config, dict) else {}
+        card = cards.get(source.card_id) if isinstance(cards, dict) else {}
+        if isinstance(card, dict) and not card.get("enabled", True):
+            return {"items": [], "cursor": None, "complete": False}
+        search_updates = getattr(source, "search_channel_updates", None)
+        if not callable(search_updates):
+            return {
+                "items": self.search_channel(source_id, channel, title),
+                "cursor": None,
+                "complete": False,
+            }
+        try:
+            state = search_updates(
+                channel,
+                str(title or "").strip(),
+                self._card_config(config, source.card_id),
+                after_post_id=after_post_id,
+            )
+            if not isinstance(state, dict) or not isinstance(state.get("items"), list):
+                raise TypeError("资源卡片 search_channel_updates 必须返回包含 items 的对象")
+            return {
+                "items": [
+                    {
+                        **item,
+                        "source_id": source.card_id,
+                        "source_name": self._source_name(source),
+                    }
+                    for item in state["items"]
+                    if isinstance(item, dict)
+                ],
+                "cursor": state.get("cursor"),
+                "complete": bool(state.get("complete")),
+            }
+        except Exception as exc:
+            self.logger.exception("资源源 %s 增量频道检索异常: %s", source.card_id, exc)
+            return {"items": [], "cursor": None, "complete": False}
+
     def check_all(self) -> list[dict[str, Any]]:
         config = self.config_store.load()
         cards = config.get("cards") if isinstance(config, dict) else {}
