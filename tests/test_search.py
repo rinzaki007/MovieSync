@@ -33,6 +33,35 @@ def test_search_deduplicates_share_ids_and_is_stable():
     assert "stoken" not in candidates[0]
 
 
+def test_search_reports_detected_episode_coverage_without_filling_gaps():
+    import logging
+
+    class EpisodeStorage(FakeStorageTargets):
+        def resolve_resource(self, resource, target_id=None):
+            return {
+                "target_id": target_id or "quark",
+                "files": [
+                    {"fid": "f1", "file_name": "Show.S01E01.mkv", "size": 1},
+                    {"fid": "f2", "file_name": "Show.S01E03.mkv", "size": 1},
+                    {"fid": "f3", "file_name": "Show.S01E03.1080p.mkv", "size": 1},
+                    {"fid": "f4", "file_name": "Show.S02E01.mkv", "size": 1},
+                    {"fid": "f5", "file_name": "Show.extra.mkv", "size": 1},
+                ],
+                "token": "token",
+                "error": None,
+            }
+
+    service = SearchService(
+        FakeResourceSources(),
+        EpisodeStorage(),
+        logging.getLogger("test"),
+    )
+    candidates = service.search_movie_candidates({"title": "Show"}, {"channels": []})
+
+    assert len(candidates) == 1
+    assert candidates[0]["episode_coverage"] == "S01 E01、E03 · S02 E01（共 3 集）"
+
+
 class FakeDoubanResponse:
     status_code = 200
 
