@@ -149,11 +149,36 @@ class SearchService:
 
         return files, token, error, target_id
 
+    @staticmethod
+    def _candidate_priority(source: dict, movie_title: str) -> int:
+        """稳定地把名称/剧集信息较明确的资源排在前面；未知格式仍保留在后续页。"""
+        name_fields = (
+            "title", "name", "file_name", "filename", "resource_name",
+            "share_name", "description",
+        )
+        text = " ".join(str(source.get(key) or "") for key in name_fields).lower()
+        score = 0
+        if re.search(r"(?:s\d{1,2}\s*e\d{1,4}|第\s*\d+\s*[集话]|(?:ep|e)\s*\d{1,4})", text, re.I):
+            score += 4
+        if re.search(r"\.(?:mp4|mkv|avi|mov|flv|wmv|m4v|ts|m2ts|iso)(?:\b|$)", text, re.I):
+            score += 2
+        if re.search(r"\b(?:2160p|1080p|720p|4k|web[- .]?dl|bluray|bdrip|remux)\b", text, re.I):
+            score += 1
+        simplified_title = re.sub(r"[^\w\u4e00-\u9fa5]", "", movie_title).lower()
+        simplified_text = re.sub(r"[^\w\u4e00-\u9fa5]", "", text)
+        if simplified_title and simplified_title in simplified_text:
+            score += 3
+        return score
+
     def search_movie_candidates(
         self,
         movie: object,
         config: dict,
         storage_target_id: str | None = None,
+        *,
+        offset: int = 0,
+        scan_limit: int | None = None,
+        page_info: dict | None = None,
     ) -> list[dict]:
         title, cleaned_title = self._title(movie)
         if not title:
@@ -205,6 +230,19 @@ class SearchService:
                 "resource_types": resource_types,
             })
         discovered = self.resource_sources.search(search_context, config)
+        total_discovered = len(discovered)
+        # 排序稳定：高置信度资源优先，无法识别命名的资源仍保留在后续页。
+        discovered = sorted(
+            discovered,
+            key=lambda source: self._candidate_priority(source, title),
+            reverse=True,
+        )
+        safe_offset = max(0, int(offset or 0))
+        if scan_limit is not None:
+            safe_limit = max(1, min(20, int(scan_limit)))
+            page_sources = discovered[safe_offset : safe_offset + safe_limit]
+        else:
+            page_sources = discovered[safe_offset:]
         candidates: list[dict] = []
         seen_resource_keys: set[tuple[str, str]] = set()
 
@@ -212,8 +250,8 @@ class SearchService:
         # 消费结果，保证候选排序稳定，并在达到上限后立即停止后续请求。
         batch_size = 10
         with ThreadPoolExecutor(max_workers=batch_size) as executor:
-            for batch_start in range(0, len(discovered), batch_size):
-                batch = discovered[batch_start : batch_start + batch_size]
+            for batch_start in range(0, len(page_sources), batch_size):
+                batch = page_sources[batch_start : batch_start + batch_size]
 
                 def resolve_source(source):
                     resource_id = str(
@@ -322,7 +360,20 @@ class SearchService:
                     })
                 if len(candidates) >= MAX_CANDIDATES_PER_MOVIE:
                     break
-        self.logger.info("《%s》检索完成，有效候选=%s", title, len(candidates))
+        if page_info is not None:
+            consumed = min(len(page_sources), max(0, total_discovered - safe_offset))
+            page_info.update({
+                "next_offset": safe_offset + consumed,
+                "has_more": safe_offset + consumed < total_discovered,
+                "total_discovered": total_discovered,
+            })
+        self.logger.info(
+            "《%s》检索完成，有效候选=%s（已扫描 %s/%s 条）",
+            title,
+            len(candidates),
+            min(total_discovered, safe_offset + len(page_sources)),
+            total_discovered,
+        )
         return candidates
 
     def transfer_selected_resource(

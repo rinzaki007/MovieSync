@@ -1138,8 +1138,19 @@ def search_candidates():
         return _json_error("所选存储卡片没有声明支持的分享类型，暂时无法按该网盘搜索", 400)
 
     service = services["search"]
-
+    scan_limit_value = data.get("scan_limit")
+    page_offset = 0
+    scan_limit = None
+    if scan_limit_value is not None:
+        if len(movies) != 1:
+            return _json_error("分批检索一次只能查询一部影片")
+        try:
+            page_offset = max(0, int(data.get("offset") or 0))
+            scan_limit = max(1, min(20, int(scan_limit_value)))
+        except (TypeError, ValueError):
+            return _json_error("检索分页参数无效")
     candidates_map = {}
+    candidate_pages = {}
 
     for movie in movies:
         title = (
@@ -1157,12 +1168,22 @@ def search_candidates():
         try:
             search_movie = dict(movie) if isinstance(movie, dict) else {"title": str(movie)}
             search_movie["storage_target_id"] = storage_target_id
-            candidates_map[
-                title
-            ] = service.search_movie_candidates(
-                search_movie,
-                config.load(),
-            )
+            page_info = {} if scan_limit is not None else None
+            if page_info is not None:
+                candidates_map[title] = service.search_movie_candidates(
+                    search_movie,
+                    config.load(),
+                    offset=page_offset,
+                    scan_limit=scan_limit,
+                    page_info=page_info,
+                )
+                candidate_pages[title] = page_info
+            else:
+                # 保持旧调用签名兼容，便于现有集成与第三方替代服务继续工作。
+                candidates_map[title] = service.search_movie_candidates(
+                    search_movie,
+                    config.load(),
+                )
         except Exception:
             _services()["logger"].exception("资源检索失败: %s", title)
             return _json_error("资源检索暂时失败，请稍后重试；若持续出现，请查看服务日志", 502)
@@ -1190,6 +1211,7 @@ def search_candidates():
         {
             "success": True,
             "candidates_map": candidates_map,
+            "candidate_pages": candidate_pages,
             "storage_target_id": storage_target_id,
             "resource_sources": source_status,
             "message": message,
