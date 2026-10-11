@@ -1,7 +1,7 @@
 import pytest
 
 from card_templates.telegram import TelegramResourceSource
-from moviesync.cards import Card, CardManifest, ResourceSourceCard
+from moviesync.cards import Card, CardManifest, ResourceSourceCard, FilenameProcessorCard
 from moviesync.services import resource_sources as resource_sources_module
 from moviesync.services.resource_sources import ResourceSourceManager
 
@@ -26,6 +26,9 @@ class FakeLogger:
         pass
 
     def info(self, *args, **kwargs):
+        pass
+
+    def warning(self, *args, **kwargs):
         pass
 
 
@@ -660,3 +663,58 @@ def test_resource_manager_owns_channel_search_result_identity():
 
     assert result[0]["source_id"] == "channel-identity-source"
     assert result[0]["source_name"] == "Channel Identity Source"
+
+
+@pytest.mark.parametrize(
+    "malformed_result",
+    [
+        None,
+        (),
+        "1,2",
+        (1,),
+        (True, 2),
+        ("1", 2),
+        (1, 0),
+        (1, 2, 3),
+        (1.5, 2),
+    ],
+)
+def test_filename_processor_invalid_output_does_not_block_next_processor(malformed_result):
+    class Store:
+        def load(self):
+            return {
+                "cards": {
+                    "broken-processor": {"enabled": True, "config": {}},
+                    "valid-processor": {"enabled": True, "config": {}},
+                }
+            }
+
+    class BrokenProcessor(FilenameProcessorCard):
+        manifest = CardManifest(
+            id="broken-processor",
+            name="Broken Processor",
+            type="filename_processor",
+            capabilities=("filename.parse",),
+        )
+
+        def parse_episode(self, file_name, config):
+            return malformed_result
+
+    class ValidProcessor(FilenameProcessorCard):
+        manifest = CardManifest(
+            id="valid-processor",
+            name="Valid Processor",
+            type="filename_processor",
+            capabilities=("filename.parse",),
+        )
+
+        def parse_episode(self, file_name, config):
+            return (2, 7)
+
+    manager = ResourceSourceManager(
+        Store(),
+        FakeLogger(),
+        resource_cards=[BrokenProcessor(), ValidProcessor()],
+    )
+
+    assert manager.parse_tv_episode("unknown-source", "example-video.mkv") == (2, 7)
