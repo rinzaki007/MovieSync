@@ -55,10 +55,17 @@ def _detect_resolution(name: str) -> str:
     return "未知"
 
 
-def _episode_coverage(files: list[dict[str, Any]], source_id: str, resource_sources) -> tuple[str, int]:
-    """Summarize only episode numbers that can be parsed; never infer missing episodes."""
+def _episode_statistics(
+    files: list[dict[str, Any]],
+    source_id: str,
+    resource_sources,
+) -> tuple[str, int, int, int, int]:
+    """Summarize parsed episodes and file quality without inferring gaps or deleting versions."""
     by_season: dict[int, set[int]] = {}
     unseasoned: set[int] = set()
+    episode_file_count = 0
+    unrecognized_file_count = 0
+    episode_occurrences: dict[tuple[int | None, int], int] = {}
     parser = getattr(resource_sources, "parse_tv_episode", None)
 
     for item in files:
@@ -68,11 +75,19 @@ def _episode_coverage(files: list[dict[str, Any]], source_id: str, resource_sour
         except Exception:
             season, episode = parse_tv_episode(name)
         if episode is None:
+            unrecognized_file_count += 1
             continue
-        if season is None:
-            unseasoned.add(episode)
+
+        episode_file_count += 1
+        season_key = int(season) if season is not None else None
+        episode_number = int(episode)
+        episode_occurrences[(season_key, episode_number)] = (
+            episode_occurrences.get((season_key, episode_number), 0) + 1
+        )
+        if season_key is None:
+            unseasoned.add(episode_number)
         else:
-            by_season.setdefault(int(season), set()).add(int(episode))
+            by_season.setdefault(season_key, set()).add(episode_number)
 
     def format_numbers(numbers: set[int]) -> str:
         ordered = sorted(numbers)
@@ -90,8 +105,9 @@ def _episode_coverage(files: list[dict[str, Any]], source_id: str, resource_sour
         return "、".join(parts)
 
     unique_count = len(unseasoned) + sum(len(numbers) for numbers in by_season.values())
+    additional_versions = sum(max(0, count - 1) for count in episode_occurrences.values())
     if not unique_count:
-        return "集数暂未识别", 0
+        return "集数暂未识别", 0, episode_file_count, unrecognized_file_count, additional_versions
 
     summary = [
         f"S{season:02d} {format_numbers(numbers)}"
@@ -102,7 +118,13 @@ def _episode_coverage(files: list[dict[str, Any]], source_id: str, resource_sour
     if len(summary) > 3:
         extra_seasons = max(0, len(summary) - 3)
         summary = summary[:3] + [f"另有 {extra_seasons} 组"]
-    return " · ".join(summary) + f"（共 {unique_count} 集）", unique_count
+    return (
+        " · ".join(summary) + f"（共 {unique_count} 集）",
+        unique_count,
+        episode_file_count,
+        unrecognized_file_count,
+        additional_versions,
+    )
 
 
 class SearchService:
@@ -383,7 +405,13 @@ class SearchService:
                     for video in videos:
                         resolution = video["resolution"]
                         resolutions[resolution] = resolutions.get(resolution, 0) + 1
-                    episode_coverage, episode_count = _episode_coverage(
+                    (
+                        episode_coverage,
+                        episode_count,
+                        recognized_episode_files,
+                        unrecognized_video_files,
+                        additional_episode_versions,
+                    ) = _episode_statistics(
                         videos,
                         str(source.get("source_id") or ""),
                         self.resource_sources,
@@ -407,6 +435,9 @@ class SearchService:
                         "file_count": len(videos),
                         "episode_coverage": episode_coverage,
                         "episode_count": episode_count,
+                        "recognized_episode_files": recognized_episode_files,
+                        "unrecognized_video_files": unrecognized_video_files,
+                        "additional_episode_versions": additional_episode_versions,
                         "total_size": total_size,
                         "total_size_text": _format_size(total_size),
                         "resolutions": resolutions,
