@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from threading import Event, RLock, Thread, current_thread
 
@@ -963,12 +964,16 @@ class SubscriptionManager:
         queued_episode_sources: dict[tuple[str, int | None, int], tuple[str, str, str]] = {}
         resolution_errors: list[str] = []
 
-        for source in sources:
-            self._set_status(sub, "running", "resolve", "正在解析发现的资源…")
-            resource_id = str(source.get("resource_id") or source.get("share_id") or source.get("pwd_id") or "").strip()
-            resource_type = str(source.get("resource_type") or "").strip().lower()
+        self._set_status(sub, "running", "resolve", "正在并发解析发现的资源…")
+
+        def resolve_source(source):
+            resource_id = str(
+                source.get("resource_id") or source.get("share_id") or source.get("pwd_id") or ""
+            ).strip()
             if not resource_id:
-                continue
+                return source, None, None
+
+            resource_type = str(source.get("resource_type") or "").strip().lower()
             resource = {
                 **source,
                 "resource_id": resource_id,
@@ -979,10 +984,36 @@ class SubscriptionManager:
                     or ""
                 ).strip(),
             }
-            resolved = self.storage_targets.resolve_resource(
-                resource,
-                resource.get("storage_target_id") or None,
-            )
+            try:
+                resolved = self.storage_targets.resolve_resource(
+                    resource,
+                    resource.get("storage_target_id") or None,
+                )
+            except Exception as exc:
+                self.logger.warning(
+                    "自动追剧资源解析异常，资源 ID=%s，错误类型=%s",
+                    resource_id,
+                    type(exc).__name__,
+                )
+                resolved = {
+                    "error": "资源解析异常",
+                    "files": [],
+                    "token": None,
+                }
+            return source, resource, resolved
+
+        # 分享解析主要受网盘网络请求延迟影响。限制并发数，按原始顺序消费结果，
+        # 保留后续集数去重、用户选中分享优先级与转存顺序的既有行为。
+        with ThreadPoolExecutor(max_workers=min(4, len(sources))) as executor:
+            resolved_sources = list(executor.map(resolve_source, sources))
+
+        for _source, resource, resolved in resolved_sources:
+            if resource is None:
+                continue
+            resource_id = resource["resource_id"]
+            resource_type = resource["resource_type"]
+            if not isinstance(resolved, dict):
+                resolved = {"error": "资源解析返回格式无效", "files": [], "token": None}
             files = resolved.get("files") or []
             token = resolved.get("token")
             target_id = str(

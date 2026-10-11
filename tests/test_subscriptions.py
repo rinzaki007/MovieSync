@@ -1677,3 +1677,46 @@ def test_channel_subscription_deduplicates_overlapping_episode_ranges_across_sha
         ("share-range-a", ["ep102-a"]),
         ("share-range-b", ["ep202", "ep103"]),
     ]
+
+
+def test_channel_subscription_resolves_multiple_shares_concurrently(tmp_path):
+    from threading import Barrier
+
+    class ConcurrentStorageTargets(ChannelStorageTargets):
+        def __init__(self):
+            super().__init__()
+            self.resolve_barrier = Barrier(2)
+
+        def resolve_resource(self, resource, target_id=None):
+            # Sequential resolution times out here; two concurrent calls pass.
+            self.resolve_barrier.wait(timeout=2)
+            return super().resolve_resource(resource, target_id)
+
+    storage = ConcurrentStorageTargets()
+    sources = FakeResourceSources()
+    sources.shares = [
+        {"channel": "demo", "pwd_id": "share1"},
+        {"channel": "demo", "pwd_id": "share2"},
+    ]
+    manager = SubscriptionManager(
+        tmp_path / "concurrent-channel.json",
+        storage,
+        sources,
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share1",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        source_id="telegram",
+        channel="demo",
+        files=[{"fid": "ep1", "file_name": "Show.S01E01.mkv"}],
+    )
+
+    ok, message = manager.check_subscription_now(sub["id"])
+
+    assert ok is True
+    assert "成功追更 2 项" in message
+    assert storage.transfers == [("share1", ["ep1"]), ("share2", ["ep2"])]
+
