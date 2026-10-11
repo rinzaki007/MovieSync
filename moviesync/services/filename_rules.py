@@ -15,7 +15,8 @@ DEFAULT_TV_MAGIC_REGEX = {
     "replace": r"\1\2.\3",
 }
 
-_SEASON_EPISODE = re.compile(r"(?<![A-Za-z0-9])S(\d{1,2})E(\d{1,4})(?!\d)", re.I)
+_SEASON_EPISODE = re.compile(r"(?<![A-Za-z0-9])S\s*(\d{1,2})[\s._-]*E[Pp]?\s*(\d{1,4})(?!\d)", re.I)
+_CHINESE_SEASON_EPISODE = re.compile(r"第\s*(\d{1,2})\s*季.{0,8}?第\s*(\d{1,4})\s*[集话期]")
 _EPISODE_PATTERNS = (
     re.compile(r"(?<![A-Za-z0-9])E[Pp]?\s*(\d{1,4})(?!\d)", re.I),
     re.compile(r"第\s*(\d{1,4})\s*[集话期]"),
@@ -63,7 +64,7 @@ def parse_tv_episode(
             if _valid_episode(episode):
                 return None, episode
 
-        match = _SEASON_EPISODE.search(value)
+        match = _SEASON_EPISODE.search(value) or _CHINESE_SEASON_EPISODE.search(value)
         if match:
             season, episode = int(match.group(1)), int(match.group(2))
             return (season, episode) if _valid_episode(episode) else (None, None)
