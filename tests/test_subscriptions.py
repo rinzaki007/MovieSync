@@ -1629,3 +1629,51 @@ def test_concurrent_manual_and_scheduled_checks_do_not_run_same_subscription_twi
         release_check.set()
         worker.join(timeout=2)
         manager.stop_scheduler()
+
+
+def test_channel_subscription_deduplicates_overlapping_episode_ranges_across_shares(tmp_path):
+    storage = ChannelStorageTargets()
+    storage.shares = {
+        "share-selected": [
+            {"fid": "ep101", "file_name": "Show.S01E01.mkv"},
+        ],
+        "share-range-a": [
+            {"fid": "ep102-a", "file_name": "Show.S01E02.mkv"},
+        ],
+        "share-range-b": [
+            {"fid": "ep102-b", "file_name": "Show.S01E02.mkv"},
+            {"fid": "ep202", "file_name": "Show.S02E02.mkv"},
+            {"fid": "ep103", "file_name": "Show.S01E03.mkv"},
+        ],
+    }
+    sources = FakeResourceSources()
+    sources.shares = [
+        {"channel": "demo", "pwd_id": "share-range-a"},
+        {"channel": "demo", "pwd_id": "share-range-b"},
+        {"channel": "demo", "pwd_id": "share-selected"},
+    ]
+    manager = SubscriptionManager(
+        tmp_path / "overlapping-ranges.json",
+        storage,
+        sources,
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-selected",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        source_id="telegram",
+        channel="demo",
+        files=[{"fid": "ep101", "file_name": "Show.S01E01.mkv"}],
+    )
+
+    ok, message = manager.check_subscription_now(sub["id"])
+
+    assert ok is True
+    assert "成功追更 4 项" in message
+    assert storage.transfers == [
+        ("share-selected", ["ep101"]),
+        ("share-range-a", ["ep102-a"]),
+        ("share-range-b", ["ep202", "ep103"]),
+    ]
