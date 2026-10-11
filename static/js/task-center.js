@@ -689,9 +689,6 @@ async function searchTaskCandidates() {
 
         candidates.forEach((candidate, index) => {
             const row = document.createElement('div');
-            if (index >= initiallyVisibleCandidates) {
-                row.classList.add('smart-follow-candidate-extra', 'hidden');
-            }
             const files = Array.isArray(candidate.files) ? candidate.files : [];
             const resolutions = Object.keys(candidate.resolutions || {});
             const resolutionText = resolutions.length ? resolutions.join(' / ') : [...new Set(files.map(f => f.resolution).filter(Boolean))].join(' / ') || '未知';
@@ -699,6 +696,9 @@ async function searchTaskCandidates() {
             const validFids = files.map(file => String(file.fid || '').trim()).filter(Boolean);
             const selectedFids = new Set(validFids);
             row.className = 'rounded-2xl border border-slate-800 bg-slate-950/80 p-4 transition hover:border-slate-700';
+            if (index >= initiallyVisibleCandidates) {
+                row.classList.add('smart-follow-candidate-extra', 'hidden');
+            }
             row.innerHTML =
                 '<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div class="min-w-0">' +
                 '<div class="flex flex-wrap items-center gap-2"><span class="inline-flex items-center gap-1.5 rounded-lg border border-sky-900/60 bg-sky-950/40 px-2 py-1 text-[11px] font-semibold text-sky-300"><i class="fa-solid fa-puzzle-piece"></i>' + escapeTask(candidate.source_name || candidate.channel || '资源来源') + '</span>' +
