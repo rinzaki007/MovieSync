@@ -61,6 +61,9 @@ def test_search_reports_detected_episode_coverage_without_filling_gaps():
     assert len(candidates) == 1
     assert candidates[0]["episode_coverage"] == "S01 E01、E03 · S02 E01（共 3 集）"
     assert candidates[0]["episode_count"] == 3
+    assert candidates[0]["recognized_episode_files"] == 4
+    assert candidates[0]["unrecognized_video_files"] == 1
+    assert candidates[0]["additional_episode_versions"] == 1
 
 
 def test_search_episode_count_is_zero_when_filenames_are_not_recognized():
@@ -84,6 +87,9 @@ def test_search_episode_count_is_zero_when_filenames_are_not_recognized():
 
     assert candidates[0]["episode_count"] == 0
     assert candidates[0]["episode_coverage"] == "集数暂未识别"
+    assert candidates[0]["recognized_episode_files"] == 0
+    assert candidates[0]["unrecognized_video_files"] == 1
+    assert candidates[0]["additional_episode_versions"] == 0
 
 
 class FakeDoubanResponse:
