@@ -4,8 +4,8 @@ import logging
 
 import pytest
 
-from moviesync.cards import CardRegistry
 from moviesync.card_plugins import CardFilePluginManager
+from moviesync.cards import CardRegistry
 
 
 CARD_SOURCE = b'''from moviesync.cards import Card, CardManifest
