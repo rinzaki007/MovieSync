@@ -146,7 +146,7 @@ class TelegramClient:
 
             oldest_page_id: int | None = None
             for message in messages:
-                match = re.search(r"/(\\d+)$", str(message.get("data-post") or ""))
+                match = re.search(r"/(\d+)$", str(message.get("data-post") or ""))
                 if not match:
                     continue
                 post_id = int(match.group(1))
