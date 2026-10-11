@@ -1169,15 +1169,21 @@ def search_candidates():
             search_movie = dict(movie) if isinstance(movie, dict) else {"title": str(movie)}
             search_movie["storage_target_id"] = storage_target_id
             page_info = {} if scan_limit is not None else None
-            candidates_map[title] = service.search_movie_candidates(
-                search_movie,
-                config.load(),
-                offset=page_offset,
-                scan_limit=scan_limit,
-                page_info=page_info,
-            )
             if page_info is not None:
+                candidates_map[title] = service.search_movie_candidates(
+                    search_movie,
+                    config.load(),
+                    offset=page_offset,
+                    scan_limit=scan_limit,
+                    page_info=page_info,
+                )
                 candidate_pages[title] = page_info
+            else:
+                # 保持旧调用签名兼容，便于现有集成与第三方替代服务继续工作。
+                candidates_map[title] = service.search_movie_candidates(
+                    search_movie,
+                    config.load(),
+                )
         except Exception:
             _services()["logger"].exception("资源检索失败: %s", title)
             return _json_error("资源检索暂时失败，请稍后重试；若持续出现，请查看服务日志", 502)
