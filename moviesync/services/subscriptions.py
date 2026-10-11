@@ -767,16 +767,63 @@ class SubscriptionManager:
             success_keys=found_keys,
         )
 
+    def _save_channel_scan_cursor(self, sub: dict, cursor: object) -> None:
+        """Persist only a confirmed scan watermark, never a partial/error result."""
+        try:
+            value = int(cursor)
+        except (TypeError, ValueError, OverflowError):
+            return
+        if value <= 0:
+            return
+        with self.lock:
+            subscriptions = self._load_subscriptions()
+            current = next(
+                (item for item in subscriptions if item.get("id") == sub.get("id")),
+                None,
+            )
+            if current is None:
+                return
+            previous = current.get("channel_scan_cursor")
+            try:
+                previous_value = int(previous or 0)
+            except (TypeError, ValueError, OverflowError):
+                previous_value = 0
+            # Telegram post IDs increase over time; never move the watermark back.
+            if value > previous_value:
+                current["channel_scan_cursor"] = value
+                self.store.write(subscriptions)
+
     def _check_channel_subscription(self, sub: dict) -> tuple[bool, str]:
         source_id = str(sub.get("source_id") or "").strip()
         channel = str(sub.get("channel") or "").strip()
         title = str(sub.get("title") or "").strip()
         self._set_status(sub, "running", "searching", "正在搜刮频道资源…")
-        sources = (
-            self.resource_sources.search_channel(source_id, channel, title)
-            if self.resource_sources
-            else []
-        )
+        scan_cursor = None
+        scan_complete = False
+        if self.resource_sources:
+            incremental_search = getattr(
+                self.resource_sources, "search_channel_updates", None
+            )
+            if callable(incremental_search):
+                scan_state = incremental_search(
+                    source_id,
+                    channel,
+                    title,
+                    sub.get("channel_scan_cursor"),
+                )
+                if isinstance(scan_state, dict):
+                    sources = scan_state.get("items", [])
+                    scan_cursor = scan_state.get("cursor")
+                    scan_complete = bool(scan_state.get("complete"))
+                else:
+                    sources = []
+            else:
+                sources = self.resource_sources.search_channel(source_id, channel, title)
+        else:
+            sources = []
+        if not isinstance(sources, list):
+            sources = []
+            scan_complete = False
 
         # 标题搜索可能因频道帖子使用英文名、旧消息超出扫描范围等原因返回空列表。
         # 用户创建订阅时选中的分享是可靠的起点，至少先检查该分享中的后续集数。
@@ -829,6 +876,8 @@ class SubscriptionManager:
         )
 
         if not sources:
+            if scan_complete:
+                self._save_channel_scan_cursor(sub, scan_cursor)
             return self._finish(sub, True, f"《{title}》频道暂未发现新资源", success_keys=[])
 
         tracked = {
@@ -968,6 +1017,8 @@ class SubscriptionManager:
                     "频道资源解析失败，未能确认是否有新集；请检查资源来源状态或查看服务日志",
                     success_keys=[],
                 )
+            if scan_complete:
+                self._save_channel_scan_cursor(sub, scan_cursor)
             return self._finish(sub, True, f"《{title}》暂无新更新", success_keys=[])
 
         target_fid = _normalize_fid(sub.get("target_fid"))
@@ -1037,6 +1088,8 @@ class SubscriptionManager:
                 success_keys=all_keys,
             )
 
+        if scan_complete:
+            self._save_channel_scan_cursor(sub, scan_cursor)
         return self._finish(
             sub,
             True,
