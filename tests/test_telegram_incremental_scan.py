@@ -34,7 +34,7 @@ def page(*posts):
 
 def make_client(responses):
     client = TelegramClient()
-    client.http.session = FakeSession(responses)
+    client.http._local.session = FakeSession(responses)
     return client
 
 
