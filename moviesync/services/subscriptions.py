@@ -865,7 +865,7 @@ class SubscriptionManager:
         # publish overlapping ranges (for example 1-10 and 8-20); only queue an
         # episode once across different shares, while preserving multi-part files
         # from the same share and same-number episodes from different seasons.
-        queued_episode_sources: dict[tuple[int | None, int], tuple[str, str, str]] = {}
+        queued_episode_sources: dict[tuple[str, int | None, int], tuple[str, str, str]] = {}
         resolution_errors: list[str] = []
 
         for source in sources:
@@ -943,7 +943,7 @@ class SubscriptionManager:
                         # 只过滤未选中的基准集及更早集数；选中集需首次转存。
                         continue
                 group_key = (resource_type, resource_id, target_id)
-                episode_key = (season, episode)
+                episode_key = (target_id, season, episode)
                 previous_group = queued_episode_sources.get(episode_key)
                 if previous_group is not None and previous_group != group_key:
                     # Another share already covers this episode. Do not transfer
