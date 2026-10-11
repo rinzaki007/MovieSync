@@ -55,7 +55,7 @@ def _detect_resolution(name: str) -> str:
     return "未知"
 
 
-def _episode_coverage(files: list[dict[str, Any]], source_id: str, resource_sources) -> str:
+def _episode_coverage(files: list[dict[str, Any]], source_id: str, resource_sources) -> tuple[str, int]:
     """Summarize only episode numbers that can be parsed; never infer missing episodes."""
     by_season: dict[int, set[int]] = {}
     unseasoned: set[int] = set()
@@ -91,7 +91,7 @@ def _episode_coverage(files: list[dict[str, Any]], source_id: str, resource_sour
 
     unique_count = len(unseasoned) + sum(len(numbers) for numbers in by_season.values())
     if not unique_count:
-        return "集数暂未识别"
+        return "集数暂未识别", 0
 
     summary = [
         f"S{season:02d} {format_numbers(numbers)}"
@@ -102,7 +102,7 @@ def _episode_coverage(files: list[dict[str, Any]], source_id: str, resource_sour
     if len(summary) > 3:
         extra_seasons = max(0, len(summary) - 3)
         summary = summary[:3] + [f"另有 {extra_seasons} 组"]
-    return " · ".join(summary) + f"（共 {unique_count} 集）"
+    return " · ".join(summary) + f"（共 {unique_count} 集）", unique_count
 
 
 class SearchService:
@@ -383,7 +383,7 @@ class SearchService:
                     for video in videos:
                         resolution = video["resolution"]
                         resolutions[resolution] = resolutions.get(resolution, 0) + 1
-                    episode_coverage = _episode_coverage(
+                    episode_coverage, episode_count = _episode_coverage(
                         videos,
                         str(source.get("source_id") or ""),
                         self.resource_sources,
@@ -406,6 +406,7 @@ class SearchService:
                         "files": videos,
                         "file_count": len(videos),
                         "episode_coverage": episode_coverage,
+                        "episode_count": episode_count,
                         "total_size": total_size,
                         "total_size_text": _format_size(total_size),
                         "resolutions": resolutions,

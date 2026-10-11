@@ -62,6 +62,11 @@
                 <div id="resource-summary" class="mt-1 text-[11px] text-slate-500"></div>
             </div>
         </div>
+        <div id="candidate-filters" class="mb-4 flex flex-wrap gap-2 hidden" aria-label="按已识别集数筛选资源">
+            <button type="button" data-candidate-filter="all" onclick="setCandidateFilter('all')" class="rounded-lg border border-blue-500 px-3 py-2 text-[11px] text-blue-300">全部资源</button>
+            <button type="button" data-candidate-filter="multi" onclick="setCandidateFilter('multi')" class="rounded-lg border border-slate-700 px-3 py-2 text-[11px] text-slate-400">多集资源（≥3集）</button>
+            <button type="button" data-candidate-filter="few" onclick="setCandidateFilter('few')" class="rounded-lg border border-slate-700 px-3 py-2 text-[11px] text-slate-400">少量 / 未识别（0–2集）</button>
+        </div>
         <div id="resource-list" class="grid gap-4 xl:grid-cols-2"></div>
         <div class="mt-6 flex justify-center">
             <button id="more-resources" type="button" onclick="queryMoreCandidates()" class="hidden rounded-xl border border-slate-700 bg-slate-900/70 px-5 py-3 text-xs font-semibold text-slate-200 transition hover:border-blue-500 hover:text-white disabled:cursor-wait disabled:opacity-60">
