@@ -3,7 +3,6 @@
 import importlib
 import logging
 
-import pytest
 
 
 CARD_SOURCE = b'''from moviesync.cards import Card, CardManifest
@@ -56,8 +55,12 @@ def test_failed_install_rolls_back_file_and_registry(tmp_path):
     manager, registry = _manager(tmp_path)
     broken_source = b"def create_card(context):\n    raise RuntimeError('broken factory')\n"
 
-    with pytest.raises(RuntimeError, match="broken factory"):
+    try:
         manager.install("broken.py", broken_source)
+    except RuntimeError as exc:
+        assert "broken factory" in str(exc)
+    else:
+        raise AssertionError("broken card factory should fail installation")
 
     assert not (tmp_path / "cards" / "broken.py").exists()
     assert registry.list() == []
