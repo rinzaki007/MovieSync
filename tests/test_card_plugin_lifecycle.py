@@ -1,10 +1,9 @@
 """单文件卡片安装、加载与卸载生命周期回归测试。"""
 
+import importlib
 import logging
 
 import pytest
-
-from moviesync import cards, card_plugins
 
 
 CARD_SOURCE = b'''from moviesync.cards import Card, CardManifest
@@ -20,8 +19,8 @@ def create_card(context):
 
 
 def _manager(tmp_path):
-    registry = cards.CardRegistry()
-    manager = card_plugins.CardFilePluginManager(
+    registry = importlib.import_module("moviesync.cards").CardRegistry()
+    manager = importlib.import_module("moviesync.card_plugins").CardFilePluginManager(
         plugin_dir=tmp_path / "cards",
         registry=registry,
         logger=logging.getLogger("test.card_plugins"),
