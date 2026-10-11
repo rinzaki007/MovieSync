@@ -241,7 +241,7 @@ class SearchService:
                 resolved_batch = list(executor.map(resolve_source, batch))
                 resolved_by_source = {
                     id(source): resolved
-                    for source, resolved in zip(batch, resolved_batch)
+                    for source, resolved in zip(batch, resolved_batch, strict=True)
                     if resolved is not None
                 }
 
