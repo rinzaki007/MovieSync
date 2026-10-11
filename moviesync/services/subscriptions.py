@@ -923,8 +923,7 @@ class SubscriptionManager:
         if not sources:
             if scan_complete:
                 self._save_channel_scan_cursor(sub, scan_cursor)
-            if not resolution_errors:
-                self._save_channel_history_cursor(sub, history_cursor, history_complete)
+            self._save_channel_history_cursor(sub, history_cursor, history_complete)
             return self._finish(sub, True, f"《{title}》频道暂未发现新资源", success_keys=[])
 
         tracked = {
