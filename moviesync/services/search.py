@@ -385,7 +385,7 @@ class SearchService:
                         )
                         continue
         
-                    videos = [
+                    all_videos = [
                         {
                             "fid": f.get("fid"),
                             "file_name": f.get("file_name", ""),
@@ -394,15 +394,20 @@ class SearchService:
                             "resolution": _detect_resolution(f.get("file_name", "")),
                         }
                         for f in files
-                        if f.get("fid")
+                        if isinstance(f, dict)
+                        and f.get("fid")
                         and str(f.get("file_name", "")).lower().endswith(VIDEO_EXTENSIONS)
-                    ][:MAX_VIDEO_FILES_PER_CANDIDATE]
-        
+                    ]
+                    total_video_count = len(all_videos)
+                    videos = all_videos[:MAX_VIDEO_FILES_PER_CANDIDATE]
+                    files_truncated = total_video_count > len(videos)
+
                     if not videos:
                         continue
-        
+
+                    # 统计信息尽量反映完整分享；只有文件选择列表受上限限制。
                     resolutions = {}
-                    for video in videos:
+                    for video in all_videos:
                         resolution = video["resolution"]
                         resolutions[resolution] = resolutions.get(resolution, 0) + 1
                     (
@@ -412,12 +417,12 @@ class SearchService:
                         unrecognized_video_files,
                         additional_episode_versions,
                     ) = _episode_statistics(
-                        videos,
+                        all_videos,
                         str(source.get("source_id") or ""),
                         self.resource_sources,
                     )
-        
-                    total_size = sum(int(v.get("size") or 0) for v in videos)
+
+                    total_size = sum(int(v.get("size") or 0) for v in all_videos)
                     seen_resource_keys.add(resource_key)
                     candidates.append({
                         "source_id": source.get("source_id", "unknown"),
@@ -433,6 +438,8 @@ class SearchService:
                         "url": str(source.get("url") or ""),
                         "files": videos,
                         "file_count": len(videos),
+                        "total_video_count": total_video_count,
+                        "files_truncated": files_truncated,
                         "episode_coverage": episode_coverage,
                         "episode_count": episode_count,
                         "recognized_episode_files": recognized_episode_files,
@@ -444,7 +451,9 @@ class SearchService:
                         "summary": (
                             f"来源: [{source.get('source_name', '未知来源')}] | "
                             f"频道: [{source.get('channel', '')}] | "
-                            f"{len(videos)} 个视频 | {_format_size(total_size)}"
+                            f"{len(videos)} 个可选视频"
+                            + (f"（实际共 {total_video_count} 个，仅展示前 {len(videos)} 个）" if files_truncated else "")
+                            + f" | {_format_size(total_size)}"
                         ),
                     })
                 if len(candidates) >= MAX_CANDIDATES_PER_MOVIE:
