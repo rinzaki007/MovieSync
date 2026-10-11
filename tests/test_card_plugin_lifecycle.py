@@ -4,7 +4,6 @@ import importlib
 import logging
 
 
-
 CARD_SOURCE = b'''from moviesync.cards import Card, CardManifest
 
 
