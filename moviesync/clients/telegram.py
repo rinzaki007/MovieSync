@@ -260,6 +260,10 @@ class TelegramClient:
                 return finish()
             before = next_before
 
+        # Reaching the hard page limit is not proof that the history was fully
+        # scanned. Do not persist a watermark for an incomplete initial scan:
+        # that could skip older shares on channels with deep histories.
+        scan_complete = False
         return finish()
 
     @staticmethod
