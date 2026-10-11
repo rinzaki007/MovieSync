@@ -209,7 +209,7 @@ def test_subscription_monitors_selected_channel_shares(tmp_path):
     assert "成功追更 1 项" in message
     assert storage.transfers == [("share2", ["ep2"])]
 
-    storage.shares["share3"] =
+    storage.shares["share3"] = [
         {"fid": "ep3", "file_name": "Show.S01E03.mkv"},
     ]
     manager.resource_sources.shares.append(
