@@ -81,6 +81,32 @@ class TelegramClient:
         return self.check_channel_detail(channel)["status"] == "healthy"
 
     def search_channel(self, channel: object, title: str, scan_all: bool = False) -> list[dict]:
+        """Search channel shares; retain the list-based compatibility API."""
+        return self._search_channel(channel, title, scan_all=scan_all)
+
+    def search_channel_updates(
+        self,
+        channel: object,
+        title: str,
+        after_post_id: int | None = None,
+    ) -> dict:
+        """Scan recent posts incrementally, stopping at the persisted post watermark."""
+        return self._search_channel(
+            channel,
+            title,
+            scan_all=True,
+            after_post_id=after_post_id,
+            include_scan_state=True,
+        )
+
+    def _search_channel(
+        self,
+        channel: object,
+        title: str,
+        scan_all: bool = False,
+        after_post_id: int | None = None,
+        include_scan_state: bool = False,
+    ):
         if isinstance(channel, dict):
             channel_id = normalize_channel_id(channel.get("id"))
             channel_name = str(channel.get("name") or channel_id).strip()
@@ -95,6 +121,21 @@ class TelegramClient:
         results: list[dict] = []
         seen_shares: set[str] = set()
         before: str | None = None
+        latest_post_id: int | None = None
+        reached_cursor = False
+        scan_complete = True
+
+        def finish():
+            if not include_scan_state:
+                return results
+            cursor_safe = scan_complete and (
+                after_post_id is None or reached_cursor
+            )
+            return {
+                "items": results,
+                "cursor": latest_post_id if cursor_safe else None,
+                "complete": cursor_safe,
+            }
 
         for page_index in range(MAX_CHANNEL_PAGES):
             url = f"https://t.me/s/{quote(channel_id)}"
@@ -113,10 +154,12 @@ class TelegramClient:
             try:
                 response = self.http.session.get(url, timeout=8)
             except Exception:
-                return results
+                scan_complete = False
+                return finish()
 
             if response.status_code != 200:
-                return results
+                scan_complete = False
+                return finish()
 
             soup = BeautifulSoup(response.text, "html.parser")
             messages = soup.select("div.tgme_widget_message")
@@ -129,13 +172,17 @@ class TelegramClient:
                         timeout=8,
                     )
                 except Exception:
-                    return results
+                    scan_complete = False
+                    return finish()
                 if response.status_code != 200:
-                    return results
+                    scan_complete = False
+                    return finish()
                 soup = BeautifulSoup(response.text, "html.parser")
                 messages = soup.select("div.tgme_widget_message")
             if not messages:
-                return results
+                if after_post_id is not None:
+                    scan_complete = False
+                return finish()
 
             oldest_post_id = None
             for message in messages:
@@ -143,6 +190,14 @@ class TelegramClient:
                 match = re.search(r"/(\d+)$", data_post)
                 if match:
                     post_id = int(match.group(1))
+                    latest_post_id = (
+                        post_id
+                        if latest_post_id is None
+                        else max(latest_post_id, post_id)
+                    )
+                    if after_post_id is not None and post_id <= after_post_id:
+                        reached_cursor = True
+                        break
                     oldest_post_id = (
                         post_id
                         if oldest_post_id is None
@@ -179,17 +234,20 @@ class TelegramClient:
                             }
                         )
                         if len(results) >= MAX_SHARES_PER_CHANNEL:
-                            return results
+                            return finish()
+
+            if reached_cursor:
+                break
 
             if oldest_post_id is None:
-                return results
+                return finish()
 
             next_before = str(oldest_post_id)
             if next_before == before:
-                return results
+                return finish()
             before = next_before
 
-        return results
+        return finish()
 
     @staticmethod
     def _simplify(value: str) -> str:
