@@ -1007,7 +1007,7 @@ class SubscriptionManager:
         with ThreadPoolExecutor(max_workers=min(4, len(sources))) as executor:
             resolved_sources = list(executor.map(resolve_source, sources))
 
-        for source, resource, resolved in resolved_sources:
+        for _source, resource, resolved in resolved_sources:
             if resource is None:
                 continue
             resource_id = resource["resource_id"]
