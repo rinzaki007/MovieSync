@@ -334,11 +334,11 @@ def test_candidate_search_pages_prioritize_recognizable_names_without_dropping_u
         def search(self, movie, config):
             return [
                 {"source_id": "unknown", "source_name": "Unknown", "resource_id": "r-unknown",
-                 "resource_type": "share", "title": "mystery release"},
+                 "title": "mystery release"},
                 {"source_id": "episode-2", "source_name": "Episode", "resource_id": "r-2",
-                 "resource_type": "share", "title": "Show S01E02 1080p.mkv"},
+                 "title": "Show S01E02 1080p.mkv"},
                 {"source_id": "episode-1", "source_name": "Episode", "resource_id": "r-1",
-                 "resource_type": "share", "title": "Show S01E01 1080p.mkv"},
+                 "title": "Show S01E01 1080p.mkv"},
             ]
 
     class PagedStorage(FakeStorageTargets):
