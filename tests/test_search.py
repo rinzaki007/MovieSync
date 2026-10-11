@@ -60,6 +60,30 @@ def test_search_reports_detected_episode_coverage_without_filling_gaps():
 
     assert len(candidates) == 1
     assert candidates[0]["episode_coverage"] == "S01 E01、E03 · S02 E01（共 3 集）"
+    assert candidates[0]["episode_count"] == 3
+
+
+def test_search_episode_count_is_zero_when_filenames_are_not_recognized():
+    import logging
+
+    class UnknownEpisodeStorage(FakeStorageTargets):
+        def resolve_resource(self, resource, target_id=None):
+            return {
+                "target_id": target_id or "quark",
+                "files": [{"fid": "f1", "file_name": "Show.special-version.mkv", "size": 1}],
+                "token": "token",
+                "error": None,
+            }
+
+    service = SearchService(
+        FakeResourceSources(),
+        UnknownEpisodeStorage(),
+        logging.getLogger("test"),
+    )
+    candidates = service.search_movie_candidates({"title": "Show"}, {"channels": []})
+
+    assert candidates[0]["episode_count"] == 0
+    assert candidates[0]["episode_coverage"] == "集数暂未识别"
 
 
 class FakeDoubanResponse:
