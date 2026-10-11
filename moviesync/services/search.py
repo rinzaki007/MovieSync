@@ -228,7 +228,15 @@ class SearchService:
                     }
                     if source.get("pwd_id"):
                         resource["pwd_id"] = str(source.get("pwd_id") or "").strip()
-                    return self._get_resource_files(resource)
+                    try:
+                        return self._get_resource_files(resource)
+                    except Exception as exc:
+                        self.logger.warning(
+                            "资源源 %s 分享解析失败，跳过此候选: %s",
+                            source.get("source_name") or source.get("source_id") or "未知来源",
+                            exc,
+                        )
+                        return ([], None, "分享解析失败", selected_target_id)
 
                 resolved_batch = list(executor.map(resolve_source, batch))
                 resolved_by_source = {
