@@ -483,22 +483,78 @@ function renderTaskDetail(task) {
 
 async function loadTaskDestinationFiles() {
     const task = window.currentDestinationTask;
+    const section = document.getElementById('task-destination-files');
     const body = document.getElementById('task-destination-files-body');
-    if (!task || !body) return;
-    body.innerHTML = '<div class="py-3 text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-2"></i>正在读取网盘目录…</div>';
+    if (!task || !section || !body) return;
+    body.innerHTML = '<div class="py-3 text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-2"></i>正在读取夸克转存目录及子目录…</div>';
     try {
-        const query = new URLSearchParams({parent_fid: String(task.parentFid || '0')});
-        const response = await apiFetchTask('/api/storage-targets/' + encodeURIComponent(task.targetId) + '/files?' + query.toString());
-        const result = await response.json();
-        if (!response.ok || !result.success) throw new Error(result.message || '读取网盘目录失败');
-        const files = Array.isArray(result.files) ? result.files : [];
-        if (!files.length) {
-            body.innerHTML = '<div class="rounded-lg border border-dashed border-slate-800 px-3 py-5 text-center text-slate-500">目录暂时没有显示文件。夸克目录可能尚未刷新，请稍后点击“刷新”再核对。</div>';
+        // Read the capability from card manifests. The UI stays provider-agnostic;
+        // only cards declaring storage.list_destination_files get this feature.
+        const cardsResponse = await apiFetchTask('/api/cards');
+        const cardsResult = await cardsResponse.json();
+        if (cardsResponse.ok && cardsResult.success && Array.isArray(cardsResult.cards)) {
+            const card = cardsResult.cards.find(item => item && item.id === task.targetId);
+            if (!card || !Array.isArray(card.capabilities) || !card.capabilities.includes('storage.list_destination_files')) {
+                section.remove();
+                return;
+            }
+        }
+
+        const maxDepth = 4;
+        const maxItems = 400;
+        let itemCount = 0;
+        let truncated = false;
+
+        async function readDirectory(parentFid, depth) {
+            const query = new URLSearchParams({parent_fid: String(parentFid || '0')});
+            const response = await apiFetchTask('/api/storage-targets/' + encodeURIComponent(task.targetId) + '/files?' + query.toString());
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.message || '读取网盘目录失败');
+            const files = Array.isArray(result.files) ? result.files.slice() : [];
+            files.sort((a, b) => {
+                const dirOrder = Number(Boolean(b.is_dir)) - Number(Boolean(a.is_dir));
+                return dirOrder || String(a.file_name || '').localeCompare(String(b.file_name || ''), 'zh-CN');
+            });
+
+            let html = '';
+            for (const file of files) {
+                if (itemCount >= maxItems) {
+                    truncated = true;
+                    break;
+                }
+                itemCount += 1;
+                const name = escapeTask(file.file_name || '未命名项目');
+                const isDir = Boolean(file.is_dir);
+                let childHtml = '';
+                let childCount = 0;
+                if (isDir && file.fid && depth < maxDepth && itemCount < maxItems) {
+                    const children = await readDirectory(file.fid, depth + 1);
+                    childHtml = children.html;
+                    childCount = children.count;
+                } else if (isDir && depth >= maxDepth) {
+                    truncated = true;
+                }
+                const icon = isDir ? 'fa-folder text-amber-400' : (file.is_video ? 'fa-file-video text-emerald-400' : 'fa-file text-slate-400');
+                const detail = isDir
+                    ? (depth >= maxDepth ? '子目录层级较深，未继续展开' : (childCount ? '文件夹 · ' + childCount + ' 项' : '空文件夹'))
+                    : formatTaskFileSize(file.size);
+                html += '<div class="flex items-start gap-3 rounded-lg border border-slate-800/70 bg-slate-900/50 px-3 py-2" style="margin-left:' + (depth * 18) + 'px">' +
+                    '<i class="fa-solid ' + icon + ' mt-0.5 w-4 shrink-0"></i>' +
+                    '<span class="min-w-0 flex-1 break-all text-slate-200">' + name + '</span>' +
+                    '<span class="shrink-0 text-right text-[10px] text-slate-500">' + detail + '</span></div>' + childHtml;
+            }
+            return {html: html, count: files.length};
+        }
+
+        const tree = await readDirectory(task.parentFid || '0', 0);
+        const rootLabel = '<div class="mb-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-400"><span><i class="fa-solid fa-folder-tree mr-1 text-amber-400"></i>转存主目录</span><span>目录 FID：' + escapeTask(task.parentFid || '0') + ' · ' + itemCount + ' 项</span></div>';
+        if (!tree.html) {
+            body.innerHTML = rootLabel + '<div class="rounded-lg border border-dashed border-slate-800 px-3 py-5 text-center text-slate-500">主目录暂时没有显示文件。可以稍后点击“刷新”再次核对。</div>';
             return;
         }
-        body.innerHTML = '<div class="mb-2 flex items-center justify-between text-[10px] text-slate-500"><span>当前目录 ' + files.length + ' 项</span><span>仅展示当前目录</span></div><div class="max-h-72 space-y-1 overflow-y-auto">' +
-            files.map(file => '<div class="flex items-center gap-3 rounded-lg border border-slate-800/70 bg-slate-900/50 px-3 py-2"><i class="fa-solid ' + (file.is_dir ? 'fa-folder text-amber-400' : file.is_video ? 'fa-file-video text-emerald-400' : 'fa-file text-slate-400') + ' w-4 shrink-0"></i><span class="min-w-0 flex-1 break-all text-slate-200">' + escapeTask(file.file_name || '未命名文件') + '</span><span class="shrink-0 text-[10px] text-slate-500">' + (file.is_dir ? '文件夹' : formatTaskFileSize(file.size)) + '</span></div>').join('') +
-            '</div>';
+        body.innerHTML = rootLabel + '<div class="max-h-[28rem] space-y-1 overflow-y-auto">' + tree.html + '</div>' +
+            (truncated ? '<div class="mt-2 text-[10px] text-amber-400">为避免目录过大影响页面，列表最多展开 4 层、显示 400 项；更深或更多内容请打开夸克查看。</div>' : '') +
+            '<div class="mt-2 text-[10px] text-slate-500">文件夹已按层级缩进显示；文件大小仅对文件展示。此列表用于核对转存结果，不影响转存任务状态。</div>';
     } catch (error) {
         body.innerHTML = '<div class="rounded-lg border border-rose-900/50 bg-rose-950/20 px-3 py-4 text-rose-300">' + escapeTask(error.message || '读取网盘目录失败') + '<div class="mt-1 text-[10px] text-rose-400/80">转存任务状态不受影响，可稍后重新刷新目录。</div></div>';
     }
