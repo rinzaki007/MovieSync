@@ -818,7 +818,15 @@ class SubscriptionManager:
                 continue
             seen_source_keys.add(source_key)
             unique_sources.append(item)
-        sources = unique_sources
+        # 优先检查用户最初选中的分享：当多个分享重复包含同一集时，
+        # 以用户已选资源为优先，避免后续频道重复转存同一集。
+        sources = sorted(
+            unique_sources,
+            key=lambda item: (
+                str(item.get("resource_id") or item.get("share_id") or item.get("pwd_id") or "").strip()
+                != selected_pwd_id,
+            ),
+        )
 
         if not sources:
             return self._finish(sub, True, f"《{title}》频道暂未发现新资源", success_keys=[])
@@ -853,6 +861,11 @@ class SubscriptionManager:
         # identity therefore includes the destination, while persisted legacy
         # keys remain compatible for the subscription's originally selected target.
         queued_keys: set[tuple[str, str, str, str]] = set()
+        # Episode identity is separate from share/file identity. Channels often
+        # publish overlapping ranges (for example 1-10 and 8-20); only queue an
+        # episode once across different shares, while preserving multi-part files
+        # from the same share and same-number episodes from different seasons.
+        queued_episode_sources: dict[tuple[int | None, int], tuple[str, str, str]] = {}
         resolution_errors: list[str] = []
 
         for source in sources:
@@ -930,6 +943,12 @@ class SubscriptionManager:
                         # 只过滤未选中的基准集及更早集数；选中集需首次转存。
                         continue
                 group_key = (resource_type, resource_id, target_id)
+                episode_key = (season, episode)
+                previous_group = queued_episode_sources.get(episode_key)
+                if previous_group is not None and previous_group != group_key:
+                    # Another share already covers this episode. Do not transfer
+                    # the overlap twice, but keep scanning for later episodes.
+                    continue
                 grouped.setdefault(group_key, {
                     "resource": resource,
                     "token": token,
@@ -939,6 +958,7 @@ class SubscriptionManager:
                 })["files"].append({"fid": fid})
                 grouped[group_key]["keys"].append(key)
                 queued_keys.add(queue_key)
+                queued_episode_sources.setdefault(episode_key, group_key)
 
         if not grouped:
             if resolution_errors:
