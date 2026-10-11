@@ -86,3 +86,23 @@ def test_incremental_scan_does_not_advance_cursor_when_saved_cursor_was_not_reac
     assert state["items"]
     assert state["cursor"] is None
     assert state["complete"] is False
+
+
+
+def test_initial_scan_does_not_advance_cursor_when_page_limit_is_reached():
+    from moviesync.clients.telegram import MAX_CHANNEL_PAGES
+
+    responses = [
+        FakeResponse(page(
+            (1000 - index * 10, f"Show S01E{index + 1:02d} https://pan.quark.cn/s/share{index}")
+        ))
+        for index in range(MAX_CHANNEL_PAGES)
+    ]
+    client = make_client(responses)
+
+    state = client.search_channel_updates("demo_channel", "Show")
+
+    assert state["items"]
+    assert state["cursor"] is None
+    assert state["complete"] is False
+    assert len(client.http.session.urls) == MAX_CHANNEL_PAGES
