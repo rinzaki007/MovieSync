@@ -324,3 +324,46 @@ def test_candidate_search_uses_selected_target_capabilities_and_pins_target():
     assert len(candidates) == 1
     assert candidates[0]["resource_type"] == "aliyun_share"
     assert candidates[0]["storage_target_id"] == "aliyun"
+
+
+
+def test_candidate_search_pages_prioritize_recognizable_names_without_dropping_unknowns():
+    import logging
+
+    class PagedSources:
+        def search(self, movie, config):
+            return [
+                {"source_id": "unknown", "source_name": "Unknown", "resource_id": "r-unknown",
+                 "resource_type": "share", "title": "mystery release"},
+                {"source_id": "episode-2", "source_name": "Episode", "resource_id": "r-2",
+                 "resource_type": "share", "title": "Show S01E02 1080p.mkv"},
+                {"source_id": "episode-1", "source_name": "Episode", "resource_id": "r-1",
+                 "resource_type": "share", "title": "Show S01E01 1080p.mkv"},
+            ]
+
+    class PagedStorage(FakeStorageTargets):
+        def resolve_resource(self, resource, target_id=None):
+            return {
+                "target_id": target_id or "quark",
+                "files": [{"fid": resource["resource_id"], "file_name": "Show.S01E01.mkv", "size": 1}],
+                "token": None,
+                "error": None,
+            }
+
+    service = SearchService(PagedSources(), PagedStorage(), logging.getLogger("test"))
+    first_page = {}
+    first = service.search_movie_candidates(
+        {"title": "Show"}, {}, offset=0, scan_limit=2, page_info=first_page
+    )
+
+    assert [item["resource_id"] for item in first] == ["r-2", "r-1"]
+    assert first_page == {"next_offset": 2, "has_more": True, "total_discovered": 3}
+
+    second_page = {}
+    second = service.search_movie_candidates(
+        {"title": "Show"}, {}, offset=first_page["next_offset"],
+        scan_limit=2, page_info=second_page,
+    )
+
+    assert [item["resource_id"] for item in second] == ["r-unknown"]
+    assert second_page == {"next_offset": 3, "has_more": False, "total_discovered": 3}
