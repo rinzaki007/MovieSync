@@ -304,12 +304,24 @@ class ResourceSourceManager:
         if not callable(search_history):
             return {"items": [], "cursor": None, "complete": False}
         try:
-            state = search_history(channel, str(title or "").strip(), self._card_config(config, source.card_id), before_post_id=before_post_id)
+            state = search_history(
+                channel,
+                str(title or "").strip(),
+                self._card_config(config, source.card_id),
+                before_post_id=before_post_id,
+            )
             if not isinstance(state, dict) or not isinstance(state.get("items"), list):
                 raise TypeError("资源卡片 search_channel_history 必须返回包含 items 的对象")
             return {
-                "items": [{**item, "source_id": source.card_id, "source_name": self._source_name(source)}
-                          for item in state["items"] if isinstance(item, dict)],
+                "items": [
+                    {
+                        **item,
+                        "source_id": source.card_id,
+                        "source_name": self._source_name(source),
+                    }
+                    for item in state["items"]
+                    if isinstance(item, dict)
+                ],
                 "cursor": state.get("cursor"),
                 "complete": bool(state.get("complete")),
             }
