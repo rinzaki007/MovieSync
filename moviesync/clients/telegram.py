@@ -114,7 +114,17 @@ class TelegramClient:
             channel_id = normalize_channel_id(channel)
             channel_name = channel_id
         if not channel_id or not str(title or "").strip():
-            return []
+            return (
+                {"items": [], "cursor": None, "complete": False}
+                if include_scan_state
+                else []
+            )
+
+        if after_post_id is not None:
+            try:
+                after_post_id = int(after_post_id)
+            except (TypeError, ValueError, OverflowError):
+                after_post_id = None
 
         title = str(title).strip()
         simple_target = self._simplify(title)
@@ -233,7 +243,10 @@ class TelegramClient:
                                 "pwd_id": pwd_id,
                             }
                         )
-                        if len(results) >= MAX_SHARES_PER_CHANNEL:
+                        if (
+                            len(results) >= MAX_SHARES_PER_CHANNEL
+                            and not include_scan_state
+                        ):
                             return finish()
 
             if reached_cursor:
