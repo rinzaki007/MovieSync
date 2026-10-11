@@ -141,6 +141,38 @@ class TelegramResourceSource(ResourceSourceCard):
         return self.client.search_channel(channel, title, scan_all=True)
 
 
+    def search_channel_updates(
+        self,
+        channel: object,
+        title: str,
+        config: dict,
+        after_post_id: int | None = None,
+    ) -> dict[str, Any]:
+        """Incrementally discover channel shares without changing the legacy API."""
+        channels = _normalize_channels(config.get("channels", []))
+        channel_id = (
+            str(channel.get("id") or "").strip().lstrip("@")
+            if isinstance(channel, dict)
+            else str(channel or "").strip().lstrip("@")
+        )
+        configured = next(
+            (item for item in channels if item["id"].casefold() == channel_id.casefold()),
+            None,
+        )
+        if not configured:
+            return {"items": [], "cursor": None, "complete": False}
+
+        search_updates = getattr(self.client, "search_channel_updates", None)
+        if not callable(search_updates):
+            # Third-party/legacy clients remain supported, but cannot safely
+            # advance a persisted cursor without explicit scan-completeness data.
+            return {
+                "items": self.client.search_channel(configured, title, scan_all=True),
+                "cursor": None,
+                "complete": False,
+            }
+        return search_updates(configured, title, after_post_id=after_post_id)
+
     def close(self) -> None:
         """Release the HTTP session owned by this card."""
         http = getattr(self.client, "http", None)
