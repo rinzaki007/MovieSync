@@ -1,4 +1,4 @@
-"""Global and source-specific filename-recognition rules shared by resource sources."""
+"""One shared filename-recognition engine for every resource source."""
 from __future__ import annotations
 
 import re
@@ -11,7 +11,7 @@ from moviesync.services.filename_rules import DEFAULT_TV_MAGIC_REGEX, parse_tv_e
 
 
 class FilenameRecognitionCard(FilenameProcessorCard):
-    """Configurable filename recognizer with ordered, source-aware fallback rules."""
+    """Configurable global filename recognizer with optional source-scoped exceptions."""
 
     # This card provides general fallback rules. More specific third-party processors
     # inherit the higher default priority and are tried first.
@@ -35,16 +35,16 @@ class FilenameRecognitionCard(FilenameProcessorCard):
                     {"key": "replace", "label": "替换规则", "placeholder": "例如：统一后的剧名和集数格式"},
                 ),
                 "default": DEFAULT_TV_MAGIC_REGEX,
-                "description": "兼容旧配置。新规则建议添加到下方的 rules 列表。",
+                "description": "仅为旧配置保留。新增规则请统一添加到下方列表，默认对所有资源来源生效。",
             },
             {
                 "key": "rules",
-                "label": "扩展识别规则列表",
+                "label": "全局文件名识别规则",
                 "type": "json",
                 "default": [],
                 "description": (
-                    "按数组顺序尝试。每项包含 pattern、replace，可选 source_ids 数组限定来源卡片 ID；"
-                    "不填写 source_ids 表示对所有资源来源生效。内置格式始终优先。"
+                    "所有资源搜索来源共用这套规则，按数组顺序尝试。每项包含 pattern、replace；"
+                    "通常无需填写 source_ids，只有确实存在来源特殊格式时才设置。内置格式始终优先。"
                 ),
             },
         ),
@@ -61,7 +61,7 @@ class FilenameRecognitionCard(FilenameProcessorCard):
         source_id: str,
         config: dict[str, Any],
     ) -> tuple[int | None, int | None]:
-        """识别内置格式，再按顺序尝试全局/来源专属规则和旧版规则。"""
+        """所有来源共用内置格式与全局规则；来源限定规则仅用于少数例外。"""
         builtin = parse_tv_episode(file_name, {"pattern": "", "replace": ""})
         if builtin[1] is not None:
             return builtin
