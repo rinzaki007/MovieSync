@@ -323,8 +323,8 @@ def test_metadata_routes_forward_explicit_provider_selection(tmp_path):
         def __init__(self):
             self.calls = []
 
-        def search(self, query, provider_id=None):
-            self.calls.append(("search", query, provider_id))
+        def search(self, query, provider_id=None, category=None):
+            self.calls.append(("search", query, provider_id, category))
             return [{"title": query, "provider_id": provider_id}]
 
         def list_movies(self, tag, sort_type, provider_id=None):
@@ -344,11 +344,21 @@ def test_metadata_routes_forward_explicit_provider_selection(tmp_path):
     listing = client.get("/api/get-movies?tag=电影&sort=U&provider_id=douban")
 
     assert search.status_code == 200
-    assert search.get_json()["movies"] == [{"title": "Arrival", "provider_id": "tmdb"}]
+    assert search.get_json()["movies"] == [{
+        "title": "Arrival",
+        "provider_id": "tmdb",
+        "tag": "电影",
+        "media_type": "movie",
+    }]
     assert listing.status_code == 200
-    assert listing.get_json()["movies"] == [{"title": "电影", "provider_id": "douban"}]
+    assert listing.get_json()["movies"] == [{
+        "title": "电影",
+        "provider_id": "douban",
+        "tag": "电影",
+        "media_type": "movie",
+    }]
     assert metadata.calls == [
-        ("search", "Arrival", "tmdb"),
+        ("search", "Arrival", "tmdb", "电影"),
         ("list", "电影", "U", "douban"),
     ]
 
