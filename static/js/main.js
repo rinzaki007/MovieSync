@@ -724,6 +724,9 @@ function openCandidateModal(movies, candidatesMap) {
                                     </span>
                                 </div>
                                 <div class="mt-3 flex flex-wrap gap-2">
+                                    ${cand.resource_title ? `<span class="resource-chip max-w-full truncate" title="${escapeHtml(cand.resource_title)}">来源标题：${escapeHtml(cand.resource_title)}</span>` : ''}
+                                    ${cand.title_mismatch ? '<span class="resource-chip text-amber-300">标题疑似不匹配：未找到续作编号</span>' : ''}
+                                    ${cand.format_mismatch ? '<span class="resource-chip text-amber-300">疑似剧集文件，与所选电影类型不符</span>' : ''}
                                     <span class="resource-chip"><i class="fa-solid fa-film"></i> ${files.length} 个视频</span>
                                     <span class="resource-chip"><i class="fa-solid fa-hard-drive"></i> ${escapeHtml(totalSize)}</span>
                                     <span class="resource-chip resource-chip-accent"><i class="fa-solid fa-display"></i> ${escapeHtml(resolutionText)}</span>
