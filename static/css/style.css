@@ -1,3 +1,5 @@
+@import url("mobile.css");
+
 /* MovieSync 全局样式
  * 用途：主页面公共背景、卡片、输入框、滚动条、状态和自动填充等视觉样式。
  * 维护说明：admin.html 不依赖本文件，因此后台专属输入框样式直接写在 admin.html。 */

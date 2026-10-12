@@ -1,0 +1,357 @@
+/* Mobile portrait layout for MovieSync.
+ * Presentation-only overrides: desktop layout and application behavior remain unchanged.
+ */
+@media (max-width: 640px) {
+    html {
+        width: 100%;
+        min-width: 0;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+    }
+
+    body {
+        width: 100%;
+        min-width: 0;
+        overflow-x: hidden;
+    }
+
+    main,
+    header,
+    section,
+    aside,
+    form,
+    [role="dialog"] {
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    img,
+    video,
+    canvas,
+    iframe {
+        max-width: 100%;
+    }
+
+    input,
+    select,
+    textarea {
+        max-width: 100%;
+        font-size: max(16px, 1em);
+    }
+
+    button {
+        max-width: 100%;
+    }
+
+    input,
+    select,
+    textarea {
+        min-width: 0;
+    }
+
+    button,
+    a.glass-control,
+    a.glass-btn {
+        touch-action: manipulation;
+    }
+
+    /* Homepage top navigation: keep category shortcuts reachable, put search on its own row. */
+    body:has(#movie-grid) > header.glass-nav:first-of-type {
+        position: sticky;
+        top: 0;
+        padding-left: .65rem;
+        padding-right: .65rem;
+    }
+
+    body:has(#movie-grid) > header.glass-nav:first-of-type > div {
+        align-items: stretch;
+        gap: .65rem;
+    }
+
+    body:has(#movie-grid) > header.glass-nav:first-of-type > div > div:first-child {
+        width: calc(100% - 76px);
+        max-width: calc(100% - 76px);
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+        scrollbar-width: none;
+        padding-bottom: 2px;
+    }
+
+    body:has(#movie-grid) > header.glass-nav:first-of-type > div > div:first-child::-webkit-scrollbar {
+        display: none;
+    }
+
+    body:has(#movie-grid) > header.glass-nav:first-of-type > div > div:first-child > button,
+    body:has(#movie-grid) > header.glass-nav:first-of-type > div > div:first-child > a {
+        flex: 0 0 auto;
+        min-height: 38px;
+    }
+
+    body:has(#movie-grid) > header.glass-nav:first-of-type > div > div:nth-child(2) {
+        order: 2;
+        width: 100%;
+        max-width: none;
+        margin: 0;
+    }
+
+    body:has(#movie-grid) > header.glass-nav:first-of-type > div > div:nth-child(3) {
+        position: static;
+        order: 1;
+        width: auto;
+        margin-left: auto;
+        align-self: flex-end;
+    }
+
+    /* The homepage's second sticky bar must not overlap the now-taller mobile header. */
+    body:has(#movie-grid) > div.glass-subnav {
+        position: relative;
+        top: auto;
+        z-index: 20;
+        padding: .6rem .75rem;
+    }
+
+    body:has(#movie-grid) > div.glass-subnav > div {
+        gap: .5rem;
+    }
+
+    body:has(#movie-grid) > div.glass-subnav a[href="/tasks"] {
+        display: none;
+    }
+
+    #movie-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .7rem;
+    }
+
+    #movie-grid > * {
+        min-width: 0;
+    }
+
+    /* Resource selection: keep target controls readable and resource cards single-column. */
+    .resource-page-card,
+    .candidate-resource-card,
+    .candidate-movie-section {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    #resource-list {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    #candidate-filters {
+        display: flex;
+        flex-wrap: wrap;
+    }
+
+    #candidate-filters button {
+        flex: 1 1 auto;
+        min-height: 40px;
+    }
+
+    #storage-target,
+    #target-fid {
+        width: 100%;
+    }
+
+    /* Task center: compact spacing, wrapping actions, and safe long names/logs. */
+    body:has(#task-list) > header.glass-nav > div {
+        gap: .5rem;
+        flex-wrap: wrap;
+    }
+
+    body:has(#task-list) > header.glass-nav > div > div:first-child {
+        flex: 1 1 100%;
+    }
+
+    body:has(#task-list) > header.glass-nav > div > div:last-child {
+        width: 100%;
+        justify-content: flex-start;
+        flex-wrap: wrap;
+    }
+
+    body:has(#task-list) > header.glass-nav > div > div:last-child > a,
+    body:has(#task-list) > header.glass-nav > div > div:last-child > button {
+        flex: 1 1 auto;
+        justify-content: center;
+        min-height: 40px;
+    }
+
+    #task-list,
+    #smart-task-list,
+    #history-list,
+    #task-list *,
+    #smart-task-list *,
+    #history-list * {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    .task-filter {
+        min-height: 38px;
+        padding-left: .65rem;
+        padding-right: .65rem;
+    }
+
+    /* Drawers and dialogs should use the available viewport, including mobile browser chrome. */
+    #movie-detail-drawer > aside,
+    #task-drawer > aside,
+    #task-detail-drawer > aside {
+        width: 100%;
+        max-width: 100%;
+        height: 100vh;
+        height: 100dvh;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    #movie-detail-drawer > aside > div:first-child,
+    #task-drawer > aside > div:first-child,
+    #task-detail-drawer > aside > div:first-child {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    #movie-detail-drawer > aside > div:nth-child(2),
+    #task-drawer > aside > div:nth-child(2),
+    #task-detail-drawer > aside > div:nth-child(2) {
+        padding: 1rem;
+    }
+
+    /* Admin: let cards, configuration fields and action buttons flow vertically. */
+    body:has(#task-list) > header.glass-nav,
+    body:has(#resource-list) > header.glass-nav,
+    body:has(#movie-grid) > header.glass-nav,
+    body:has(#task-list) > main,
+    body:has(#resource-list) > main,
+    body:has(#movie-grid) > main {
+        padding-left: .75rem;
+        padding-right: .75rem;
+    }
+
+    .glass-panel,
+    .glass-shell,
+    .glass-card {
+        min-width: 0;
+        overflow-wrap: anywhere;
+    }
+
+    table {
+        display: block;
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    pre,
+    code,
+    .log-box-style,
+    #log-box {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+    }
+
+    /* Resource selection: keep the page header and destination controls usable on narrow screens. */
+    body:has(#resource-list) > header.glass-nav > div {
+        align-items: flex-start;
+        gap: .65rem;
+        padding-left: .75rem;
+        padding-right: .75rem;
+    }
+
+    body:has(#resource-list) > header.glass-nav > div > div:first-child {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    body:has(#resource-list) > header.glass-nav > div > a {
+        flex: 0 0 auto;
+    }
+
+    body:has(#resource-list) > main {
+        padding: .75rem;
+    }
+
+    body:has(#resource-list) #movie-title {
+        font-size: clamp(1rem, 4.5vw, 1.25rem);
+        overflow-wrap: anywhere;
+    }
+
+    /* Admin: stack the sidebar above content instead of squeezing the settings panel. */
+    body:has(#panel-global) > header.glass-nav {
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: .75rem;
+        padding: .75rem;
+    }
+
+    body:has(#panel-global) > header.glass-nav > div {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    body:has(#panel-global) > div.flex-1.flex.overflow-hidden {
+        flex-direction: column;
+        overflow: visible;
+    }
+
+    body:has(#panel-global) > div.flex-1.flex.overflow-hidden > aside.w-60 {
+        width: 100%;
+        flex: 0 0 auto;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: .5rem;
+        padding: .75rem;
+        border-right: 0;
+        border-bottom: 1px solid rgba(148, 163, 184, .14);
+    }
+
+    body:has(#panel-global) > div.flex-1.flex.overflow-hidden > aside.w-60 > button {
+        flex: 1 1 calc(50% - .5rem);
+        min-width: 0;
+        min-height: 42px;
+        padding: .65rem .75rem;
+        text-align: left;
+        overflow-wrap: anywhere;
+    }
+
+    body:has(#panel-global) > div.flex-1.flex.overflow-hidden > main {
+        width: 100%;
+        min-width: 0;
+        overflow: visible;
+        padding: .9rem .75rem;
+    }
+
+    body:has(#panel-global) .panel-content {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    body:has(#panel-global) .generic-card-dialog-wide {
+        height: calc(100vh - 1rem);
+        height: calc(100dvh - 1rem);
+        margin-top: .5rem;
+    }
+
+    /* Inputs must remain visible when the mobile keyboard opens. */
+    .login-card {
+        width: min(430px, calc(100vw - 24px));
+        padding: clamp(1.25rem, 6vw, 2rem);
+        max-height: calc(100vh - 24px);
+        max-height: calc(100dvh - 24px);
+        overflow-y: auto;
+    }
+
+@media (max-width: 380px) {
+    #movie-grid {
+        gap: .5rem;
+    }
+
+    .candidate-resource-card {
+        padding: .75rem !important;
+    }
+
+    #candidate-filters button {
+        flex-basis: 100%;
+    }
+}
