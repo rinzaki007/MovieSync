@@ -40,7 +40,9 @@ jobs:
           node-version: "22"
 
       - name: Check frontend JavaScript syntax
-        run: node --check static/js/resource-select.js
+        run: |
+          node --check static/js/main.js
+          node --check static/js/resource-select.js
 
       - name: Install test dependencies
         run: pip install -r requirements-dev.txt
