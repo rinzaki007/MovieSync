@@ -727,16 +727,34 @@ class SubscriptionManager:
                 for key in (sub.get("saved_episodes", []) or [])
                 if str(key).strip()
             }
+            baseline_episode = max(0, int(sub.get("start_ep") or 0))
+            baseline_season = max(0, int(sub.get("start_season") or 0))
+            source_id = str(sub.get("source_id") or "").strip()
             for item in files:
                 fid = str(item.get("fid") or "").strip()
                 is_initial = fid in initial_file_keys
                 already_saved = fid in saved_keys
-                if (
-                    fid
-                    and not already_saved
-                    and (fid not in tracked_keys or is_initial)
-                    and fid not in selected_fids
-                ):
+                if not fid or already_saved or fid in selected_fids:
+                    continue
+
+                # The selected initial file is the inclusive baseline: transfer
+                # it once, then only episodes after it. Generic/all-mode tasks
+                # must not turn a single selected episode into a whole-share dump.
+                if not is_initial and baseline_episode > 0:
+                    file_name = str(item.get("file_name") or item.get("name") or "")
+                    season, episode = _parse_source_episode(
+                        self.resource_sources,
+                        source_id,
+                        file_name,
+                    )
+                    if episode is not None:
+                        if season is not None and baseline_season > 0:
+                            if (season, episode) <= (baseline_season, baseline_episode):
+                                continue
+                        elif episode <= baseline_episode:
+                            continue
+
+                if fid not in tracked_keys or is_initial:
                     selected.append({"fid": fid})
                     found_keys.append(fid)
                     selected_fids.add(fid)
