@@ -124,3 +124,46 @@ def test_search_result_episode_statistics_use_shared_rules_for_each_source():
     assert pansou[1:4] == (3, 3, 0)
     assert "S02 E07-E08" in pansou[0]
     assert "S03 E01" in pansou[0]
+
+
+def test_legacy_filename_rule_migrates_into_new_rule_list():
+    card = FilenameRecognitionCard()
+    legacy = {
+        "pattern": "^Old-Episode-([0-9]+)[.]mkv$",
+        "replace": r"Show.S01E\\1.mkv",
+    }
+
+    normalized = card.validate_config({"magic_regex": legacy})
+
+    assert "magic_regex" not in normalized
+    assert normalized["rules"] == [
+        {
+            "pattern": legacy["pattern"],
+            "replace": legacy["replace"],
+            "source_ids": [],
+        }
+    ]
+
+
+def test_legacy_filename_rule_is_preserved_when_new_rules_already_exist():
+    card = FilenameRecognitionCard()
+    legacy = {
+        "pattern": "^Old-Episode-([0-9]+)[.]mkv$",
+        "replace": r"Show.S01E\\1.mkv",
+    }
+    current = {
+        "pattern": r"^New-Episode-([0-9]+)[.]mkv$",
+        "replace": r"Show.S01E\\1.mkv",
+        "source_ids": [],
+    }
+
+    normalized = card.validate_config({"magic_regex": legacy, "rules": [current]})
+
+    assert normalized["rules"] == [
+        current,
+        {
+            "pattern": legacy["pattern"],
+            "replace": legacy["replace"],
+            "source_ids": [],
+        },
+    ]
