@@ -641,7 +641,7 @@ class SearchService:
             )
             if verified is False:
                 message = (
-                    "网盘接口已接受转存请求，但暂未能核实所选文件已出现在目标目录。"
+                    "网盘接口已接受转存请求，但结果待核实：暂未能确认所选文件已出现在目标目录。"
                     "请检查目标网盘后再决定是否重试"
                 )
                 self.logger.warning("《%s》转存结果待核实，resource_id=%s", title, resource_id)
