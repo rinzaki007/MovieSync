@@ -1096,7 +1096,9 @@ class SubscriptionManager:
                     resource_id == selected_pwd_id and fid in initial_file_keys
                 )
                 legacy_selected_key = target_id == selected_target_id and legacy_key in tracked
-                confirmed_saved = key in saved_episode_keys or legacy_key in saved_episode_keys
+                confirmed_saved = key in saved_episode_keys or (
+                    target_id == selected_target_id and legacy_key in saved_episode_keys
+                )
                 # Do not re-copy files with a durable success record. A tracked-only
                 # marker on a selected initial file may be the false-positive written
                 # by older versions before filename recognition was available.
