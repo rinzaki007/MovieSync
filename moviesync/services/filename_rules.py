@@ -119,7 +119,7 @@ _VARIETY_MARKER = re.compile(
 _RELEASE_YEAR = re.compile(r"(?<!\d)[（( ._-]?(18\d{2}|19\d{2}|20\d{2}|21\d{2})[）) ._-]?(?!\d)")
 _MULTI_EPISODE = re.compile(
     r"(?i)(?:S\s*\d{1,2}[\s._-]*E[Pp]?\s*\d{1,4})"
-    r"\s*[-~至]\s*(?:S\s*\d{1,2}[\s._-]*E[Pp]?\s*)?(\d{1,4})"
+    r"\s*[-~至]\s*(?:(?:S\s*\d{1,2}[\s._-]*E[Pp]?)|E[Pp]?)?\s*(\d{1,4})"
 )
 
 
