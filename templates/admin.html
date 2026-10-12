@@ -1321,7 +1321,7 @@
                 .replace(/第\\s*\\d{1,4}\\s*[集话期]/g, " ")
                 .replace(/(?:^|[^A-Za-z0-9])E[Pp]?\\s*\\d{1,4}(?!\\d)/ig, " ")
                 .replace(/(?<!\\d)(18\\d{2}|19\\d{2}|20\\d{2}|21\\d{2})(?!\\d)/g, " ")
-                .replace(/2160p|1080p|720p|480p|4k|8k|uhd|bluray|blu-ray|web-?dl|web-?rip|hdtv|dvdrip|remux|x26[45]|hevc|hdr10?\\+?/ig, " ")
+                .replace(/2160p|1080p|720p|480p|4k|8k|uhd|bluray|blu-ray|web-?dl|web-?rip|hdtv|dvdrip|remux|x26[45]|hevc|hdr10?\\+?|动漫|动画|番剧|新番/ig, " ")
                 .replace(/[._\\[\\](){}【】（）]+/g, " ").replace(/\\s+/g, " ").trim();
             if (!title) title = stem;
             // If built-in parsing does not recognize it, preview the same ordered custom-rule list as a fallback.
@@ -1412,7 +1412,7 @@
                         '<div class="rounded-lg border border-slate-700/70 bg-slate-950/40 p-2"><div class="text-[11px] font-medium text-slate-200">电影 · 名称 + 年份</div><div class="mt-1 text-[10px] text-slate-400">肖申克的救赎 (1994) 1080p.mkv</div><div class="mt-1 text-[10px] text-emerald-300">名称：肖申克的救赎 · 年份：1994</div></div>' +
                         '<div class="rounded-lg border border-slate-700/70 bg-slate-950/40 p-2"><div class="text-[11px] font-medium text-slate-200">剧集 · 季 / 集</div><div class="mt-1 text-[10px] text-slate-400">庆余年.S02E07.1080p.mkv</div><div class="mt-1 text-[10px] text-emerald-300">名称：庆余年 · 第 2 季 · 第 7 集</div></div>' +
                         '<div class="rounded-lg border border-slate-700/70 bg-slate-950/40 p-2"><div class="text-[11px] font-medium text-slate-200">中文剧集</div><div class="mt-1 text-[10px] text-slate-400">甄嬛传 第12集.mp4</div><div class="mt-1 text-[10px] text-emerald-300">名称：甄嬛传 · 集数：12（季数未知）</div></div>' +
-                        '<div class="rounded-lg border border-slate-700/70 bg-slate-950/40 p-2"><div class="text-[11px] font-medium text-slate-200">动画 / 综艺</div><div class="mt-1 text-[10px] text-slate-400">动画 S01E03 · 综艺 第12期 / 日期期数</div><div class="mt-1 text-[10px] text-emerald-300">尽可能提取类型、名称、季集或期数</div></div>' +
+                        '<div class="rounded-lg border border-slate-700/70 bg-slate-950/40 p-2"><div class="text-[11px] font-medium text-slate-200">动画 / 综艺</div><div class="mt-1 text-[10px] text-slate-400">动画 S01E03 · 综艺 第12期 · Running Man 2024.06.02 E705</div><div class="mt-1 text-[10px] text-emerald-300">提取名称、类型、年份、季集 / 期数及部分节目日期</div></div>' +
                         '</div>' +
                         '<div class="mt-3 text-[10px] font-semibold text-slate-300">快速试一下文件名</div>' +
                         '<div class="mt-1 flex flex-col gap-2 sm:flex-row"><input data-filename-preview-input type="text" value="庆余年.S02E07.1080p.WEB-DL.mkv" placeholder="粘贴一个真实文件名" class="glass-input min-w-0 flex-1 rounded-lg border border-slate-800 px-3 py-2 text-xs text-slate-200">' +
