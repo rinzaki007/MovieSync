@@ -327,14 +327,12 @@ class ConfigStore:
                 self.store.write(current)
         return current
 
-    def save(self, incoming: dict) -> dict:
-        if not isinstance(incoming, dict):
-            raise ConfigValidationError(
-                "配置必须是 JSON 对象"
-            )
-
-        current = self.load()
-
+    def _import_legacy_top_level_fields(
+        self,
+        current: dict,
+        incoming: dict,
+    ) -> dict:
+        """迁移旧版全局 Quark 字段；新卡片配置请使用 cards[card_id]。"""
         legacy_quark = {}
         if incoming.get("clear_quark_cookie") is True:
             legacy_quark["clear_cookie"] = True
@@ -346,7 +344,18 @@ class ConfigStore:
             legacy_quark["category_fids"] = incoming["category_fids"]
         if legacy_quark:
             self.save_quark_config(legacy_quark)
-            current = self.load()
+            return self.load()
+        return current
+
+    def save(self, incoming: dict) -> dict:
+        if not isinstance(incoming, dict):
+            raise ConfigValidationError(
+                "配置必须是 JSON 对象"
+            )
+
+        current = self.load()
+
+        current = self._import_legacy_top_level_fields(current, incoming)
 
         if "openlist_url" in incoming:
             current["openlist_url"] = self._normalize_openlist(
