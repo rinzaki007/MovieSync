@@ -66,8 +66,8 @@
     }
 
     body > header.glass-nav:first-of-type > div > div:first-child {
-        width: 100%;
-        max-width: 100%;
+        width: calc(100% - 76px);
+        max-width: calc(100% - 76px);
         overflow-x: auto;
         overscroll-behavior-x: contain;
         scrollbar-width: none;
