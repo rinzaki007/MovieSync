@@ -206,8 +206,10 @@ def test_subscription_monitors_selected_channel_shares(tmp_path):
 
     ok, message = manager.check_subscription_now(sub["id"])
     assert ok is True
-    assert "成功追更 1 项" in message
-    assert storage.transfers == [("share2", ["ep2"])]
+    assert "成功追更 2 项" in message
+    # The selected file is part of the initial transfer request even when the
+    # API supplied only its FID and the filename is resolved during the scan.
+    assert storage.transfers == [("share1", ["ep1"]), ("share2", ["ep2"])]
 
     storage.shares["share3"] = [
         {"fid": "ep3", "file_name": "Show.S01E03.mkv"},
@@ -1862,6 +1864,48 @@ def test_channel_subscription_preserves_season_when_card_parser_omits_it(tmp_pat
         assert "成功追更 3 项" in message
         assert storage.transfers == [
             ("share-season-baseline", ["s3e6", "s3e7", "s4e1"]),
+        ]
+    finally:
+        manager.stop_scheduler()
+
+
+def test_channel_subscription_transfers_selected_fid_when_creation_payload_omits_filename(tmp_path):
+    storage = ChannelStorageTargets()
+    storage.shares = {
+        "share-14": [
+            {"fid": f"ep{episode}", "file_name": f"Show.S01E{episode:02d}.mkv"}
+            for episode in range(1, 15)
+        ],
+    }
+    sources = FakeResourceSources()
+    sources.shares = [{"channel": "demo", "pwd_id": "share-14"}]
+    manager = SubscriptionManager(
+        tmp_path / "selected-fid-without-name.json",
+        storage,
+        sources,
+        FakeLogger(),
+    )
+    # Some callers send selected files as FID strings, not {fid, file_name}
+    # objects. The selected episode is the baseline but must still transfer once.
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-14",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        source_id="telegram",
+        channel="demo",
+        start_ep=1,
+        files=["ep1"],
+    )
+
+    try:
+        assert sub["initial_file_keys"] == ["ep1"]
+        assert "share-14:ep1" not in sub["tracked_file_keys"]
+        ok, message = manager.check_subscription_now(sub["id"])
+        assert ok is True
+        assert "成功追更 14 项" in message
+        assert storage.transfers == [
+            ("share-14", [f"ep{episode}" for episode in range(1, 15)])
         ]
     finally:
         manager.stop_scheduler()
