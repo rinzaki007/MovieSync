@@ -22,12 +22,12 @@ class FilenameRecognitionCard(FilenameProcessorCard):
         name="文件名识别",
         version="1.1.0",
         type="filename_processor",
-        description="统一识别不同资源来源中的季集信息和特殊文件命名。",
+        description="自动识别电影年份、剧集季集、动画集数和综艺期数；大多数情况无需手动配置。",
         capabilities=("filename.parse", "filename.normalize"),
         config_fields=(
             {
                 "key": "rules",
-                "label": "文件名识别规则",
+                "label": "特殊文件名规则（高级设置）",
                 "type": "json",
                 "editor": "rule_list",
                 "item_fields": (
@@ -35,7 +35,7 @@ class FilenameRecognitionCard(FilenameProcessorCard):
                     {"key": "replace", "label": "替换格式", "placeholder": "例如：S\\1E\\2"},
                     {
                         "key": "source_ids",
-                        "label": "限定来源 ID（可选）",
+                        "label": "只对哪些资源来源生效（可选）",
                         "placeholder": "留空表示所有来源；多个 ID 用逗号分隔",
                     },
                 ),
