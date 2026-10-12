@@ -57,7 +57,7 @@ def test_mobile_task_admin_and_openlist_controls_are_compact():
     assert "body:has(#task-list) > main > section:nth-child(2)" in stylesheet
     assert "body:has(#panel-global) > header.glass-nav > div:last-child" in stylesheet
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in stylesheet
-    assert "v=20261012-mobile-v3" in stylesheet
+    assert "v=20261012-mobile-v3" in STYLE.read_text(encoding="utf-8")
     assert "body:has(#task-list) > main > section:first-child p" in stylesheet
     assert "body:has(#panel-global) #cards-list" in stylesheet
     assert stylesheet.rstrip().endswith("}")
