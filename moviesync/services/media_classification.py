@@ -128,9 +128,20 @@ def classify_metadata_item(
     if not isinstance(genre_ids, list):
         genre_ids = []
     genre_category = next(
-        (_TMDB_GENRE_CATEGORY.get(value) for value in genre_ids if isinstance(value, int) and value in _TMDB_GENRE_CATEGORY),
+        (
+            _TMDB_GENRE_CATEGORY.get(value)
+            for value in genre_ids
+            if isinstance(value, int) and value in _TMDB_GENRE_CATEGORY
+        ),
         None,
-    ) or next((_GENRE_NAME_CATEGORY.get(value) for value in genre_names if value in _GENRE_NAME_CATEGORY), None)
+    ) or next(
+        (
+            _GENRE_NAME_CATEGORY.get(value)
+            for value in genre_names
+            if value in _GENRE_NAME_CATEGORY
+        ),
+        None,
+    )
 
     # Genre-derived categories apply to TV titles. Films remain films even when
     # animated; their movie/tv format is what controls resource handling.
