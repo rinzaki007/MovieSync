@@ -1769,3 +1769,46 @@ def test_channel_subscription_with_legacy_all_mode_still_applies_episode_baselin
         for fid in fids
     )
 
+
+
+def test_channel_subscription_falls_back_to_generic_parser_for_numeric_episode(tmp_path):
+    class NumericEpisodeFallbackSources(FakeResourceSources):
+        def parse_tv_episode(self, source_id, file_name):
+            # Simulate a card parser that cannot recognize plain "45.mkv".
+            return None, None
+
+    storage = ChannelStorageTargets()
+    storage.shares = {
+        "share-numeric": [
+            {"fid": "ep44", "file_name": "44.mkv"},
+            {"fid": "ep45", "file_name": "45.mkv"},
+            {"fid": "ep46", "file_name": "46.mkv"},
+        ],
+    }
+    sources = NumericEpisodeFallbackSources()
+    sources.shares = [{"channel": "demo", "pwd_id": "share-numeric"}]
+    manager = SubscriptionManager(
+        tmp_path / "numeric-episode-fallback.json",
+        storage,
+        sources,
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-numeric",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        source_id="telegram",
+        channel="demo",
+        files=[{"fid": "ep45", "file_name": "45.mkv"}],
+    )
+
+    try:
+        assert sub["start_ep"] == 45
+        ok, message = manager.check_subscription_now(sub["id"])
+
+        assert ok is True
+        assert "成功追更 2 项" in message
+        assert storage.transfers == [("share-numeric", ["ep45", "ep46"])]
+    finally:
+        manager.stop_scheduler()
