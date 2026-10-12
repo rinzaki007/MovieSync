@@ -117,7 +117,10 @@ def classify_metadata_item(
 
     category = normalize_media_category(result.get("category")) or normalize_media_category(result.get("tag"))
     genres = result.get("genres")
-    genre_names = [str(value).strip().lower() for value in genres] if isinstance(genres, list) else []
+    genre_names = [
+        str(value.get("name") if isinstance(value, dict) else value).strip().lower()
+        for value in genres
+    ] if isinstance(genres, list) else []
     genre_ids = result.get("genre_ids")
     if not isinstance(genre_ids, list):
         genre_ids = []
