@@ -92,7 +92,7 @@ class DynamicStorageTargets(FakeStorageTargets):
         return True, "ok"
 
 
-def test_subscription_tracks_new_files_from_selected_source(tmp_path):
+def test_subscription_transfers_selected_initial_files_and_tracks_new_files(tmp_path):
     storage = DynamicStorageTargets()
     manager = SubscriptionManager(
         tmp_path / "subscriptions.json",
@@ -108,10 +108,12 @@ def test_subscription_tracks_new_files_from_selected_source(tmp_path):
         files=[{"fid": "ep1"}, {"fid": "ep2"}],
     )
 
+    # Explicitly selected initial files must be included in the first transfer,
+    # even though task creation also stores them as tracking markers.
     ok, message = manager.check_subscription_now(sub["id"])
     assert ok is True
-    assert "暂无新更新" in message
-    assert storage.transfers == []
+    assert "成功追更 2 项" in message
+    assert storage.transfers == [["ep1", "ep2"]]
 
     storage.files.append(
         {"fid": "ep3", "file_name": "Show.S01E03.1080p.mkv"}
@@ -120,7 +122,7 @@ def test_subscription_tracks_new_files_from_selected_source(tmp_path):
     ok, message = manager.check_subscription_now(sub["id"])
     assert ok is True
     assert "成功追更 1 项" in message
-    assert storage.transfers == [["ep3"]]
+    assert storage.transfers == [["ep1", "ep2"], ["ep3"]]
 
     saved = manager.get_subscriptions()[0]
     assert "ep3" in saved["tracked_file_keys"]
