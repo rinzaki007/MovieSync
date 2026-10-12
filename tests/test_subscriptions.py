@@ -2004,11 +2004,11 @@ def test_channel_subscription_transfers_explicitly_selected_file_with_unrecogniz
 
 
 
-def test_generic_all_mode_transfers_selected_initial_fid_even_when_pretracked(tmp_path):
+def test_generic_all_mode_transfers_selected_episode_and_later_episodes_only(tmp_path):
     storage = DynamicStorageTargets()
     storage.files = [
         {"fid": f"ep{episode}", "file_name": f"Show.S01E{episode:02d}.mkv"}
-        for episode in range(45, 59)
+        for episode in range(15, 25)
     ]
     manager = SubscriptionManager(
         tmp_path / "generic-all-initial-selection.json",
@@ -2018,27 +2018,29 @@ def test_generic_all_mode_transfers_selected_initial_fid_even_when_pretracked(tm
     )
     # Without channel/source metadata this task takes the generic "all" path.
     # The selected FID is pre-marked tracked by legacy task creation logic, but
-    # that marker alone must not suppress its first transfer.
+    # that marker alone must not suppress its first transfer. Episodes before
+    # the selected baseline must remain excluded.
     sub = manager.add_subscription(
         title="Show",
-        pwd_id="share-45",
+        pwd_id="share-20",
         target_fid="0",
         storage_target_id="demo-storage",
-        files=[{"fid": "ep45", "file_name": "Show.S01E45.mkv"}],
+        files=[{"fid": "ep20", "file_name": "Show.S01E20.mkv"}],
     )
 
     try:
         assert sub["tracking_mode"] == "all"
-        assert "ep45" in sub["tracked_file_keys"]
+        assert sub["start_ep"] == 20
+        assert "ep20" in sub["tracked_file_keys"]
         ok, message = manager.check_subscription_now(sub["id"])
 
         assert ok is True
-        assert "成功追更 14 项" in message
+        assert "成功追更 5 项" in message
         assert storage.transfers == [
-            [f"ep{episode}" for episode in range(45, 59)]
+            [f"ep{episode}" for episode in range(20, 25)]
         ]
         saved = manager.get_subscriptions()[0]
-        assert "ep45" in saved["saved_episodes"]
+        assert "ep20" in saved["saved_episodes"]
     finally:
         manager.stop_scheduler()
 
