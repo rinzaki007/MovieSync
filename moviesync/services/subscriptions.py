@@ -980,14 +980,18 @@ class SubscriptionManager:
         # history as a fallback so older confirmed files do not become eligible
         # for transfer again after they fall out of that bounded index.
         saved_episodes = sub.get("saved_episodes", [])
-        if isinstance(saved_episodes, list):
-            tracked.update(
-                str(key).strip()
-                for key in saved_episodes
-                if str(key).strip()
-            )
+        saved_episode_keys = {
+            str(key).strip()
+            for key in (saved_episodes if isinstance(saved_episodes, list) else [])
+            if str(key).strip()
+        }
+        tracked.update(saved_episode_keys)
         # The user-selected files are the initial transfer request, not just a
         # tracking watermark. Transfer them once even when they equal the baseline.
+        # Older versions incorrectly pre-marked selected files whose names could
+        # not be parsed as tracked. Keep respecting that historical state for every
+        # other file, but do not let an unconfirmed legacy marker suppress an
+        # explicitly selected initial file. Confirmed-success history remains final.
         initial_file_keys = {
             str(fid).strip()
             for fid in (sub.get("initial_file_keys", []) or [])
@@ -1005,7 +1009,7 @@ class SubscriptionManager:
         # publish overlapping ranges (for example 1-10 and 8-20); only queue an
         # episode once across different shares, while preserving multi-part files
         # from the same share and same-number episodes from different seasons.
-        queued_episode_sources: dict[tuple[str, int | None, int], tuple[str, str, str]] = {}
+        queued_episode_sources: dict[tuple[str, int | None, int | None], tuple[str, str, str]] = {}
         resolution_errors: list[str] = []
 
         self._set_status(sub, "running", "resolve", "正在并发解析发现的资源…")
@@ -1088,8 +1092,17 @@ class SubscriptionManager:
                     else f"{target_id}:{key_base}" if target_id else key_base
                 )
                 queue_key = (resource_type, resource_id, target_id, fid)
+                is_selected_initial = (
+                    resource_id == selected_pwd_id and fid in initial_file_keys
+                )
                 legacy_selected_key = target_id == selected_target_id and legacy_key in tracked
-                if (key in tracked or legacy_selected_key) or queue_key in queued_keys:
+                confirmed_saved = key in saved_episode_keys or legacy_key in saved_episode_keys
+                # Do not re-copy files with a durable success record. A tracked-only
+                # marker on a selected initial file may be the false-positive written
+                # by older versions before filename recognition was available.
+                if confirmed_saved:
+                    continue
+                if ((key in tracked or legacy_selected_key) and not is_selected_initial) or queue_key in queued_keys:
                     continue
                 file_name = str(item.get("file_name") or "")
                 if not file_name.lower().endswith(VIDEO_EXTENSIONS):
@@ -1104,11 +1117,14 @@ class SubscriptionManager:
                     # remains unclassified. Otherwise the incremental scan could
                     # permanently skip a share before recognition rules improve.
                     scan_complete = False
-                    continue
-                is_selected_initial = (
-                    resource_id == selected_pwd_id and fid in initial_file_keys
-                )
+                    # Explicit user selection is authoritative for the first run:
+                    # it must still transfer even if the global/card parser cannot
+                    # identify the episode. Unselected unclassified files are skipped.
+                    if not is_selected_initial:
+                        continue
                 if not is_selected_initial:
+                    if episode is None:
+                        continue
                     if season is not None and baseline_season > 0:
                         if (season, episode) <= (baseline_season, baseline_episode):
                             continue
@@ -1117,11 +1133,12 @@ class SubscriptionManager:
                         continue
                 group_key = (resource_type, resource_id, target_id)
                 episode_key = (target_id, season, episode)
-                previous_group = queued_episode_sources.get(episode_key)
-                if previous_group is not None and previous_group != group_key:
-                    # Another share already covers this episode. Do not transfer
-                    # the overlap twice, but keep scanning for later episodes.
-                    continue
+                if episode is not None:
+                    previous_group = queued_episode_sources.get(episode_key)
+                    if previous_group is not None and previous_group != group_key:
+                        # Another share already covers this episode. Do not transfer
+                        # the overlap twice, but keep scanning for later episodes.
+                        continue
                 grouped.setdefault(group_key, {
                     "resource": resource,
                     "token": token,
@@ -1131,7 +1148,8 @@ class SubscriptionManager:
                 })["files"].append({"fid": fid})
                 grouped[group_key]["keys"].append(key)
                 queued_keys.add(queue_key)
-                queued_episode_sources.setdefault(episode_key, group_key)
+                if episode is not None:
+                    queued_episode_sources.setdefault(episode_key, group_key)
 
         if not grouped:
             if resolution_errors:
