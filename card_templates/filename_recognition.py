@@ -32,7 +32,7 @@ class FilenameRecognitionCard(FilenameProcessorCard):
                 "editor": "rule_list",
                 "item_fields": (
                     {"key": "pattern", "label": "原始文件名的匹配方式", "placeholder": "仅特殊命名需要填写，例如 Raw_S(\\d+)_E(\\d+)"},
-                    {"key": "replace", "label": "统一后的文件名格式", "placeholder": "例如：Show.S\\1E\\2.mkv"},
+                    {"key": "replace", "label": "用于识别的标准格式（不会改动原文件）", "placeholder": "例如：Show.S\\1E\\2.mkv"},
                     {
                         "key": "source_ids",
                         "label": "只对哪些资源来源生效（可选）",
