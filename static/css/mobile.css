@@ -430,3 +430,196 @@
         flex-basis: 100%;
     }
 }
+
+/* Mobile v3: stronger, visible density improvements for narrow screens.
+   Keep resource scraping/selection untouched; these rules target only home, tasks and admin. */
+@media (max-width: 640px) {
+    /* Home: reduce the two navigation bars' combined height and keep actions easy to tap. */
+    body:has(#movie-grid) > header.glass-nav:first-of-type {
+        padding-top: .45rem;
+        padding-bottom: .45rem;
+    }
+    body:has(#movie-grid) > header.glass-nav:first-of-type > div {
+        gap: .4rem;
+    }
+    body:has(#movie-grid) > div.glass-subnav {
+        padding: .4rem .55rem;
+    }
+    body:has(#movie-grid) > div.glass-subnav > div {
+        gap: .35rem;
+    }
+    body:has(#movie-grid) > div.glass-subnav a {
+        min-height: 32px;
+        padding: .35rem .45rem;
+        font-size: 10px;
+    }
+    body:has(#movie-grid) > main {
+        padding: .65rem;
+    }
+
+    /* Task center: make the first screen useful instead of spending it on headings. */
+    body:has(#task-list) > header.glass-nav {
+        position: sticky;
+        top: 0;
+    }
+    body:has(#task-list) > header.glass-nav > div {
+        padding: .45rem .65rem;
+        gap: .45rem;
+    }
+    body:has(#task-list) > header.glass-nav > div > div:first-child {
+        flex: 0 0 auto;
+    }
+    body:has(#task-list) > header.glass-nav > div > div:last-child {
+        width: auto;
+        flex: 1 1 auto;
+        justify-content: flex-end;
+        gap: .35rem;
+    }
+    body:has(#task-list) > header.glass-nav > div > div:last-child > a,
+    body:has(#task-list) > header.glass-nav > div > div:last-child > button {
+        min-height: 36px;
+        padding: .45rem .6rem;
+        font-size: 10px;
+        flex: 0 1 auto;
+    }
+    body:has(#task-list) > main {
+        padding: .65rem;
+    }
+    body:has(#task-list) > main > section:first-child {
+        margin-bottom: .6rem;
+    }
+    body:has(#task-list) > main > section:first-child h1 {
+        font-size: 1.15rem;
+        line-height: 1.45rem;
+    }
+    body:has(#task-list) > main > section:first-child p {
+        display: none;
+    }
+    body:has(#task-list) > main > section:nth-child(2) {
+        gap: .45rem;
+        margin-bottom: .7rem;
+    }
+    body:has(#task-list) > main > section:nth-child(2) > div {
+        padding: .6rem .7rem;
+        border-radius: .7rem;
+    }
+    body:has(#task-list) > main > section:nth-child(2) > div > div:first-child {
+        font-size: 10px;
+    }
+    body:has(#task-list) > main > section:nth-child(2) > div > div:last-child {
+        margin-top: .2rem;
+        font-size: 1.2rem;
+        line-height: 1.5rem;
+    }
+    body:has(#task-list) > main > section.glass-panel,
+    body:has(#task-list) > main > section.mt-6 {
+        margin-top: .7rem;
+        border-radius: .85rem;
+    }
+    body:has(#task-list) > main > section.glass-panel > div:first-child,
+    body:has(#task-list) > main > section.mt-6 > div:first-child {
+        padding: .7rem;
+        gap: .55rem;
+    }
+    body:has(#task-list) > main > section.glass-panel > div:first-child p,
+    body:has(#task-list) > main > section.mt-6 > div:first-child p {
+        display: none;
+    }
+    body:has(#task-list) .task-filter {
+        min-height: 34px;
+        padding: .35rem .5rem;
+        font-size: 10px;
+        white-space: nowrap;
+    }
+    body:has(#task-list) .task-filter + .task-filter {
+        margin-left: 0;
+    }
+    #task-list > div,
+    #smart-task-list > div,
+    #history-list > div {
+        padding: .7rem !important;
+    }
+
+    /* Admin: stop the desktop shell from constraining the page; keep navigation compact. */
+    body:has(#panel-global) {
+        min-height: 100dvh;
+        height: auto;
+        overflow-x: hidden;
+    }
+    body:has(#panel-global) > header.glass-nav {
+        position: relative;
+        top: auto;
+        gap: .5rem;
+        padding: .65rem;
+    }
+    body:has(#panel-global) > header.glass-nav > div:first-child {
+        width: 100%;
+        font-size: 14px;
+    }
+    body:has(#panel-global) > header.glass-nav > div:last-child {
+        display: flex;
+        width: 100%;
+        gap: .4rem;
+    }
+    body:has(#panel-global) > header.glass-nav > div:last-child > a,
+    body:has(#panel-global) > header.glass-nav > div:last-child > form {
+        flex: 1 1 0;
+    }
+    body:has(#panel-global) > header.glass-nav > div:last-child > form > button {
+        width: 100%;
+    }
+    body:has(#panel-global) > div.flex-1.flex.overflow-hidden {
+        flex: 1 0 auto;
+        min-height: 0;
+    }
+    body:has(#panel-global) > div.flex-1.flex.overflow-hidden > aside.w-60 {
+        padding: .55rem;
+        gap: .4rem;
+    }
+    body:has(#panel-global) > div.flex-1.flex.overflow-hidden > aside.w-60 > button {
+        min-height: 42px;
+        padding: .55rem .6rem;
+        font-size: 11px;
+    }
+    body:has(#panel-global) > div.flex-1.flex.overflow-hidden > main {
+        padding: .75rem .6rem;
+        border-left: 0;
+        border-right: 0;
+        border-radius: 0;
+    }
+    body:has(#panel-global) .panel-content {
+        display: block;
+    }
+    body:has(#panel-global) .panel-content.hidden {
+        display: none;
+    }
+    body:has(#panel-global) .panel-content > h2,
+    body:has(#panel-global) .panel-content > div:first-child h2 {
+        font-size: 14px;
+    }
+    body:has(#panel-global) .panel-content.space-y-6 > * + * {
+        margin-top: 1rem;
+    }
+    body:has(#panel-global) #panel-global .space-y-1,
+    body:has(#panel-global) #panel-security .space-y-1 {
+        margin-top: .8rem;
+    }
+    body:has(#panel-global) #panel-global input,
+    body:has(#panel-global) #panel-global select,
+    body:has(#panel-global) #panel-security input,
+    body:has(#panel-global) #panel-security select {
+        min-height: 42px;
+        padding: .65rem .75rem;
+        font-size: 16px;
+    }
+    body:has(#panel-global) #cards-list {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    body:has(#panel-global) .generic-card-dialog-wide {
+        width: calc(100vw - .5rem);
+        max-width: calc(100vw - .5rem);
+        height: calc(100dvh - .5rem);
+        margin: .25rem;
+        border-radius: .9rem;
+    }
+}

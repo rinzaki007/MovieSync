@@ -9,7 +9,7 @@ MOBILE = ROOT / "static" / "css" / "mobile.css"
 
 def test_mobile_stylesheet_is_loaded_by_shared_styles():
     stylesheet = STYLE.read_text(encoding="utf-8")
-    assert stylesheet.startswith('@import url("mobile.css");')
+    assert stylesheet.startswith('@import url("mobile.css?v=20261012-mobile-v3");')
     assert MOBILE.is_file()
 
 
@@ -25,7 +25,7 @@ def test_mobile_stylesheet_covers_core_portrait_layouts():
 
 def test_login_page_loads_mobile_stylesheet():
     login = (TEMPLATES / "login.html").read_text(encoding="utf-8")
-    assert "filename='css/mobile.css'" in login
+    assert "filename='css/mobile.css'" in login and "v=20261012-mobile-v3" in login
 
 
 def test_page_specific_mobile_rules_are_scoped_to_their_pages():
@@ -57,4 +57,7 @@ def test_mobile_task_admin_and_openlist_controls_are_compact():
     assert "body:has(#task-list) > main > section:nth-child(2)" in stylesheet
     assert "body:has(#panel-global) > header.glass-nav > div:last-child" in stylesheet
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in stylesheet
+    assert "v=20261012-mobile-v3" in STYLE.read_text(encoding="utf-8")
+    assert "body:has(#task-list) > main > section:first-child p" in stylesheet
+    assert "body:has(#panel-global) #cards-list" in stylesheet
     assert stylesheet.rstrip().endswith("}")
