@@ -7,7 +7,7 @@ from typing import Any
 from moviesync.cards import CardManifest, FilenameProcessorCard
 from moviesync.errors import ConfigValidationError
 from moviesync.regex_safety import has_nested_unbounded_quantifier
-from moviesync.services.filename_rules import parse_tv_episode
+from moviesync.services.filename_rules import parse_media_filename, parse_tv_episode
 
 
 class FilenameRecognitionCard(FilenameProcessorCard):
@@ -47,6 +47,10 @@ class FilenameRecognitionCard(FilenameProcessorCard):
             },
         ),
     )
+
+    def parse_filename(self, file_name: str) -> dict[str, object]:
+        """返回名称、媒体类型、年份与季集等结构化识别结果。"""
+        return parse_media_filename(file_name)
 
     def parse_episode(
         self, file_name: str, config: dict[str, Any]
