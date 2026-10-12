@@ -92,9 +92,11 @@
     }
 
     body > header.glass-nav:first-of-type > div > div:nth-child(3) {
-        position: absolute;
-        top: .65rem;
-        right: .65rem;
+        position: static;
+        order: 1;
+        width: auto;
+        margin-left: auto;
+        align-self: flex-end;
     }
 
     /* The homepage's second sticky bar must not overlap the now-taller mobile header. */
