@@ -3,6 +3,20 @@ from card_templates.telegram import TelegramResourceSource
 from moviesync.cards import CardRegistry
 
 
+def test_filename_recognition_admin_shows_builtin_catalog_and_preview():
+    from pathlib import Path
+
+    html = (Path(__file__).resolve().parents[1] / "templates" / "admin.html").read_text(
+        encoding="utf-8"
+    )
+    assert "内置识别规则（自动生效）" in html
+    assert "快速试一下文件名" in html
+    assert "data-filename-preview-run" in html
+    assert "已配置的自定义规则（按顺序尝试）" in html
+    assert "肖申克的救赎 (1994) 1080p.mkv" in html
+    assert "庆余年.S02E07.1080p.mkv" in html
+
+
 def test_card_management_uses_registry_manifests():
     registry = CardRegistry()
     registry.register(DoubanMetadataCard(object()))
