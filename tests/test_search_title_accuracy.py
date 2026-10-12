@@ -53,7 +53,12 @@ def test_movie_search_filters_clear_mismatched_chinese_title():
 
 
 def test_movie_search_can_check_english_original_titles():
-    movie = {\n        "title": "兰香如故",\n        "original_title": "Different Original Film",\n        "media_type": "movie",\n        "tag": "电影",\n    }
+    movie = {
+        "title": "兰香如故",
+        "original_title": "Different Original Film",
+        "media_type": "movie",
+        "tag": "电影",
+    }
     videos = [
         {"file_name": "The.Matrix.1999.BluRay.1080p.mkv"},
         {"file_name": "The.Matrix.1999.BluRay.Extras.mkv"},
