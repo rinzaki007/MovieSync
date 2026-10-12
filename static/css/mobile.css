@@ -56,19 +56,19 @@
     }
 
     /* Homepage top navigation: keep category shortcuts reachable, put search on its own row. */
-    body > header.glass-nav:first-of-type {
+    body:has(#movie-grid) > header.glass-nav:first-of-type {
         position: sticky;
         top: 0;
         padding-left: .65rem;
         padding-right: .65rem;
     }
 
-    body > header.glass-nav:first-of-type > div {
+    body:has(#movie-grid) > header.glass-nav:first-of-type > div {
         align-items: stretch;
         gap: .65rem;
     }
 
-    body > header.glass-nav:first-of-type > div > div:first-child {
+    body:has(#movie-grid) > header.glass-nav:first-of-type > div > div:first-child {
         width: calc(100% - 76px);
         max-width: calc(100% - 76px);
         overflow-x: auto;
@@ -77,24 +77,24 @@
         padding-bottom: 2px;
     }
 
-    body > header.glass-nav:first-of-type > div > div:first-child::-webkit-scrollbar {
+    body:has(#movie-grid) > header.glass-nav:first-of-type > div > div:first-child::-webkit-scrollbar {
         display: none;
     }
 
-    body > header.glass-nav:first-of-type > div > div:first-child > button,
-    body > header.glass-nav:first-of-type > div > div:first-child > a {
+    body:has(#movie-grid) > header.glass-nav:first-of-type > div > div:first-child > button,
+    body:has(#movie-grid) > header.glass-nav:first-of-type > div > div:first-child > a {
         flex: 0 0 auto;
         min-height: 38px;
     }
 
-    body > header.glass-nav:first-of-type > div > div:nth-child(2) {
+    body:has(#movie-grid) > header.glass-nav:first-of-type > div > div:nth-child(2) {
         order: 2;
         width: 100%;
         max-width: none;
         margin: 0;
     }
 
-    body > header.glass-nav:first-of-type > div > div:nth-child(3) {
+    body:has(#movie-grid) > header.glass-nav:first-of-type > div > div:nth-child(3) {
         position: static;
         order: 1;
         width: auto;
@@ -103,18 +103,18 @@
     }
 
     /* The homepage's second sticky bar must not overlap the now-taller mobile header. */
-    body > div.glass-subnav {
+    body:has(#movie-grid) > div.glass-subnav {
         position: relative;
         top: auto;
         z-index: 20;
         padding: .6rem .75rem;
     }
 
-    body > div.glass-subnav > div {
+    body:has(#movie-grid) > div.glass-subnav > div {
         gap: .5rem;
     }
 
-    body > div.glass-subnav a[href="/tasks"] {
+    body:has(#movie-grid) > div.glass-subnav a[href="/tasks"] {
         display: none;
     }
 
@@ -218,13 +218,12 @@
     }
 
     /* Admin: let cards, configuration fields and action buttons flow vertically. */
-    body > header.glass-nav {
-        padding-left: .75rem;
-        padding-right: .75rem;
-    }
-
-    body > header.glass-nav + main,
-    body > main {
+    body:has(#task-list) > header.glass-nav,
+    body:has(#resource-list) > header.glass-nav,
+    body:has(#movie-grid) > header.glass-nav,
+    body:has(#task-list) > main,
+    body:has(#resource-list) > main,
+    body:has(#movie-grid) > main {
         padding-left: .75rem;
         padding-right: .75rem;
     }
