@@ -213,7 +213,7 @@ def parse_media_filename(file_name: str) -> dict[str, object]:
 
 def extract_filename_tokens(file_name: str, task_name: str = "") -> dict[str, str]:
     """从文件名提取模板令牌；令牌值不包含文件扩展名。"""
-    path = PurePosixPath(str(file_name or "").replace("\", "/"))
+    path = PurePosixPath(str(file_name or "").replace("\\", "/"))
     stem, ext = path.stem, path.suffix.lstrip(".")
     season, episode = parse_tv_episode(stem)
     date_match = _DATE.search(stem)
@@ -273,4 +273,4 @@ def render_filename_template(
         lambda match: tokens.get(match.group(1), match.group(0)),
         rendered,
     )
-    return re.sub(r"[<>:\"/\|?*\x00-\x1f]", "_", rendered).strip(" .")
+    return re.sub(r"[<>:\"/\\|?*\x00-\x1f]", "_", rendered).strip(" .")
