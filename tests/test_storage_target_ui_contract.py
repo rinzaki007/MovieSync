@@ -19,3 +19,16 @@ def test_card_management_uses_manifest_driven_editor_without_card_id_routing():
     assert "renderGenericCardFields(currentGenericCard.fields" in template
     assert '"key": "category_fids"' in quark_card
     assert '"key": "cookie"' in quark_card
+
+
+def test_task_center_offers_destination_check_for_uncertain_transfers_without_quark_dependency():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    task_center = (root / "static" / "js" / "task-center.js").read_text(encoding="utf-8")
+
+    assert "task.status === 'success' || task.recovery_uncertain" in task_center
+    assert "转存结果尚不确定" in task_center
+    assert "不要重复提交" in task_center
+    assert "storage.list_destination_files" in task_center
+    assert "https://pan.quark.cn/" not in task_center
