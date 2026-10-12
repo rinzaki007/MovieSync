@@ -43,8 +43,8 @@ class FilenameRecognitionCard(FilenameProcessorCard):
                 "type": "json",
                 "default": [],
                 "description": (
-                    "按数组顺序尝试。每项包含 pattern、replace，可选 source_ids 数组限定来源卡片 ID；"
-                    "不填写 source_ids 表示对所有资源来源生效。内置格式始终优先。"
+                    "所有资源搜索来源共用这套规则，按数组顺序尝试。每项包含 pattern、replace；"
+                    "通常无需填写 source_ids，只有确实存在来源特殊格式时才设置。内置格式始终优先。"
                 ),
             },
         ),
