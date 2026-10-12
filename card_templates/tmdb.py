@@ -9,6 +9,7 @@ from urllib.parse import quote
 
 from moviesync.cards import CardManifest, MetadataProviderCard
 from moviesync.clients.http import ApiError, HttpClient
+from moviesync.services.media_classification import classify_metadata_item
 
 API_BASE = "https://api.themoviedb.org/3"
 IMAGE_BASE = "https://image.tmdb.org/t/p"
@@ -177,7 +178,7 @@ class TMDBMetadataCard(MetadataProviderCard):
         genres = item.get("genres") or []
         if not isinstance(genres, list):
             genres = []
-        return {
+        normalized = {
             "id": f"{media_type}:{item_id}",
             "tmdb_id": item_id,
             "media_type": media_type,
@@ -188,8 +189,12 @@ class TMDBMetadataCard(MetadataProviderCard):
             "rate": rating,
             "vote_count": item.get("vote_count", 0),
             "year": release_date[:4],
-            "tag": ", ".join(str(value) for value in genres if value) if genres else "",
+            "tag": "电影" if media_type == "movie" else "电视剧",
             "genres": [str(value) for value in genres if value],
+            "genre_ids": [
+                value for value in (item.get("genre_ids") or [])
+                if isinstance(value, int) and not isinstance(value, bool)
+            ] if isinstance(item.get("genre_ids"), list) else [],
             "summary": str(item.get("overview") or "").strip(),
             "overview": str(item.get("overview") or "").strip(),
             "url": f"https://www.themoviedb.org/{media_type}/{item_id}",
@@ -197,6 +202,7 @@ class TMDBMetadataCard(MetadataProviderCard):
             "provider_name": "TMDB",
             "language": language,
         }
+        return classify_metadata_item(normalized)
 
     def is_configured(self, config: dict[str, Any]) -> bool:
         config = config if isinstance(config, dict) else {}
@@ -261,6 +267,7 @@ class TMDBMetadataCard(MetadataProviderCard):
         ]
 
     def search(self, query: str) -> list[dict[str, Any]]:
+        """Search across movies and TV when no category was explicitly selected."""
         query = str(query or "").strip()[:80]
         if not query:
             return []
@@ -277,6 +284,48 @@ class TMDBMetadataCard(MetadataProviderCard):
             if not isinstance(item, dict) or item.get("media_type") not in {"movie", "tv"}:
                 continue
             result = self._normalize(item, language)
+            if result:
+                normalized.append(result)
+        return normalized[:40]
+
+    def search_by_category(self, query: str, category: str) -> list[dict[str, Any]]:
+        """Search only the selected media format to avoid movie/TV title collisions."""
+        query = str(query or "").strip()[:80]
+        category = str(category or "").strip()
+        if not query:
+            return []
+        if category not in {"电影", "电视剧", "综艺", "动漫", "纪录片", "短剧"}:
+            return self.search(query)
+
+        media_type = "movie" if category == "电影" else "tv"
+        config = self._config()
+        language = self._language(config)
+        payload = self._request(
+            f"/search/{media_type}",
+            {"query": query, "include_adult": "false", "page": 1},
+            language=language,
+        )
+        results = payload.get("results", []) if isinstance(payload, dict) else []
+        normalized = []
+        special_tv_genres = {16, 99, 10763, 10764, 10767}
+        wanted_genres = {
+            "综艺": {10764, 10767},
+            "动漫": {16},
+            "纪录片": {99, 10763},
+        }
+        for item in results:
+            if not isinstance(item, dict):
+                continue
+            raw_genres = item.get("genre_ids")
+            genre_ids = {
+                value for value in raw_genres
+                if isinstance(value, int) and not isinstance(value, bool)
+            } if isinstance(raw_genres, list) else set()
+            if category in wanted_genres and not genre_ids.intersection(wanted_genres[category]):
+                continue
+            if category == "电视剧" and genre_ids.intersection(special_tv_genres):
+                continue
+            result = self._normalize({**item, "media_type": media_type}, language)
             if result:
                 normalized.append(result)
         return normalized[:40]
