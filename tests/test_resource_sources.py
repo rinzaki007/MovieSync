@@ -1,7 +1,13 @@
 import pytest
 
 from card_templates.telegram import TelegramResourceSource
-from moviesync.cards import Card, CardManifest, CardRegistry, ResourceSourceCard, FilenameProcessorCard
+from moviesync.cards import (
+    Card,
+    CardManifest,
+    CardRegistry,
+    FilenameProcessorCard,
+    ResourceSourceCard,
+)
 from moviesync.services import resource_sources as resource_sources_module
 from moviesync.services.resource_sources import ResourceSourceManager
 
