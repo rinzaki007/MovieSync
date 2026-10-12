@@ -2078,3 +2078,70 @@ def test_generic_all_mode_does_not_retransfer_initial_fid_with_confirmed_success
         assert storage.transfers == [["ep46"]]
     finally:
         manager.stop_scheduler()
+
+
+
+def test_smart_follow_uses_global_filename_rules_for_channel_scan_and_season_baseline(tmp_path):
+    from card_templates.filename_recognition import FilenameRecognitionCard
+    from moviesync.cards import CardRegistry
+    from moviesync.services.resource_sources import ResourceSourceManager
+
+    class RuleConfigStore:
+        def load(self):
+            return {
+                "cards": {
+                    "filename_recognition": {
+                        "enabled": True,
+                        "config": {
+                            "rules": [
+                                {
+                                    "pattern": r"^Raw_S(\\d+)_E(\\d+)[.]mkv$",
+                                    "replace": r"Show.S\\1E\\2.mkv",
+                                }
+                            ]
+                        },
+                    }
+                }
+            }
+
+    registry = CardRegistry()
+    registry.register(FilenameRecognitionCard())
+    parser = ResourceSourceManager(RuleConfigStore(), FakeLogger(), registry=registry)
+
+    class SharedRuleResourceSources(FakeResourceSources):
+        def parse_tv_episode(self, source_id, file_name):
+            return parser.parse_tv_episode(source_id, file_name)
+
+    storage = ChannelStorageTargets()
+    storage.shares = {
+        "share-seasons": [
+            {"fid": "ep206", "file_name": "Raw_S02_E06.mkv"},
+            {"fid": "ep207", "file_name": "Raw_S02_E07.mkv"},
+            {"fid": "ep208", "file_name": "Raw_S02_E08.mkv"},
+            {"fid": "ep301", "file_name": "Raw_S03_E01.mkv"},
+        ],
+    }
+    sources = SharedRuleResourceSources()
+    sources.shares = [{"channel": "demo", "pwd_id": "share-seasons"}]
+    manager = SubscriptionManager(
+        tmp_path / "global-rules-smart-follow.json",
+        storage,
+        sources,
+        FakeLogger(),
+    )
+
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-seasons",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        source_id="telegram",
+        channel="demo",
+        files=[{"fid": "ep207", "file_name": "Raw_S02_E07.mkv"}],
+    )
+
+    ok, message = manager.check_subscription_now(sub["id"])
+
+    assert ok is True
+    assert "成功追更 3 项" in message
+    assert storage.transfers == [("share-seasons", ["ep207", "ep208", "ep301"])]
