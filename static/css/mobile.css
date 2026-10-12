@@ -333,6 +333,79 @@
         margin-top: .5rem;
     }
 
+    /* Homepage: make the OpenList shortcut and other sub-navigation actions compact. */
+    body:has(#movie-grid) > div.glass-subnav a {
+        min-height: 34px;
+        padding: .4rem .55rem;
+        font-size: 10px;
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+
+    /* Task center: reduce oversized mobile padding and keep filters compact. */
+    body:has(#task-list) > main { padding: .75rem; }
+    body:has(#task-list) > main > section:first-child { margin-bottom: .85rem; }
+    body:has(#task-list) > main > section:nth-child(2) { gap: .5rem; margin-bottom: .85rem; }
+    body:has(#task-list) > main > section:nth-child(2) > div { padding: .75rem; }
+    body:has(#task-list) > main > section:nth-child(2) > div > div:last-child {
+        margin-top: .35rem;
+        font-size: 1.35rem;
+    }
+    body:has(#task-list) > main > section.glass-panel > div:first-child,
+    body:has(#task-list) > main > section.mt-6 > div:first-child { padding: .85rem; }
+    body:has(#task-list) .task-filter {
+        flex: 1 1 auto;
+        font-size: 10px;
+        padding-top: .45rem;
+        padding-bottom: .45rem;
+    }
+    #task-list > div,
+    #smart-task-list > div,
+    #history-list > div { padding: .85rem !important; }
+
+    /* Admin settings: compact top bar, usable two-column tabs, full-width content. */
+    body:has(#panel-global) > header.glass-nav { position: relative; padding: .65rem .75rem; }
+    body:has(#panel-global) > header.glass-nav > div:first-child {
+        font-size: 14px;
+        line-height: 1.3;
+        min-width: 0;
+    }
+    body:has(#panel-global) > header.glass-nav > div:last-child {
+        width: 100%;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .4rem;
+    }
+    body:has(#panel-global) > header.glass-nav > div:last-child > a,
+    body:has(#panel-global) > header.glass-nav > div:last-child > form,
+    body:has(#panel-global) > header.glass-nav > div:last-child > form > button {
+        width: 100%;
+        min-width: 0;
+        justify-content: center;
+        text-align: center;
+        padding: .55rem .4rem;
+        font-size: 10px;
+    }
+    body:has(#panel-global) > div.flex-1.flex.overflow-hidden > aside.w-60 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: stretch;
+    }
+    body:has(#panel-global) > div.flex-1.flex.overflow-hidden > aside.w-60 > button {
+        width: 100%;
+        min-height: 40px;
+        padding: .55rem;
+        font-size: 11px;
+        line-height: 1.25;
+    }
+    body:has(#panel-global) .panel-content { padding: 0; }
+    body:has(#panel-global) #panel-global > div,
+    body:has(#panel-global) #panel-cards > div,
+    body:has(#panel-global) #panel-backup > div,
+    body:has(#panel-global) #panel-security > div,
+    body:has(#panel-global) #panel-logs > div { min-width: 0; max-width: 100%; }
+    body:has(#panel-global) #openlist-url { font-size: 16px; }
+
     /* Inputs must remain visible when the mobile keyboard opens. */
     .login-card {
         width: min(430px, calc(100vw - 24px));
@@ -341,6 +414,8 @@
         max-height: calc(100dvh - 24px);
         overflow-y: auto;
     }
+
+}
 
 @media (max-width: 380px) {
     #movie-grid {
