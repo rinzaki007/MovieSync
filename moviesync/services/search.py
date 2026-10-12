@@ -468,7 +468,11 @@ class SearchService:
                             f"来源: [{source.get('source_name', '未知来源')}] | "
                             f"频道: [{source.get('channel', '')}] | "
                             f"{len(videos)} 个可选视频"
-                            + (f"（实际共 {total_video_count} 个，仅展示前 {len(videos)} 个）" if files_truncated else "")
+                            + (
+                                f"（实际共 {total_video_count} 个，仅展示前 {len(videos)} 个）"
+                                if files_truncated
+                                else ""
+                            )
                             + f" | {_format_size(total_size)}"
                         ),
                     })
