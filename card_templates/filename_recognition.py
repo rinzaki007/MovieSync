@@ -141,6 +141,8 @@ class FilenameRecognitionCard(FilenameProcessorCard):
             rule["source_ids"] = list(dict.fromkeys(source_ids))
             validated_rules.append(rule)
         normalized["rules"] = validated_rules
+        # The old field is no longer part of the saved schema after migration.
+        normalized.pop("magic_regex", None)
         return normalized
 
     @staticmethod
