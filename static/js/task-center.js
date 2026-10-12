@@ -481,12 +481,31 @@ function renderTaskDetail(task) {
 }
 
 
-async function loadTaskDestinationFiles() {
+async function loadTaskDestinationFiles(attempt = 0, refreshSequence = null) {
     const task = window.currentDestinationTask;
     const section = document.getElementById('task-destination-files');
     const body = document.getElementById('task-destination-files-body');
     if (!task || !section || !body) return;
-    body.innerHTML = '<div class="py-3 text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-2"></i>正在读取目标网盘目录及子目录…</div>';
+
+    if (attempt === 0) {
+        window.taskDestinationRefreshSequence = (window.taskDestinationRefreshSequence || 0) + 1;
+        refreshSequence = window.taskDestinationRefreshSequence;
+        if (window.taskDestinationRefreshTimer) {
+            clearTimeout(window.taskDestinationRefreshTimer);
+            window.taskDestinationRefreshTimer = null;
+        }
+        body.innerHTML = '<div class="py-3 text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-2"></i>正在读取目标网盘目录及子目录…</div>';
+    } else if (refreshSequence !== window.taskDestinationRefreshSequence) {
+        return;
+    }
+
+    const scheduleRetry = () => {
+        if (attempt >= 2 || refreshSequence !== window.taskDestinationRefreshSequence) return;
+        window.taskDestinationRefreshTimer = setTimeout(
+            () => loadTaskDestinationFiles(attempt + 1, refreshSequence),
+            1000 * (attempt + 1)
+        );
+    };
     try {
         // Read the capability from card manifests. The UI stays provider-agnostic;
         // only cards declaring storage.list_destination_files get this feature.
@@ -551,14 +570,17 @@ async function loadTaskDestinationFiles() {
         const tree = await readDirectory(task.parentFid || '0', 0);
         const rootLabel = '<div class="mb-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-400"><span><i class="fa-solid fa-folder-tree mr-1 text-amber-400"></i>转存主目录</span><span>目录 FID：' + escapeTask(task.parentFid || '0') + ' · ' + itemCount + ' 项</span></div>';
         if (!tree.html) {
-            body.innerHTML = rootLabel + '<div class="rounded-lg border border-dashed border-slate-800 px-3 py-5 text-center text-slate-500">主目录暂时没有显示文件。可以稍后点击“刷新”再次核对。</div>';
+            body.innerHTML = rootLabel + '<div class="rounded-lg border border-dashed border-slate-800 px-3 py-5 text-center text-slate-500">主目录暂时没有显示文件，MovieSync 会自动再次刷新核对。</div>';
+            scheduleRetry();
             return;
         }
         body.innerHTML = rootLabel + '<div class="max-h-[28rem] space-y-1 overflow-y-auto">' + tree.html + '</div>' +
             (truncated ? '<div class="mt-2 text-[10px] text-amber-400">为避免目录过大影响页面，列表最多展开 4 层、显示 400 项；更深或更多内容请打开夸克查看。</div>' : '') +
-            '<div class="mt-2 text-[10px] text-slate-500">文件夹已按层级缩进显示；文件大小仅对文件展示。此列表用于核对转存结果，不影响转存任务状态。</div>';
+            '<div class="mt-2 text-[10px] text-slate-500">文件夹已按层级缩进显示；文件大小仅对文件展示。MovieSync 会在转存后自动复核几次，亦可手动刷新。</div>';
+        scheduleRetry();
     } catch (error) {
-        body.innerHTML = '<div class="rounded-lg border border-rose-900/50 bg-rose-950/20 px-3 py-4 text-rose-300">' + escapeTask(error.message || '读取网盘目录失败') + '<div class="mt-1 text-[10px] text-rose-400/80">转存任务状态不受影响，可稍后重新刷新目录。</div></div>';
+        body.innerHTML = '<div class="rounded-lg border border-rose-900/50 bg-rose-950/20 px-3 py-4 text-rose-300">' + escapeTask(error.message || '读取网盘目录失败') + '<div class="mt-1 text-[10px] text-rose-400/80">转存任务状态不受影响，MovieSync 会自动重试刷新目录。</div></div>';
+        scheduleRetry();
     }
 }
 
