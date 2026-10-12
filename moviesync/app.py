@@ -178,6 +178,11 @@ def create_app(
             logger.exception("停止自动追剧调度器失败")
 
         try:
+            tasks.shutdown()
+        except Exception:
+            logger.exception("关闭任务执行器失败")
+
+        try:
             card_registry.close_all()
         except Exception:
             logger.exception("关闭卡片注册表失败")
