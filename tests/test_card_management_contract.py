@@ -705,7 +705,13 @@ def test_telegram_channels_use_form_editor_and_filename_rules_are_global():
     assert "JSON 数组" not in channels["description"]
     assert "magic_regex" not in fields
     assert FilenameRecognitionCard.manifest.type == "filename_processor"
-    assert global_fields["magic_regex"]["editor"] == "object_fields"
+    assert list(global_fields) == ["rules"]
+    assert global_fields["rules"]["editor"] == "rule_list"
+    assert [field["key"] for field in global_fields["rules"]["item_fields"]] == [
+        "pattern",
+        "replace",
+        "source_ids",
+    ]
 
 
 
