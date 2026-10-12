@@ -284,17 +284,48 @@ class ConfigStore:
         return deepcopy(value)
 
     def public(self) -> dict:
-        """返回可公开给后台界面的配置，所有卡片的敏感字段均脱敏。"""
-        config = self.load()
+        """返回脱敏后的配置，不要求任何特定卡片已安装。"""
+        return self._sanitize_public_value(self.load())
 
-        quark = config["cards"]["quark"]
-        quark_config = quark["config"]
-        quark["config"] = {
-            **quark_config,
-            "cookie": "",
-            "has_cookie": bool(quark_config.get("cookie")),
-        }
-        return self._sanitize_public_value(config)
+    def _import_legacy_card_settings(
+        self,
+        current: dict,
+        imported_cards: object,
+    ) -> dict:
+        """兼容旧版备份中的 Quark/Telegram 配置；新卡片走通用导入流程。"""
+        if not isinstance(imported_cards, dict):
+            return current
+        if isinstance(imported_cards.get("quark"), dict):
+            quark = imported_cards["quark"]
+            quark_config = quark.get("config")
+            if isinstance(quark_config, dict):
+                imported_quark = dict(quark_config)
+                if "cookie" in imported_quark:
+                    # A public config export intentionally redacts secrets to
+                    # an empty string. Treat that as "unchanged", not as an
+                    # explicit request to erase the locally stored cookie.
+                    cookie = str(imported_quark.pop("cookie") or "").strip()
+                    if cookie:
+                        imported_quark["cookie"] = cookie
+                self.save_quark_config(imported_quark)
+            current = self.load()
+            if "enabled" in quark:
+                current["cards"]["quark"]["enabled"] = bool(quark["enabled"])
+                self.store.write(current)
+        if isinstance(imported_cards.get("telegram"), dict):
+            telegram = imported_cards["telegram"]
+            telegram_config = telegram.get("config")
+            if isinstance(telegram_config, dict):
+                self.save_telegram_config({
+                    key: value
+                    for key, value in telegram_config.items()
+                    if key in {"channels", "magic_regex"}
+                })
+            current = self.load()
+            if "enabled" in telegram:
+                current["cards"]["telegram"]["enabled"] = bool(telegram["enabled"])
+                self.store.write(current)
+        return current
 
     def save(self, incoming: dict) -> dict:
         if not isinstance(incoming, dict):
@@ -328,37 +359,7 @@ class ConfigStore:
             current["default_storage_target_id"] = target_id
 
         imported_cards = incoming.get("cards")
-        if isinstance(imported_cards, dict):
-            if isinstance(imported_cards.get("quark"), dict):
-                quark = imported_cards["quark"]
-                quark_config = quark.get("config")
-                if isinstance(quark_config, dict):
-                    imported_quark = dict(quark_config)
-                    if "cookie" in imported_quark:
-                        # A public config export intentionally redacts secrets to
-                        # an empty string. Treat that as "unchanged", not as an
-                        # explicit request to erase the locally stored cookie.
-                        cookie = str(imported_quark.pop("cookie") or "").strip()
-                        if cookie:
-                            imported_quark["cookie"] = cookie
-                    self.save_quark_config(imported_quark)
-                current = self.load()
-                if "enabled" in quark:
-                    current["cards"]["quark"]["enabled"] = bool(quark["enabled"])
-                    self.store.write(current)
-            if isinstance(imported_cards.get("telegram"), dict):
-                telegram = imported_cards["telegram"]
-                telegram_config = telegram.get("config")
-                if isinstance(telegram_config, dict):
-                    self.save_telegram_config({
-                        key: value
-                        for key, value in telegram_config.items()
-                        if key in {"channels", "magic_regex"}
-                    })
-                current = self.load()
-                if "enabled" in telegram:
-                    current["cards"]["telegram"]["enabled"] = bool(telegram["enabled"])
-                    self.store.write(current)
+        current = self._import_legacy_card_settings(current, imported_cards)
 
         # Restore third-party card settings too. Keep entries for cards that
         # are not currently installed so their configuration survives backups.
