@@ -465,3 +465,18 @@ def test_search_reports_video_file_truncation_without_losing_total_statistics():
     assert candidate["total_size"] == 205 * 1024
     assert "实际共 205 个" in candidate["summary"]
     assert "仅展示前 200 个" in candidate["summary"]
+
+
+def test_candidate_priority_prefers_clear_episode_ranges_but_keeps_unknown_candidates():
+    import logging
+
+    clear = {
+        "title": "Show S01E01-E08 1080p WEB-DL.mkv",
+        "resource_id": "clear",
+    }
+    vague = {"title": "Show share resource", "resource_id": "vague"}
+    assert SearchService._candidate_priority(clear, "Show") > SearchService._candidate_priority(
+        vague, "Show"
+    )
+    # Unknown/low-signal candidates remain eligible; ranking is not a filter.
+    assert isinstance(SearchService._candidate_priority(vague, "Show"), int)
