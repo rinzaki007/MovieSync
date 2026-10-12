@@ -543,3 +543,38 @@ def test_transfer_success_without_visible_destination_file_is_uncertain_not_retr
     assert "请检查目标网盘后再决定是否重试" in message
     assert counts["uncertain"] is True
     assert counts["success"] == 0
+
+
+
+def test_search_preserves_selected_media_identity_for_resource_cards():
+    import logging
+
+    class ContextSources:
+        received = None
+
+        def search(self, movie, config):
+            self.received = dict(movie)
+            return []
+
+    sources = ContextSources()
+    service = SearchService(sources, FakeStorageTargets(), logging.getLogger("test"))
+
+    assert service.search_movie_candidates(
+        {
+            "title": "潜伏6",
+            "tag": "电影",
+            "media_type": "movie",
+            "year": "2026",
+            "original_title": "The Final Chapter",
+            "genres": ["恐怖"],
+        },
+        {},
+    ) == []
+    assert sources.received == {
+        "title": "潜伏6",
+        "tag": "电影",
+        "media_type": "movie",
+        "year": "2026",
+        "original_title": "The Final Chapter",
+        "genres": ["恐怖"],
+    }
