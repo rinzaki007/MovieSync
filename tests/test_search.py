@@ -426,3 +426,55 @@ def test_candidate_search_pages_prioritize_recognizable_names_without_dropping_u
 
     assert [item["resource_id"] for item in second] == ["r-unknown"]
     assert second_page == {"next_offset": 3, "has_more": False, "total_discovered": 3}
+
+
+def test_search_reports_video_file_truncation_without_losing_total_statistics():
+    import logging
+
+    class LargeShareStorage(FakeStorageTargets):
+        def resolve_resource(self, resource, target_id=None):
+            files = [
+                {
+                    "fid": f"f{index}",
+                    "file_name": f"Show.S01E{index:03d}.mkv",
+                    "size": 1024,
+                }
+                for index in range(1, 206)
+            ]
+            return {
+                "target_id": target_id or "quark",
+                "files": files,
+                "token": "token",
+                "error": None,
+            }
+
+    service = SearchService(
+        FakeResourceSources(),
+        LargeShareStorage(),
+        logging.getLogger("test"),
+    )
+    candidates = service.search_movie_candidates({"title": "Show"}, {"channels": []})
+
+    assert len(candidates) == 1
+    candidate = candidates[0]
+    assert candidate["file_count"] == 200
+    assert len(candidate["files"]) == 200
+    assert candidate["total_video_count"] == 205
+    assert candidate["files_truncated"] is True
+    assert candidate["episode_count"] == 205
+    assert candidate["total_size"] == 205 * 1024
+    assert "实际共 205 个" in candidate["summary"]
+    assert "仅展示前 200 个" in candidate["summary"]
+
+
+def test_candidate_priority_prefers_clear_episode_ranges_but_keeps_unknown_candidates():
+    clear = {
+        "title": "Show S01E01-E08 1080p WEB-DL.mkv",
+        "resource_id": "clear",
+    }
+    vague = {"title": "Show share resource", "resource_id": "vague"}
+    assert SearchService._candidate_priority(clear, "Show") > SearchService._candidate_priority(
+        vague, "Show"
+    )
+    # Unknown/low-signal candidates remain eligible; ranking is not a filter.
+    assert isinstance(SearchService._candidate_priority(vague, "Show"), int)

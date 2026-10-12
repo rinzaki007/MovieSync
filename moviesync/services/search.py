@@ -231,8 +231,16 @@ class SearchService:
         )
         text = " ".join(str(source.get(key) or "") for key in name_fields).lower()
         score = 0
-        if re.search(r"(?:s\d{1,2}\s*e\d{1,4}|第\s*\d+\s*[集话]|(?:ep|e)\s*\d{1,4})", text, re.I):
-            score += 4
+        # 多个集数标记通常意味着资源标题包含更明确的剧集范围；
+        # 只用于排序，不过滤候选，也不把分辨率差异当作重复资源。
+        episode_markers = re.findall(
+            r"(?:s\d{1,2}\s*e\d{1,4}|第\s*\d+\s*[集话]|(?:ep|e)\s*\d{1,4})",
+            text,
+            re.I,
+        )
+        score += min(len(episode_markers), 4) * 2
+        if re.search(r"s\d{1,2}", text, re.I):
+            score += 1
         if re.search(r"\.(?:mp4|mkv|avi|mov|flv|wmv|m4v|ts|m2ts|iso)(?:\b|$)", text, re.I):
             score += 2
         if re.search(r"\b(?:2160p|1080p|720p|4k|web[- .]?dl|bluray|bdrip|remux)\b", text, re.I):
@@ -241,6 +249,14 @@ class SearchService:
         simplified_text = re.sub(r"[^\w\u4e00-\u9fa5]", "", text)
         if simplified_title and simplified_title in simplified_text:
             score += 3
+        # 标题过于简短或主要由分享说明组成时，降低优先级但仍保留候选。
+        meaningful_text = re.sub(
+            r"(?:分享|资源|链接|下载|转存|合集|全集|更新|推荐)",
+            "",
+            simplified_text,
+        )
+        if len(meaningful_text) < 3:
+            score -= 2
         return score
 
     def search_movie_candidates(
@@ -385,7 +401,7 @@ class SearchService:
                         )
                         continue
         
-                    videos = [
+                    all_videos = [
                         {
                             "fid": f.get("fid"),
                             "file_name": f.get("file_name", ""),
@@ -394,15 +410,20 @@ class SearchService:
                             "resolution": _detect_resolution(f.get("file_name", "")),
                         }
                         for f in files
-                        if f.get("fid")
+                        if isinstance(f, dict)
+                        and f.get("fid")
                         and str(f.get("file_name", "")).lower().endswith(VIDEO_EXTENSIONS)
-                    ][:MAX_VIDEO_FILES_PER_CANDIDATE]
-        
+                    ]
+                    total_video_count = len(all_videos)
+                    videos = all_videos[:MAX_VIDEO_FILES_PER_CANDIDATE]
+                    files_truncated = total_video_count > len(videos)
+
                     if not videos:
                         continue
-        
+
+                    # 统计信息尽量反映完整分享；只有文件选择列表受上限限制。
                     resolutions = {}
-                    for video in videos:
+                    for video in all_videos:
                         resolution = video["resolution"]
                         resolutions[resolution] = resolutions.get(resolution, 0) + 1
                     (
@@ -412,12 +433,12 @@ class SearchService:
                         unrecognized_video_files,
                         additional_episode_versions,
                     ) = _episode_statistics(
-                        videos,
+                        all_videos,
                         str(source.get("source_id") or ""),
                         self.resource_sources,
                     )
-        
-                    total_size = sum(int(v.get("size") or 0) for v in videos)
+
+                    total_size = sum(int(v.get("size") or 0) for v in all_videos)
                     seen_resource_keys.add(resource_key)
                     candidates.append({
                         "source_id": source.get("source_id", "unknown"),
@@ -433,6 +454,8 @@ class SearchService:
                         "url": str(source.get("url") or ""),
                         "files": videos,
                         "file_count": len(videos),
+                        "total_video_count": total_video_count,
+                        "files_truncated": files_truncated,
                         "episode_coverage": episode_coverage,
                         "episode_count": episode_count,
                         "recognized_episode_files": recognized_episode_files,
@@ -444,7 +467,13 @@ class SearchService:
                         "summary": (
                             f"来源: [{source.get('source_name', '未知来源')}] | "
                             f"频道: [{source.get('channel', '')}] | "
-                            f"{len(videos)} 个视频 | {_format_size(total_size)}"
+                            f"{len(videos)} 个可选视频"
+                            + (
+                                f"（实际共 {total_video_count} 个，仅展示前 {len(videos)} 个）"
+                                if files_truncated
+                                else ""
+                            )
+                            + f" | {_format_size(total_size)}"
                         ),
                     })
                 if len(candidates) >= MAX_CANDIDATES_PER_MOVIE:

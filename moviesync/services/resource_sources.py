@@ -189,8 +189,26 @@ class ResourceSourceManager:
             except Exception:
                 self.logger.exception("文件名识别卡片 %s 执行失败", processor.card_id)
                 continue
+            if (
+                not isinstance(parsed, (tuple, list))
+                or len(parsed) != 2
+                or any(
+                    value is not None
+                    and (
+                        isinstance(value, bool)
+                        or not isinstance(value, int)
+                        or value < 1
+                    )
+                    for value in parsed
+                )
+            ):
+                self.logger.warning(
+                    "文件名识别卡片 %s 返回了无效的季集结果，已跳过",
+                    processor.card_id,
+                )
+                continue
             if parsed[1] is not None:
-                return parsed
+                return parsed[0], parsed[1]
 
         # 旧版本将增强规则存放在资源来源卡片内。全局规则没有识别出集数时，
         # 继续尝试旧规则，避免升级后已有订阅的特殊命名突然失效。
