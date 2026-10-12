@@ -528,7 +528,12 @@ class SearchService:
                         ),
                         "",
                     )
-                    if self._has_conflicting_tv_title(movie, source_title, all_videos):
+                    source_title_evidence = " ".join(
+                        str(source.get(key) or "").strip()
+                        for key in ("title", "name", "resource_name", "share_name", "content", "description")
+                        if str(source.get(key) or "").strip()
+                    )
+                    if self._has_conflicting_tv_title(movie, source_title_evidence, all_videos):
                         self.logger.info(
                             "过滤疑似错误剧集候选：目标《%s》，分享标题《%s》，视频文件与分享标题指向其他作品",
                             title,
