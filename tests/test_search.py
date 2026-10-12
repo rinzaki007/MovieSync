@@ -468,8 +468,6 @@ def test_search_reports_video_file_truncation_without_losing_total_statistics():
 
 
 def test_candidate_priority_prefers_clear_episode_ranges_but_keeps_unknown_candidates():
-    import logging
-
     clear = {
         "title": "Show S01E01-E08 1080p WEB-DL.mkv",
         "resource_id": "clear",
