@@ -1761,8 +1761,7 @@ def test_channel_subscription_with_legacy_all_mode_still_applies_episode_baselin
     assert ok is True
     assert "成功追更 3 项" in message
     assert storage.transfers == [
-        ("share-seasons", ["ep108"]),
-        ("share-seasons", ["ep109", "ep201"]),
+        ("share-seasons", ["ep108", "ep109", "ep201"]),
     ]
     assert all(
         fid != "ep101"
