@@ -72,7 +72,10 @@ def filter_metadata_items_by_category(
             if category == "电视剧" and genre_ids.intersection(special_tv_genres):
                 continue
             genres = item.get("genres")
-            genre_text = " ".join(str(value).lower() for value in genres) if isinstance(genres, list) else str(item.get("tag") or "").lower()
+            genre_text = " ".join(
+                str(value.get("name") if isinstance(value, dict) else value).lower()
+                for value in genres
+            ) if isinstance(genres, list) else str(item.get("tag") or "").lower()
             if category in {"综艺", "动漫", "纪录片"} and not genre_ids:
                 markers = {
                     "综艺": ("reality", "talk show", "综艺", "真人秀", "脱口秀"),
