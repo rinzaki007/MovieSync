@@ -53,7 +53,7 @@ def test_movie_search_filters_clear_mismatched_chinese_title():
 
 
 def test_movie_search_can_check_english_original_titles():
-    movie = {"title": "兰香如故", "media_type": "movie", "tag": "电影"}
+    movie = {"title": "兰香如故", "original_title": "Different Original Film", "media_type": "movie", "tag": "电影"}
     videos = [
         {"file_name": "The.Matrix.1999.BluRay.1080p.mkv"},
         {"file_name": "The.Matrix.1999.BluRay.Extras.mkv"},
@@ -95,3 +95,15 @@ def test_filters_anime_and_variety_mismatches_too():
 
     assert SearchService._has_conflicting_media_title(anime, "吞噬星空 动画", anime_files)
     assert SearchService._has_conflicting_media_title(variety, "奔跑吧 综艺合集", variety_files)
+
+
+def test_keeps_possible_english_alias_when_metadata_has_no_original_title():
+    movie = {"title": "兰香如故", "media_type": "movie", "tag": "电影"}
+    videos = [
+        {"file_name": "The.Matrix.1999.BluRay.1080p.mkv"},
+        {"file_name": "The.Matrix.1999.BluRay.Extras.mkv"},
+    ]
+
+    assert not SearchService._has_conflicting_media_title(
+        movie, "The Matrix 1999 BluRay", videos
+    )
