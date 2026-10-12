@@ -36,7 +36,7 @@ def test_legacy_provider_uses_selected_category_only_when_type_is_unknown():
     )
 
     assert result["tag"] == "电影"
-    assert "media_type" not in result
+    assert result["media_type"] == "movie"
 
 
 
