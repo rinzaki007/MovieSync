@@ -43,6 +43,7 @@ jobs:
         run: |
           node --check static/js/main.js
           node --check static/js/resource-select.js
+          node --check static/js/task-center.js
 
       - name: Install test dependencies
         run: pip install -r requirements-dev.txt

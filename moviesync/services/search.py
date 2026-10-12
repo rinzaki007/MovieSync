@@ -607,26 +607,41 @@ class SearchService:
         if len(expected_names) != len(selected) or any(not name for name in expected_names):
             return False
 
-        try:
-            destination_files = list_destination_files(folder_fid)
-            if not isinstance(destination_files, list) or any(
-                not isinstance(item, dict) for item in destination_files
-            ):
-                raise TypeError("目标目录文件列表格式无效")
-        except Exception:
-            self.logger.warning(
-                "转存请求已返回成功，但无法读取目标目录进行结果核实",
-                exc_info=True,
-            )
-            return False
-
         expected = Counter(name.casefold() for name in expected_names)
-        observed = Counter(
-            str(item.get("file_name") or "").strip().casefold()
-            for item in destination_files
-            if not item.get("is_dir") and str(item.get("file_name") or "").strip()
-        )
-        return all(observed[name] >= count for name, count in expected.items())
+
+        # Some storage APIs accept a transfer before the destination listing is
+        # consistent. Recheck briefly instead of reporting an immediate mismatch.
+        last_error = None
+        for attempt in range(3):
+            try:
+                destination_files = list_destination_files(folder_fid)
+                if not isinstance(destination_files, list) or any(
+                    not isinstance(item, dict) for item in destination_files
+                ):
+                    raise TypeError("目标目录文件列表格式无效")
+                observed = Counter(
+                    str(item.get("file_name") or "").strip().casefold()
+                    for item in destination_files
+                    if not item.get("is_dir") and str(item.get("file_name") or "").strip()
+                )
+                if all(observed[name] >= count for name, count in expected.items()):
+                    return True
+            except Exception as exc:
+                last_error = exc
+                self.logger.warning(
+                    "转存请求已返回成功，读取目标目录核实失败（第 %s/3 次）",
+                    attempt + 1,
+                    exc_info=True,
+                )
+
+            if attempt < 2:
+                time.sleep(0.3 * (attempt + 1))
+
+        if last_error is not None:
+            self.logger.warning(
+                "转存请求已返回成功，但重试后仍无法读取目标目录进行结果核实"
+            )
+        return False
 
     def transfer_selected_resource_with_progress(
         self,
