@@ -32,6 +32,48 @@ def _parse_tv_episode(file_name: str) -> tuple[int | None, int | None]:
     return parse_tv_episode(file_name)
 
 
+def _parse_source_episode(resource_sources, source_id: str, file_name: str) -> tuple[int | None, int | None]:
+    """Use canonical season/episode parsing before card-specific fallbacks.
+
+    A card parser may return a valid episode number while losing the season
+    (for example, (None, 6) for S03E06). Treating that as valid would collapse
+    every season into one episode sequence and make the follow-up baseline wrong.
+    """
+    generic = _parse_tv_episode(file_name)
+    if generic[0] is not None and generic[1] is not None:
+        return generic
+
+    parser = getattr(resource_sources, "parse_tv_episode", None)
+    parsed = None
+    if source_id and callable(parser):
+        try:
+            parsed = parser(source_id, file_name)
+        except Exception:
+            parsed = None
+
+    if isinstance(parsed, (tuple, list)) and len(parsed) == 2:
+        season, episode = parsed
+        valid = all(
+            value is None
+            or (
+                isinstance(value, int)
+                and not isinstance(value, bool)
+                and value >= 1
+            )
+            for value in (season, episode)
+        )
+        if valid and episode is not None:
+            # Preserve a season supplied by a card only when it agrees with
+            # the episode number recognized by the generic parser.
+            if generic[1] is not None:
+                if episode == generic[1] and season is not None:
+                    return season, episode
+                return generic
+            return season, episode
+
+    return generic
+
+
 def _clean_tv_filename(file_name: str, title: str = "") -> tuple[int | None, str]:
     _, episode = _parse_tv_episode(file_name)
     return episode, file_name
@@ -365,24 +407,11 @@ class SubscriptionManager:
                     if isinstance(item, dict)
                     else ""
                 )
-                parser = getattr(self.resource_sources, "parse_tv_episode", None)
-                parsed_episode = (
-                    parser(source_id, file_name)
-                    if source_id and callable(parser)
-                    else _parse_tv_episode(file_name)
+                season_num, ep_num = _parse_source_episode(
+                    self.resource_sources,
+                    source_id,
+                    file_name,
                 )
-                if (
-                    not isinstance(parsed_episode, (tuple, list))
-                    or len(parsed_episode) != 2
-                    or parsed_episode[1] is None
-                ):
-                    # A card-specific rule may not recognize a plain numeric
-                    # filename such as "45.mkv". Fall back to the shared parser
-                    # so the selected episode still establishes the baseline.
-                    fallback_episode = _parse_tv_episode(file_name)
-                    if fallback_episode[1] is not None:
-                        parsed_episode = fallback_episode
-                season_num, ep_num = parsed_episode
                 if ep_num is not None:
                     selected_episode_numbers.append(ep_num)
                     if season_num is not None:
@@ -1067,24 +1096,11 @@ class SubscriptionManager:
                 file_name = str(item.get("file_name") or "")
                 if not file_name.lower().endswith(VIDEO_EXTENSIONS):
                     continue
-                parser = getattr(self.resource_sources, "parse_tv_episode", None)
-                parsed_episode = (
-                    parser(source_id, file_name)
-                    if callable(parser)
-                    else _parse_tv_episode(file_name)
+                season, episode = _parse_source_episode(
+                    self.resource_sources,
+                    source_id,
+                    file_name,
                 )
-                if (
-                    not isinstance(parsed_episode, (tuple, list))
-                    or len(parsed_episode) != 2
-                    or parsed_episode[1] is None
-                ):
-                    # Use the generic recognizer when a card rule misses a
-                    # numeric-only filename; otherwise episode 45 can be
-                    # omitted while the baseline silently becomes zero.
-                    fallback_episode = _parse_tv_episode(file_name)
-                    if fallback_episode[1] is not None:
-                        parsed_episode = fallback_episode
-                season, episode = parsed_episode
                 if episode is None:
                     # Keep the channel watermark unchanged while a video file
                     # remains unclassified. Otherwise the incremental scan could
