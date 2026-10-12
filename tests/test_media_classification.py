@@ -1,4 +1,7 @@
-from moviesync.services.media_classification import classify_metadata_item
+from moviesync.services.media_classification import (
+    classify_metadata_item,
+    filter_metadata_items_by_category,
+)
 
 
 def test_explicit_movie_type_overrides_a_stale_tv_tab():
@@ -34,3 +37,34 @@ def test_legacy_provider_uses_selected_category_only_when_type_is_unknown():
 
     assert result["tag"] == "电影"
     assert "media_type" not in result
+
+
+
+def test_category_filter_removes_known_wrong_format_but_keeps_unknown_legacy_items():
+    items = [
+        {"title": "潜伏", "media_type": "tv"},
+        {"title": "潜伏6", "media_type": "movie"},
+        {"title": "旧版豆瓣搜索结果"},
+    ]
+
+    filtered = filter_metadata_items_by_category(items, "电影")
+
+    assert [item["title"] for item in filtered] == ["潜伏6", "旧版豆瓣搜索结果"]
+
+
+def test_category_filter_uses_available_tv_genres_without_guessing_when_missing():
+    items = [
+        {"title": "动画", "media_type": "tv", "genre_ids": [16]},
+        {"title": "综艺", "media_type": "tv", "genre_ids": [10764]},
+        {"title": "普通剧", "media_type": "tv", "genre_ids": [18]},
+        {"title": "未知旧卡片", "media_type": "tv"},
+    ]
+
+    assert [item["title"] for item in filter_metadata_items_by_category(items, "动漫")] == [
+        "动画",
+        "未知旧卡片",
+    ]
+    assert [item["title"] for item in filter_metadata_items_by_category(items, "电视剧")] == [
+        "普通剧",
+        "未知旧卡片",
+    ]
