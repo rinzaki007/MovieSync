@@ -398,7 +398,11 @@ class StorageTargetCard(Card):
 
 
 class FilenameProcessorCard(Card):
-    """文件名识别能力接口；资源源只依赖此能力，不依赖具体卡片 ID。"""
+    """可扩展的文件名识别接口。
+
+    识别卡片只负责把文件名转换为 (season, episode)，不负责决定是否转存。
+    rule_priority 越大越先尝试；无法识别时返回 (None, None)，让后续规则继续。
+    """
 
     manifest = CardManifest(
         id="unknown.filename-processor",
@@ -406,12 +410,26 @@ class FilenameProcessorCard(Card):
         type="filename_processor",
         capabilities=("filename.parse",),
     )
+    rule_priority = 100
 
     def parse_episode(
         self, file_name: str, config: dict[str, Any]
     ) -> tuple[int | None, int | None]:
-        """识别文件名中的季集信息；无法识别时返回 (None, None)。"""
+        """兼容接口：识别文件名中的季集信息；无法识别时返回 (None, None)。"""
         raise NotImplementedError
+
+    def parse_episode_for_source(
+        self,
+        file_name: str,
+        source_id: str,
+        config: dict[str, Any],
+    ) -> tuple[int | None, int | None]:
+        """可选的来源感知接口；旧卡片无需改造即可继续工作。
+
+        来源专属识别卡片可覆盖此方法，根据 source_id 选择规则；
+        默认委托给原有 parse_episode()，保持现有插件兼容。
+        """
+        return self.parse_episode(file_name, config)
 
 
 class MetadataProviderCard(Card):
