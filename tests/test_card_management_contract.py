@@ -10,9 +10,9 @@ def test_filename_recognition_admin_shows_builtin_catalog_and_preview():
         encoding="utf-8"
     )
     assert "内置识别规则（自动生效）" in html
-    assert "快速试一下文件名" in html
+    assert "试一试：这个文件名会被识别成什么？" in html
     assert "data-filename-preview-run" in html
-    assert "已配置的自定义规则（按顺序尝试）" in html
+    assert "高级设置：自定义识别规则（大多数人不需要修改）" in html
     assert "肖申克的救赎 (1994) 1080p.mkv" in html
     assert "庆余年.S02E07.1080p.mkv" in html
 
