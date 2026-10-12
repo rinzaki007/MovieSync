@@ -99,8 +99,8 @@ def test_search_result_episode_statistics_use_shared_rules_for_each_source():
                         "config": {
                             "rules": [
                                 {
-                                    "pattern": r"^Raw_S(\\d+)_E(\\d+)[.]mkv$",
-                                    "replace": r"Show.S\\1E\\2.mkv",
+                                    "pattern": r"^Raw_S(\d+)_E(\d+)[.]mkv$",
+                                    "replace": r"Show.S\1E\2.mkv",
                                 }
                             ]
                         },
