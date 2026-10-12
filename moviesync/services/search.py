@@ -233,7 +233,7 @@ class SearchService:
         """仅在分享标题与实际视频文件名共同指向另一部作品时，过滤明显的错误候选。
 
         适用于电影、电视剧、综艺和动画。标题不明确时保留候选，避免误杀简称、别名和合集。
-        这里要求能从实际视频文件名中识别出稳定的另一部中文作品名，降低误杀风险。
+        同时支持常见中文标题与英文原名，并要求分享元数据和视频文件相互佐证，降低误杀风险。
         """
         if not isinstance(movie, dict):
             return False
@@ -260,14 +260,14 @@ class SearchService:
                 target_titles.extend(part.strip() for part in re.split(r"[,;；、|]", aliases) if part.strip())
             elif isinstance(aliases, (list, tuple, set)):
                 target_titles.extend(str(part).strip() for part in aliases if str(part).strip())
-        target_titles = [cls._simplify(value).lower() for value in target_titles]
+        target_titles = [cls._simplify(value).replace("_", "").lower() for value in target_titles]
         target_titles = [value for value in target_titles if len(value) >= 2]
         if not target_titles:
             return False
 
-        source_name = cls._simplify(source_title).lower()
+        source_name = cls._simplify(source_title).replace("_", "").lower()
         file_names = [
-            cls._simplify(str(video.get("file_name") or "")).lower()
+            cls._simplify(str(video.get("file_name") or "")).replace("_", "").lower()
             for video in videos
         ]
         # 目标标题在分享名或任一实际视频名中出现时，不能仅凭其他词语判定误命中。
@@ -295,10 +295,10 @@ class SearchService:
             # 每个文件对同一候选标题最多计数一次，避免标题中的重复片段抬高置信度。
             normalized_candidates = set()
             for candidate in file_candidates:
-                normalized = cls._simplify(candidate).lower()
+                normalized = cls._simplify(candidate).replace("_", "").lower()
                 if (
                     len(normalized) >= 3
-                    and normalized not in {cls._simplify(item).lower() for item in generic}
+                    and normalized not in {cls._simplify(item).replace("_", "").lower() for item in generic}
                     and not any(title in normalized for title in target_titles)
                 ):
                     normalized_candidates.add(normalized)
