@@ -99,27 +99,27 @@ def parse_tv_episode(
 _VIDEO_QUALITY = re.compile(
     r"(?i)(?:2160p|1080p|720p|480p|4k|8k|uhd|fhd|hd|bluray|blu-ray|"
     r"web-?dl|web-?rip|hdtv|dvdrip|remux|x26[45]|h26[45]|hevc|avc|aac|"
-    r"flac|hdr10?\\+?|dolby[ ._-]?vision|杜比视界|高清|超清|国语|中字|"
+    r"flac|hdr10?\+?|dolby[ ._-]?vision|杜比视界|高清|超清|国语|中字|"
     r"简体|繁体|内封|外挂字幕|合集|全集)"
 )
 _EPISODE_MARKER = re.compile(
-    r"(?i)(?:S\\s*\\d{1,2}[\\s._-]*E[Pp]?\\s*\\d{1,4}|"
-    r"第\\s*\\d{1,2}\\s*季|第\\s*\\d{1,4}\\s*[集话期]|"
-    r"(?<![A-Za-z0-9])E[Pp]\\s*\\d{1,4}(?!\\d))"
+    r"(?i)(?:S\s*\d{1,2}[\s._-]*E[Pp]?\s*\d{1,4}|"
+    r"第\s*\d{1,2}\s*季|第\s*\d{1,4}\s*[集话期]|"
+    r"(?<![A-Za-z0-9])E[Pp]\s*\d{1,4}(?!\d))"
 )
 _ANIME_MARKER = re.compile(
-    r"(?i)(?:\\banime\\b|\\bani-?me\\b|\\b\\d{1,2}月新番\\b|番剧|新番|动漫|动画)"
+    r"(?i)(?:\banime\b|\bani-?me\b|\b\d{1,2}月新番\b|番剧|新番|动漫|动画)"
 )
 _VARIETY_MARKER = re.compile(
-    r"(?i)(?:综艺|真人秀|脱口秀|歌手\\s*\\d{0,4}|乘风\\s*\\d{0,4}|"
+    r"(?i)(?:综艺|真人秀|脱口秀|歌手\s*\d{0,4}|乘风\s*\d{0,4}|"
     r"披荆斩棘|奔跑吧|王牌对王牌|你好星期六|极限挑战|向往的生活|"
-    r"快乐再出发|令人心动的offer|\\brunning[ ._-]?man\\b|\\bvariety\\b|"
-    r"第\\s*\\d{1,4}\\s*期)"
+    r"快乐再出发|令人心动的offer|\brunning[ ._-]?man\b|\bvariety\b|"
+    r"第\s*\d{1,4}\s*期)"
 )
-_RELEASE_YEAR = re.compile(r"(?<!\\d)[（( ._-]?(18\\d{2}|19\\d{2}|20\\d{2}|21\\d{2})[）) ._-]?(?!\\d)")
+_RELEASE_YEAR = re.compile(r"(?<!\d)[（( ._-]?(18\d{2}|19\d{2}|20\d{2}|21\d{2})[）) ._-]?(?!\d)")
 _MULTI_EPISODE = re.compile(
-    r"(?i)(?:S\\s*\\d{1,2}[\\s._-]*E[Pp]?\\s*\\d{1,4})"
-    r"\\s*[-~至]\\s*(?:S\\s*\\d{1,2}[\\s._-]*E[Pp]?\\s*)?(\\d{1,4})"
+    r"(?i)(?:S\s*\d{1,2}[\s._-]*E[Pp]?\s*\d{1,4})"
+    r"\s*[-~至]\s*(?:S\s*\d{1,2}[\s._-]*E[Pp]?\s*)?(\d{1,4})"
 )
 
 
@@ -129,7 +129,7 @@ def parse_media_filename(file_name: str) -> dict[str, object]:
     media_type: movie / tv / anime / variety / unknown
     season 与 episode 对电影或未知季集保持 None；episode_end 用于连续多集。
     """
-    raw = str(file_name or "").replace("\\\\", "/")
+    raw = str(file_name or "").replace("\\", "/")
     path = PurePosixPath(raw)
     stem = path.stem.strip()
     if not stem:
@@ -162,11 +162,11 @@ def parse_media_filename(file_name: str) -> dict[str, object]:
 
     year_match = _YEAR.search(stem)
     year = int(year_match.group(1)) if year_match else None
-    has_episode_marker = bool(_EPISODE_MARKER.search(stem) or re.search(r"(?i)S\\s*\\d{1,2}[\\s._-]*E\\s*\\d+", stem))
+    has_episode_marker = bool(_EPISODE_MARKER.search(stem) or re.search(r"(?i)S\s*\d{1,2}[\s._-]*E\s*\d+", stem))
     is_variety = bool(_VARIETY_MARKER.search(stem))
     is_anime = bool(_ANIME_MARKER.search(stem))
 
-    if is_variety and (episode is not None or date_value or re.search(r"第\\s*\\d+\\s*期", stem)):
+    if is_variety and (episode is not None or date_value or re.search(r"第\s*\d+\s*期", stem)):
         media_type = "variety"
     elif is_anime and (episode is not None or year is not None):
         media_type = "anime"
@@ -179,19 +179,22 @@ def parse_media_filename(file_name: str) -> dict[str, object]:
 
     # 名称只剥离明确的集数、年份、技术参数；不猜测或翻译标题。
     title = stem
+    if date_match:
+        title = title.replace(date_match.group(0), " ")
     title = _MULTI_EPISODE.sub(" ", title)
     title = _SEASON_EPISODE.sub(" ", title)
     title = _CHINESE_SEASON_EPISODE.sub(" ", title)
-    title = re.sub(r"第\\s*\\d{1,4}\\s*[集话期]", " ", title)
-    title = re.sub(r"(?i)(?<![A-Za-z0-9])E[Pp]?\\s*\\d{1,4}(?!\\d)", " ", title)
+    title = re.sub(r"第\s*\d{1,4}\s*[集话期]", " ", title)
+    title = re.sub(r"(?i)(?<![A-Za-z0-9])E[Pp]?\s*\d{1,4}(?!\d)", " ", title)
     if year_match:
         title = title.replace(year_match.group(0), " ")
     title = _VIDEO_QUALITY.sub(" ", title)
-    title = re.sub(r"(?i)\\b(?:proper|repack|limited|complete|batch|season|episode)\\b", " ", title)
-    title = re.sub(r"[\\[\\](){}【】（）]", " ", title)
+    title = re.sub(r"(?i)(?:动漫|动画|番剧|新番)", " ", title)
+    title = re.sub(r"(?i)\b(?:proper|repack|limited|complete|batch|season|episode)\b", " ", title)
+    title = re.sub(r"[\[\](){}【】（）]", " ", title)
     title = re.sub(r"[._]+", " ", title)
-    title = re.sub(r"\\s*[-–—]\\s*", " ", title)
-    title = re.sub(r"\\s+", " ", title).strip(" -_.")
+    title = re.sub(r"\s*[-–—]\s*", " ", title)
+    title = re.sub(r"\s+", " ", title).strip(" -_.")
     # 若规则清理过度，保留原始主文件名，避免返回空标题。
     if not title:
         title = stem
@@ -210,7 +213,7 @@ def parse_media_filename(file_name: str) -> dict[str, object]:
 
 def extract_filename_tokens(file_name: str, task_name: str = "") -> dict[str, str]:
     """从文件名提取模板令牌；令牌值不包含文件扩展名。"""
-    path = PurePosixPath(str(file_name or "").replace("\\", "/"))
+    path = PurePosixPath(str(file_name or "").replace("\", "/"))
     stem, ext = path.stem, path.suffix.lstrip(".")
     season, episode = parse_tv_episode(stem)
     date_match = _DATE.search(stem)
@@ -270,4 +273,4 @@ def render_filename_template(
         lambda match: tokens.get(match.group(1), match.group(0)),
         rendered,
     )
-    return re.sub(r"[<>:\"/\\|?*\x00-\x1f]", "_", rendered).strip(" .")
+    return re.sub(r"[<>:\"/\|?*\x00-\x1f]", "_", rendered).strip(" .")
