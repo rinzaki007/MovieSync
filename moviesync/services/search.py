@@ -254,6 +254,12 @@ class SearchService:
             for key in ("title", "name", "original_title")
             if str(movie.get(key) or "").strip()
         ]
+        for alias_key in ("aliases", "alternative_titles", "aka"):
+            aliases = movie.get(alias_key)
+            if isinstance(aliases, str):
+                target_titles.extend(part.strip() for part in re.split(r"[,;；、|]", aliases) if part.strip())
+            elif isinstance(aliases, (list, tuple, set)):
+                target_titles.extend(str(part).strip() for part in aliases if str(part).strip())
         target_titles = [cls._simplify(value).lower() for value in target_titles]
         target_titles = [value for value in target_titles if len(value) >= 2]
         if not target_titles:
@@ -276,7 +282,6 @@ class SearchService:
             "动画", "动漫", "电影", "电视剧", "综艺", "WEB-DL", "BluRay",
         }
         occurrences: Counter[str] = Counter()
-        labels: dict[str, str] = {}
         for video in videos:
             file_name = str(video.get("file_name") or "")
             file_candidates = set(re.findall(r"[\u4e00-\u9fff]{3,}", file_name))
@@ -297,7 +302,6 @@ class SearchService:
                     and not any(title in normalized for title in target_titles)
                 ):
                     normalized_candidates.add(normalized)
-                    labels.setdefault(normalized, candidate)
             for normalized in normalized_candidates:
                 occurrences[normalized] += 1
 
