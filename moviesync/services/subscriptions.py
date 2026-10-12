@@ -366,11 +366,23 @@ class SubscriptionManager:
                     else ""
                 )
                 parser = getattr(self.resource_sources, "parse_tv_episode", None)
-                season_num, ep_num = (
+                parsed_episode = (
                     parser(source_id, file_name)
                     if source_id and callable(parser)
                     else _parse_tv_episode(file_name)
                 )
+                if (
+                    not isinstance(parsed_episode, (tuple, list))
+                    or len(parsed_episode) != 2
+                    or parsed_episode[1] is None
+                ):
+                    # A card-specific rule may not recognize a plain numeric
+                    # filename such as "45.mkv". Fall back to the shared parser
+                    # so the selected episode still establishes the baseline.
+                    fallback_episode = _parse_tv_episode(file_name)
+                    if fallback_episode[1] is not None:
+                        parsed_episode = fallback_episode
+                season_num, ep_num = parsed_episode
                 if ep_num is not None:
                     selected_episode_numbers.append(ep_num)
                     if season_num is not None:
@@ -1056,11 +1068,23 @@ class SubscriptionManager:
                 if not file_name.lower().endswith(VIDEO_EXTENSIONS):
                     continue
                 parser = getattr(self.resource_sources, "parse_tv_episode", None)
-                season, episode = (
+                parsed_episode = (
                     parser(source_id, file_name)
                     if callable(parser)
                     else _parse_tv_episode(file_name)
                 )
+                if (
+                    not isinstance(parsed_episode, (tuple, list))
+                    or len(parsed_episode) != 2
+                    or parsed_episode[1] is None
+                ):
+                    # Use the generic recognizer when a card rule misses a
+                    # numeric-only filename; otherwise episode 45 can be
+                    # omitted while the baseline silently becomes zero.
+                    fallback_episode = _parse_tv_episode(file_name)
+                    if fallback_episode[1] is not None:
+                        parsed_episode = fallback_episode
+                season, episode = parsed_episode
                 if episode is None:
                     # Keep the channel watermark unchanged while a video file
                     # remains unclassified. Otherwise the incremental scan could
