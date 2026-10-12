@@ -33,7 +33,11 @@ class FilenameRecognitionCard(FilenameProcessorCard):
                 "item_fields": (
                     {"key": "pattern", "label": "匹配规则", "placeholder": "例如：Raw_S(\\d+)_E(\\d+)"},
                     {"key": "replace", "label": "替换格式", "placeholder": "例如：S\\1E\\2"},
-                    {"key": "source_ids", "label": "限定来源 ID（可选）", "placeholder": "留空表示所有来源；多个 ID 用逗号分隔"},
+                    {
+                        "key": "source_ids",
+                        "label": "限定来源 ID（可选）",
+                        "placeholder": "留空表示所有来源；多个 ID 用逗号分隔",
+                    },
                 ),
                 "default": [],
                 "description": (
