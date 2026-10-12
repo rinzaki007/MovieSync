@@ -10,6 +10,7 @@ import secrets
 from functools import wraps
 from urllib.parse import urlparse
 
+from ..services.media_classification import classify_metadata_item, normalize_media_category
 from flask import (
     Blueprint,
     Response,
@@ -1022,11 +1023,17 @@ def get_movies():
     provider_id = str(request.args.get("provider_id") or "").strip() or None
 
     try:
+        category = normalize_media_category(tag) or "电影"
         movies = _services()["metadata"].list_movies(
-            tag,
+            category,
             sort_type,
             provider_id=provider_id,
         )
+        movies = [
+            classify_metadata_item(item, fallback_category=category)
+            for item in movies
+            if isinstance(item, dict)
+        ]
 
         return jsonify(
             {
@@ -1062,16 +1069,25 @@ def search_metadata():
         )
 
     provider_id = str(request.args.get("provider_id") or "").strip() or None
+    category = normalize_media_category(request.args.get("tag")) or "电影"
 
     try:
+        movies = _services()["metadata"].search(
+            query,
+            provider_id=provider_id,
+            category=category,
+        )
+        movies = [
+            classify_metadata_item(item, fallback_category=category)
+            for item in movies
+            if isinstance(item, dict)
+        ]
         return jsonify(
             {
                 "success": True,
                 "provider_id": provider_id,
-                "movies": _services()["metadata"].search(
-                    query,
-                    provider_id=provider_id,
-                ),
+                "category": category,
+                "movies": movies,
             }
         )
 
