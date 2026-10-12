@@ -163,11 +163,22 @@ class MetadataProviderManager:
             valid=self._valid_items,
         )
 
-    def search(self, query: str, provider_id: str | None = None) -> list[dict[str, Any]]:
+    def search(
+        self,
+        query: str,
+        provider_id: str | None = None,
+        category: str | None = None,
+    ) -> list[dict[str, Any]]:
+        def search_card(card: MetadataProviderCard):
+            category_search = getattr(card, "search_by_category", None)
+            if category and callable(category_search):
+                return category_search(query, category)
+            return card.search(query)
+
         return self._call(
             "search",
             "metadata.search",
-            lambda card: card.search(query),
+            search_card,
             provider_id=provider_id,
             empty=[],
             valid=self._valid_items,
