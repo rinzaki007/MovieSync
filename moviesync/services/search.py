@@ -224,7 +224,11 @@ class SearchService:
         return files, token, error, target_id
 
     @staticmethod
-    def _candidate_priority(source: dict, movie_title: str) -> int:
+    def _candidate_priority(
+        source: dict,
+        movie_title: str,
+        media_type: str = "",
+    ) -> int:
         """稳定地把名称/剧集信息较明确的资源排在前面；未知格式仍保留在后续页。"""
         name_fields = (
             "title", "name", "file_name", "filename", "resource_name",
@@ -250,6 +254,21 @@ class SearchService:
         simplified_text = re.sub(r"[^\w\u4e00-\u9fa5]", "", text)
         if simplified_title and simplified_title in simplified_text:
             score += 3
+        # A sequel number is part of the title, not disposable punctuation:
+        # "潜伏6" must not rank "潜伏" TV-season shares above matching film shares.
+        sequel_match = re.search(r"(\d+)$", simplified_title)
+        if sequel_match:
+            base_title = simplified_title[: -len(sequel_match.group(1))]
+            if base_title and base_title in simplified_text and simplified_title not in simplified_text:
+                score -= 8
+        # For a selected movie, explicit episode markers are strong contrary
+        # evidence. Keep these candidates visible, but place them lower.
+        if media_type == "movie" and re.search(
+            r"(?:s\d{1,2}\s*e\d{1,4}|第\s*\d+\s*[集话]|(?:ep|e)\s*\d{1,4})",
+            text,
+            re.I,
+        ):
+            score -= 6
         # 标题过于简短或主要由分享说明组成时，降低优先级但仍保留候选。
         meaningful_text = re.sub(
             r"(?:分享|资源|链接|下载|转存|合集|全集|更新|推荐)",
@@ -313,7 +332,15 @@ class SearchService:
             f"（存储目标：{selected_target_id}）" if selected_target_id else "",
         )
 
+        # Preserve the selected work's identity for resource cards that can use it.
+        # Legacy cards may continue to read only "title"; media-aware cards can use
+        # category, media_type, year and alternate/original titles without core coupling.
         search_context = {"title": cleaned_title}
+        if isinstance(movie, dict):
+            for key in ("tag", "media_type", "year", "original_title", "genres"):
+                value = movie.get(key)
+                if value not in (None, "", [], {}):
+                    search_context[key] = value
         if selected_target_id:
             search_context.update({
                 "storage_target_id": selected_target_id,
@@ -324,7 +351,11 @@ class SearchService:
         # 排序稳定：高置信度资源优先，无法识别命名的资源仍保留在后续页。
         discovered = sorted(
             discovered,
-            key=lambda source: self._candidate_priority(source, title),
+            key=lambda source: self._candidate_priority(
+                source,
+                title,
+                str(movie.get("media_type") or "") if isinstance(movie, dict) else "",
+            ),
             reverse=True,
         )
         safe_offset = max(0, int(offset or 0))
@@ -440,9 +471,44 @@ class SearchService:
                     )
 
                     total_size = sum(int(v.get("size") or 0) for v in all_videos)
+                    source_title = next(
+                        (
+                            str(source.get(key) or "").strip()[:200]
+                            for key in ("title", "name", "resource_name", "share_name", "content")
+                            if str(source.get(key) or "").strip()
+                        ),
+                        "",
+                    )
+                    simplified_movie_title = self._simplify(title).lower()
+                    simplified_source_title = self._simplify(source_title).lower()
+                    sequel_match = re.search(r"(\d+)$", simplified_movie_title)
+                    title_mismatch = bool(
+                        sequel_match
+                        and simplified_movie_title not in simplified_source_title
+                        and simplified_movie_title[: -len(sequel_match.group(1))]
+                        and simplified_movie_title[: -len(sequel_match.group(1))] in simplified_source_title
+                    )
+                    strong_episode_markers = any(
+                        re.search(
+                            r"(?:s\d{1,2}\s*e\d{1,4}|第\s*\d+\s*[集话]|(?:ep|e)\s*\d{1,4})",
+                            str(video.get("file_name") or ""),
+                            re.I,
+                        )
+                        for video in all_videos
+                    )
+                    format_mismatch = bool(
+                        isinstance(movie, dict)
+                        and movie.get("media_type") == "movie"
+                        and strong_episode_markers
+                    )
                     seen_resource_keys.add(resource_key)
                     candidates.append({
                         "source_id": source.get("source_id", "unknown"),
+                        "resource_title": source_title,
+                        "title_mismatch": title_mismatch,
+                        "format_mismatch": format_mismatch,
+                        "media_type": str(movie.get("media_type") or "") if isinstance(movie, dict) else "",
+                        "tag": str(movie.get("tag") or "") if isinstance(movie, dict) else "",
                         "source_name": source.get("source_name", "未知来源"),
                         "cover": str(movie.get("cover", "") if isinstance(movie, dict) else "").strip()[:1000],
                         "storage_target_id": storage_target_id,

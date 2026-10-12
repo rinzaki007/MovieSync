@@ -288,7 +288,7 @@ async function doSearch() {
     grid.classList.add('hidden');
 
     try {
-        const params = new URLSearchParams({ q: query });
+        const params = new URLSearchParams({ q: query, tag: currentTag });
         if (currentMetadataProviderId) params.set('provider_id', currentMetadataProviderId);
         const resp = await apiFetch(`/api/search-metadata?${params.toString()}`);
         const res = await resp.json();
@@ -441,6 +441,9 @@ function movieDetailTransfer() {
     const selectedMovie = {
         title: movie.title,
         tag: movie.tag || currentTag || '电影',
+        media_type: movie.media_type || '',
+        genres: Array.isArray(movie.genres) ? movie.genres : [],
+        original_title: movie.original_title || '',
         cover: movie.cover,
         url: movie.url,
         rate: movie.rate || ''
@@ -697,7 +700,8 @@ function openCandidateModal(movies, candidatesMap) {
                 );
                 const versionLabel = getCandidateVersionLabel(cand, files, resolutionText);
                 const episodeCount = files.filter(file => isEpisodeFile(file.file_name)).length;
-                const isSeries = (movie.tag === '电视剧' || currentTag === '电视剧') && (episodeCount >= 1 || files.length >= 2);
+                const seriesCategory = ['电视剧', '综艺', '动漫', '纪录片', '短剧'].includes(movie.tag);
+                const isSeries = (movie.media_type === 'tv' || seriesCategory) && (episodeCount >= 1 || files.length >= 2);
                 const filesBoxId = `candidate-files-${mIdx}-${cIdx}`;
                 const toggleId = `candidate-files-toggle-${mIdx}-${cIdx}`;
                 const fileCheckboxes = files.map((f, fIdx) => `
@@ -720,6 +724,9 @@ function openCandidateModal(movies, candidatesMap) {
                                     </span>
                                 </div>
                                 <div class="mt-3 flex flex-wrap gap-2">
+                                    ${cand.resource_title ? `<span class="resource-chip max-w-full truncate" title="${escapeHtml(cand.resource_title)}">来源标题：${escapeHtml(cand.resource_title)}</span>` : ''}
+                                    ${cand.title_mismatch ? '<span class="resource-chip text-amber-300">标题疑似不匹配：未找到续作编号</span>' : ''}
+                                    ${cand.format_mismatch ? '<span class="resource-chip text-amber-300">疑似剧集文件，与所选电影类型不符</span>' : ''}
                                     <span class="resource-chip"><i class="fa-solid fa-film"></i> ${files.length} 个视频</span>
                                     <span class="resource-chip"><i class="fa-solid fa-hard-drive"></i> ${escapeHtml(totalSize)}</span>
                                     <span class="resource-chip resource-chip-accent"><i class="fa-solid fa-display"></i> ${escapeHtml(resolutionText)}</span>

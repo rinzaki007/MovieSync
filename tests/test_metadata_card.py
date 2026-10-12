@@ -323,8 +323,8 @@ def test_metadata_routes_forward_explicit_provider_selection(tmp_path):
         def __init__(self):
             self.calls = []
 
-        def search(self, query, provider_id=None):
-            self.calls.append(("search", query, provider_id))
+        def search(self, query, provider_id=None, category=None):
+            self.calls.append(("search", query, provider_id, category))
             return [{"title": query, "provider_id": provider_id}]
 
         def list_movies(self, tag, sort_type, provider_id=None):
@@ -344,11 +344,21 @@ def test_metadata_routes_forward_explicit_provider_selection(tmp_path):
     listing = client.get("/api/get-movies?tag=电影&sort=U&provider_id=douban")
 
     assert search.status_code == 200
-    assert search.get_json()["movies"] == [{"title": "Arrival", "provider_id": "tmdb"}]
+    assert search.get_json()["movies"] == [{
+        "title": "Arrival",
+        "provider_id": "tmdb",
+        "tag": "电影",
+        "media_type": "movie",
+    }]
     assert listing.status_code == 200
-    assert listing.get_json()["movies"] == [{"title": "电影", "provider_id": "douban"}]
+    assert listing.get_json()["movies"] == [{
+        "title": "电影",
+        "provider_id": "douban",
+        "tag": "电影",
+        "media_type": "movie",
+    }]
     assert metadata.calls == [
-        ("search", "Arrival", "tmdb"),
+        ("search", "Arrival", "tmdb", "电影"),
         ("list", "电影", "U", "douban"),
     ]
 
@@ -470,3 +480,40 @@ def test_metadata_manager_config_load_failure_does_not_break_home_or_search():
     # usable; a failed config read must not escape into the home/search routes.
     assert manager.list_movies() == [{"title": "电影"}]
     assert manager.search("测试") == [{"title": "测试"}]
+
+
+
+def test_metadata_manager_uses_category_aware_search_when_provider_supports_it():
+    import logging
+
+    from moviesync.cards import CardManifest, CardRegistry, MetadataProviderCard
+    from moviesync.services.metadata import MetadataProviderManager
+
+    class CategoryProvider(MetadataProviderCard):
+        manifest = CardManifest(
+            id="category-provider",
+            name="Category Provider",
+            type="metadata_provider",
+            capabilities=("metadata.search",),
+        )
+
+        def search(self, query):
+            return [{"title": "mixed result"}]
+
+        def search_by_category(self, query, category):
+            return [{"title": query, "tag": category, "media_type": "movie"}]
+
+        def list_movies(self, tag, sort_type):
+            return []
+
+        def get_detail(self, item_id):
+            return None
+
+    registry = CardRegistry()
+    registry.register(CategoryProvider())
+    manager = MetadataProviderManager(registry, logging.getLogger("test.metadata"))
+
+    assert manager.search("潜伏6", category="电影") == [
+        {"title": "潜伏6", "tag": "电影", "media_type": "movie"}
+    ]
+    assert manager.search("潜伏6") == [{"title": "mixed result"}]
