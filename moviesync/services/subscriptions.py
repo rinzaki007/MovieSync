@@ -1207,6 +1207,15 @@ class SubscriptionManager:
                     if previous_group is not None and previous_group != group_key:
                         # Another share already covers this episode. Do not transfer
                         # the overlap twice, but keep scanning for later episodes.
+                        if is_selected_initial:
+                            self.logger.warning(
+                                "智能追剧初选诊断：初选文件被跨分享同集去重拦截，FID=%s，文件名=%s，集数=%s，当前分享=%s，优先分享=%s",
+                                fid,
+                                file_name,
+                                episode,
+                                resource_id,
+                                previous_group[1],
+                            )
                         continue
                 grouped.setdefault(group_key, {
                     "resource": resource,
