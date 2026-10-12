@@ -2095,8 +2095,8 @@ def test_smart_follow_uses_global_filename_rules_for_channel_scan_and_season_bas
                         "config": {
                             "rules": [
                                 {
-                                    "pattern": r"^Raw_S(\\d+)_E(\\d+)[.]mkv$",
-                                    "replace": r"Show.S\\1E\\2.mkv",
+                                    "pattern": r"^Raw_S(\d+)_E(\d+)[.]mkv$",
+                                    "replace": r"Show.S\1E\2.mkv",
                                 }
                             ]
                         },
