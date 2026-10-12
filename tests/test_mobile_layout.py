@@ -40,3 +40,11 @@ def test_all_html_pages_load_mobile_styles_directly_or_through_shared_styles():
         if "css/style.css" in html:
             continue
         assert "css/mobile.css" in html, f"{template.name} does not load mobile styles"
+
+
+def test_admin_and_resource_pages_have_dedicated_mobile_layouts():
+    stylesheet = MOBILE.read_text(encoding="utf-8")
+    assert "body:has(#panel-global) > div.flex-1.flex.overflow-hidden" in stylesheet
+    assert "body:has(#panel-global) > div.flex-1.flex.overflow-hidden > aside.w-60" in stylesheet
+    assert "body:has(#resource-list) > header.glass-nav > div" in stylesheet
+    assert "body:has(#resource-list) > main" in stylesheet
