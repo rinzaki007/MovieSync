@@ -1288,6 +1288,76 @@
 
         let currentGenericCard = null;
 
+        function renderFilenameRecognitionPreview(fileName, wrapper, fieldKey) {
+            const raw = String(fileName || "").trim();
+            if (!raw) return '<span class="text-amber-300">请先输入文件名。</span>';
+            const stem = raw.split(/[\\/]/).pop().replace(/\\.[^.]+$/, "");
+            let season = null, episode = null, episodeEnd = null, year = null, date = null;
+            let type = "暂无法判断";
+            const seasonMatch = stem.match(/(?:^|[^A-Za-z0-9])S\\s*(\\d{1,2})[\\s._-]*E[Pp]?\\s*(\\d{1,4})(?!\\d)/i);
+            const chineseSeasonMatch = stem.match(/第\\s*(\\d{1,2})\\s*季.{0,8}?第\\s*(\\d{1,4})\\s*[集话期]/);
+            const episodeMatch = stem.match(/第\\s*(\\d{1,4})\\s*[集话期]/) || stem.match(/(?:^|[^A-Za-z0-9])E[Pp]?\\s*(\\d{1,4})(?!\\d)/i);
+            const multiMatch = stem.match(/S\\s*\\d{1,2}[\\s._-]*E[Pp]?\\s*\\d{1,4}\\s*[-~至]\\s*(?:S\\s*\\d{1,2}[\\s._-]*E[Pp]?|E[Pp]?)?\\s*(\\d{1,4})/i);
+            if (seasonMatch) { season = Number(seasonMatch[1]); episode = Number(seasonMatch[2]); }
+            else if (chineseSeasonMatch) { season = Number(chineseSeasonMatch[1]); episode = Number(chineseSeasonMatch[2]); }
+            else if (episodeMatch) episode = Number(episodeMatch[1]);
+            if (multiMatch && episode !== null) episodeEnd = Number(multiMatch[1]);
+            const dateMatch = stem.match(/(?<!\\d)(20\\d{2})[-_.年/月]?([01]?\\d)[-_.月]?([0-3]?\\d)日?(?!\\d)/);
+            if (dateMatch) {
+                const month = Number(dateMatch[2]), day = Number(dateMatch[3]);
+                if (month >= 1 && month <= 12 && day >= 1 && day <= 31) date = dateMatch[1] + "-" + String(month).padStart(2,"0") + "-" + String(day).padStart(2,"0");
+            }
+            const yearMatch = stem.match(/(?<!\\d)(18\\d{2}|19\\d{2}|20\\d{2}|21\\d{2})(?!\\d)/);
+            if (yearMatch) year = Number(yearMatch[1]);
+            const variety = /综艺|真人秀|脱口秀|歌手|乘风|披荆斩棘|奔跑吧|王牌对王牌|你好星期六|running[ ._-]?man|variety|第\\s*\\d+\\s*期/i.test(stem);
+            const anime = /\\banime\\b|\\d{1,2}月新番|番剧|新番|动漫|动画/i.test(stem);
+            if (variety && (episode !== null || date || /第\\s*\\d+\\s*期/.test(stem))) type = "综艺";
+            else if (anime && (episode !== null || year !== null)) type = "动画";
+            else if (episode !== null || season !== null) type = "剧集";
+            else if (year !== null) type = "电影";
+            let title = stem
+                .replace(/(?:S\\s*\\d{1,2}[\\s._-]*E[Pp]?\\s*\\d{1,4})(?:\\s*[-~至]\\s*(?:S\\s*\\d{1,2}[\\s._-]*E[Pp]?|E[Pp]?)?\\s*\\d{1,4})?/ig, " ")
+                .replace(/第\\s*\\d{1,2}\\s*季.{0,8}?第\\s*\\d{1,4}\\s*[集话期]/g, " ")
+                .replace(/第\\s*\\d{1,4}\\s*[集话期]/g, " ")
+                .replace(/(?:^|[^A-Za-z0-9])E[Pp]?\\s*\\d{1,4}(?!\\d)/ig, " ")
+                .replace(/(?<!\\d)(18\\d{2}|19\\d{2}|20\\d{2}|21\\d{2})(?!\\d)/g, " ")
+                .replace(/2160p|1080p|720p|480p|4k|8k|uhd|bluray|blu-ray|web-?dl|web-?rip|hdtv|dvdrip|remux|x26[45]|hevc|hdr10?\\+?/ig, " ")
+                .replace(/[._\\[\\](){}【】（）]+/g, " ").replace(/\\s+/g, " ").trim();
+            if (!title) title = stem;
+            // If built-in parsing does not recognize it, preview the same ordered custom-rule list as a fallback.
+            if (type === "暂无法判断") {
+                const list = wrapper.querySelector('[data-card-rule-list="' + CSS.escape(fieldKey) + '"]');
+                const rows = Array.from(list?.querySelectorAll("[data-card-rule-row]") || []);
+                for (const row of rows) {
+                    const pattern = row.querySelector('[data-card-rule-field="pattern"]')?.value || "";
+                    const replace = row.querySelector('[data-card-rule-field="replace"]')?.value || "";
+                    if (!pattern) continue;
+                    try {
+                        const match = raw.match(new RegExp(pattern, "i"));
+                        if (!match) continue;
+                        const normalized = raw.replace(new RegExp(pattern, "i"), replace);
+                        const parsed = normalized.match(/S(\\d{1,2})E(\\d{1,4})/i);
+                        if (parsed) {
+                            season = Number(parsed[1]); episode = Number(parsed[2]); type = "自定义规则";
+                            title = stem.replace(pattern ? new RegExp(pattern, "i") : /$^/, " ").replace(/[._]+/g, " ").trim() || stem;
+                            break;
+                        }
+                    } catch (_) { /* 无效规则由保存时的服务端校验提示。 */ }
+                }
+            }
+            const rows = [
+                ["识别类型", type],
+                ["影视名称", title],
+                ["年份", year === null ? "未识别" : String(year)],
+                ["季数", season === null ? "未标明 / 不适用" : "第 " + season + " 季"],
+                ["集数 / 期数", episode === null ? "未识别" : String(episode) + (episodeEnd !== null ? "–" + episodeEnd : "")],
+                ["节目日期", date || "未识别"]
+            ];
+            return '<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">' + rows.map(item =>
+                '<div class="rounded-md border border-slate-800 bg-slate-900/50 p-2"><div class="text-[10px] text-slate-500">' + escapeHtml(item[0]) + '</div><div class="mt-0.5 text-xs text-slate-200">' + escapeHtml(item[1]) + '</div></div>'
+            ).join("") + '</div><p class="mt-2 text-[10px] text-slate-500">这是浏览器快速预览，不会保存配置；最终结果以服务端解析为准。</p>';
+        }
+
         function renderGenericCardFields(fields, config, hasValue) {
             const container = document.getElementById("generic-card-fields");
             const noFields = document.getElementById("generic-card-no-fields");
@@ -1335,7 +1405,21 @@
                                 '" class="glass-input mt-1 w-full rounded-md border border-slate-800 px-2.5 py-2 text-xs text-slate-200"></label>';
                         }).join("") + '</div>' +
                         '<div class="flex justify-end"><button type="button" data-card-remove-rule class="rounded-md border border-rose-400/20 px-2.5 py-1.5 text-[11px] text-rose-300 hover:bg-rose-400/10"><i class="fa-solid fa-trash-can mr-1"></i>删除规则</button></div></div>';
-                    control = '<div class="mt-3 mb-2 text-[10px] font-semibold text-slate-400">已有规则</div>' +
+                    control = '<section class="mt-3 rounded-xl border border-sky-400/20 bg-sky-400/5 p-3">' +
+                        '<div class="flex items-center gap-2 text-xs font-semibold text-sky-200"><i class="fa-solid fa-wand-magic-sparkles"></i>内置识别规则（自动生效）</div>' +
+                        '<p class="mt-1 text-[10px] text-slate-400">无需配置，优先尝试内置格式；下方自定义规则用于补充特殊命名。</p>' +
+                        '<div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">' +
+                        '<div class="rounded-lg border border-slate-700/70 bg-slate-950/40 p-2"><div class="text-[11px] font-medium text-slate-200">电影 · 名称 + 年份</div><div class="mt-1 text-[10px] text-slate-400">肖申克的救赎 (1994) 1080p.mkv</div><div class="mt-1 text-[10px] text-emerald-300">名称：肖申克的救赎 · 年份：1994</div></div>' +
+                        '<div class="rounded-lg border border-slate-700/70 bg-slate-950/40 p-2"><div class="text-[11px] font-medium text-slate-200">剧集 · 季 / 集</div><div class="mt-1 text-[10px] text-slate-400">庆余年.S02E07.1080p.mkv</div><div class="mt-1 text-[10px] text-emerald-300">名称：庆余年 · 第 2 季 · 第 7 集</div></div>' +
+                        '<div class="rounded-lg border border-slate-700/70 bg-slate-950/40 p-2"><div class="text-[11px] font-medium text-slate-200">中文剧集</div><div class="mt-1 text-[10px] text-slate-400">甄嬛传 第12集.mp4</div><div class="mt-1 text-[10px] text-emerald-300">名称：甄嬛传 · 集数：12（季数未知）</div></div>' +
+                        '<div class="rounded-lg border border-slate-700/70 bg-slate-950/40 p-2"><div class="text-[11px] font-medium text-slate-200">动画 / 综艺</div><div class="mt-1 text-[10px] text-slate-400">动画 S01E03 · 综艺 第12期 / 日期期数</div><div class="mt-1 text-[10px] text-emerald-300">尽可能提取类型、名称、季集或期数</div></div>' +
+                        '</div>' +
+                        '<div class="mt-3 text-[10px] font-semibold text-slate-300">快速试一下文件名</div>' +
+                        '<div class="mt-1 flex flex-col gap-2 sm:flex-row"><input data-filename-preview-input type="text" value="庆余年.S02E07.1080p.WEB-DL.mkv" placeholder="粘贴一个真实文件名" class="glass-input min-w-0 flex-1 rounded-lg border border-slate-800 px-3 py-2 text-xs text-slate-200">' +
+                        '<button type="button" data-filename-preview-run class="rounded-lg border border-sky-400/25 px-3 py-2 text-[11px] text-sky-200 hover:bg-sky-400/10">查看识别效果</button></div>' +
+                        '<div data-filename-preview-result class="mt-2 rounded-lg border border-slate-700/70 bg-slate-950/50 p-3 text-[11px] text-slate-300">输入文件名后点击“查看识别效果”。预览用于快速检查常见格式，实际解析以服务端识别结果为准。</div>' +
+                        '</section>' +
+                        '<div class="mt-4 mb-2 text-[10px] font-semibold text-slate-400">已配置的自定义规则（按顺序尝试）</div>' +
                         '<div data-card-rule-list="' + escapeHtml(key) + '" class="space-y-3">' +
                         (items.length ? items.filter(item => item && typeof item === "object").map(renderRule).join("") :
                             '<div data-card-rule-empty class="rounded-lg border border-dashed border-slate-700 p-3 text-[11px] text-slate-500">暂未添加自定义规则。内置识别仍会正常工作。</div>') + '</div>' +
@@ -1415,6 +1499,10 @@
                         addChannel();
                     } else if (event.target.closest("[data-card-remove-channel]")) {
                         event.target.closest("[data-card-channel-chip]")?.remove();
+                    } else if (event.target.closest("[data-filename-preview-run]")) {
+                        const input = wrapper.querySelector("[data-filename-preview-input]");
+                        const result = wrapper.querySelector("[data-filename-preview-result]");
+                        if (input && result) result.innerHTML = renderFilenameRecognitionPreview(input.value, wrapper, key);
                     } else if (event.target.closest("[data-card-add-rule]")) {
                         const list = wrapper.querySelector('[data-card-rule-list="' + CSS.escape(key) + '"]');
                         if (list) {
