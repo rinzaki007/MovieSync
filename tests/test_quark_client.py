@@ -135,3 +135,46 @@ def test_list_drive_files_normalizes_destination_items(monkeypatch):
     assert files[0]["is_dir"] is True
     assert files[1]["is_video"] is True
     assert files[1]["size"] == 1024
+
+
+
+def test_get_share_files_reports_when_nested_directory_exceeds_depth_limit():
+    response = FakeResponse(200)
+    http = FakeHttp([
+        (response, {"code": 0, "data": {"stoken": "share-token"}}),
+        (response, {"code": 0, "data": {"list": [
+            {"fid": "folder-1", "file_name": "Season 1", "dir_file": True},
+        ]}}),
+        (response, {"code": 0, "data": {"list": [
+            {"fid": "folder-2", "file_name": "Nested", "dir_file": True},
+        ]}}),
+    ])
+    client = QuarkClient("session=value")
+    client.http = http
+
+    files, token, error = client.get_share_files("share123", max_depth=1)
+
+    assert error is None
+    assert token == "share-token"
+    assert files.scan_complete is False
+    assert any("扫描深度上限" in warning for warning in files.scan_warnings)
+
+
+def test_get_share_files_reports_when_file_limit_is_reached():
+    response = FakeResponse(200)
+    http = FakeHttp([
+        (response, {"code": 0, "data": {"stoken": "share-token"}}),
+        (response, {"code": 0, "data": {"list": [
+            {"fid": "file-1", "file_name": "One.mkv"},
+            {"fid": "file-2", "file_name": "Two.mkv"},
+        ]}}),
+    ])
+    client = QuarkClient("session=value")
+    client.http = http
+
+    files, _token, error = client.get_share_files("share123", max_files=1)
+
+    assert error is None
+    assert len(files) == 1
+    assert files.scan_complete is False
+    assert any("扫描上限" in warning for warning in files.scan_warnings)

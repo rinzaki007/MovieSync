@@ -56,6 +56,22 @@ def _detect_resolution(name: str) -> str:
     return "未知"
 
 
+def _declared_episode_count(source_title: str) -> int | None:
+    """Extract an explicitly advertised total episode count, not a current update number."""
+    text = str(source_title or "")
+    patterns = (
+        r"(?:全|共)\s*(\d{1,3})\s*[集话期]",
+        r"(\d{1,3})\s*[集话期]\s*全",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            count = int(match.group(1))
+            if 1 <= count <= 999:
+                return count
+    return None
+
+
 def _episode_statistics(
     files: list[dict[str, Any]],
     source_id: str,
@@ -577,6 +593,8 @@ class SearchService:
                     total_video_count = len(all_videos)
                     videos = all_videos[:MAX_VIDEO_FILES_PER_CANDIDATE]
                     files_truncated = total_video_count > len(videos)
+                    scan_complete = bool(getattr(files, "scan_complete", True))
+                    scan_warnings = list(getattr(files, "scan_warnings", []) or [])
 
                     if not videos:
                         continue
@@ -599,6 +617,19 @@ class SearchService:
                     )
 
                     total_size = sum(int(v.get("size") or 0) for v in all_videos)
+                    declared_episode_count = _declared_episode_count(source_title_evidence)
+                    media_type = str(movie.get("media_type") or "").strip().lower() if isinstance(movie, dict) else ""
+                    media_tag = str(movie.get("tag") or "").strip()
+                    is_series_media = (
+                        media_type in {"tv", "tv_show", "series", "anime", "variety", "documentary", "short_drama"}
+                        or media_tag in {"电视剧", "剧集", "综艺", "动漫", "动画", "纪录片", "短剧"}
+                    )
+                    episode_count_warning = bool(
+                        is_series_media
+                        and declared_episode_count
+                        and episode_count < declared_episode_count
+                        and recognized_episode_files > 0
+                    )
                     simplified_movie_title = self._simplify(title).lower()
                     simplified_source_title = self._simplify(source_title).lower()
                     sequel_match = re.search(r"(\d+)$", simplified_movie_title)
@@ -629,6 +660,10 @@ class SearchService:
                         "format_mismatch": format_mismatch,
                         "media_type": str(movie.get("media_type") or "") if isinstance(movie, dict) else "",
                         "tag": str(movie.get("tag") or "") if isinstance(movie, dict) else "",
+                        "declared_episode_count": declared_episode_count if is_series_media else None,
+                        "episode_count_warning": episode_count_warning,
+                        "scan_complete": scan_complete,
+                        "scan_warnings": scan_warnings,
                         "source_name": source.get("source_name", "未知来源"),
                         "cover": str(movie.get("cover", "") if isinstance(movie, dict) else "").strip()[:1000],
                         "storage_target_id": storage_target_id,

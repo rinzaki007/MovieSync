@@ -112,3 +112,21 @@ def test_keeps_possible_english_alias_when_metadata_has_no_original_title():
     assert not SearchService._has_conflicting_media_title(
         movie, "The Matrix 1999 BluRay", videos
     )
+
+
+
+def test_declared_episode_count_extracts_full_series_markers_only():
+    from moviesync.services.search import _declared_episode_count
+
+    assert _declared_episode_count("兰香如故 全47集 4K") == 47
+    assert _declared_episode_count("综艺 共12期 中文字幕") == 12
+    assert _declared_episode_count("动画 24集全") == 24
+    assert _declared_episode_count("更新至第47集") is None
+    assert _declared_episode_count("电影 4K 1080P") is None
+
+
+def test_declared_episode_count_can_be_extracted_without_forcing_movie_warning():
+    from moviesync.services.search import _declared_episode_count
+
+    # Category gating is performed when candidate metadata is assembled.
+    assert _declared_episode_count("电影合集 全47集") == 47
