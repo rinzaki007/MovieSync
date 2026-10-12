@@ -32,3 +32,11 @@ def test_page_specific_mobile_rules_are_scoped_to_their_pages():
     stylesheet = MOBILE.read_text(encoding="utf-8")
     assert "body:has(#movie-grid) > header.glass-nav" in stylesheet
     assert "body:has(#task-list) > header.glass-nav > div" in stylesheet
+
+
+def test_all_html_pages_load_mobile_styles_directly_or_through_shared_styles():
+    for template in TEMPLATES.glob("*.html"):
+        html = template.read_text(encoding="utf-8")
+        if "css/style.css" in html:
+            continue
+        assert "css/mobile.css" in html, f"{template.name} does not load mobile styles"
