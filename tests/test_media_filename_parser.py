@@ -29,7 +29,7 @@ from moviesync.services.filename_rules import parse_media_filename
         ),
         (
             "进击的巨人 动漫 S04E05 1080p.mkv",
-            {"name": "进击的巨人 动漫", "media_type": "anime", "year": None,
+            {"name": "进击的巨人", "media_type": "anime", "year": None,
              "season": 4, "episode": 5},
         ),
         (
