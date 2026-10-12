@@ -34,10 +34,13 @@
 
     input,
     select,
-    textarea,
-    button {
+    textarea {
         max-width: 100%;
         font-size: max(16px, 1em);
+    }
+
+    button {
+        max-width: 100%;
     }
 
     input,
@@ -152,23 +155,23 @@
     }
 
     /* Task center: compact spacing, wrapping actions, and safe long names/logs. */
-    body > header.glass-nav > div {
+    body:has(#task-list) > header.glass-nav > div {
         gap: .5rem;
         flex-wrap: wrap;
     }
 
-    body > header.glass-nav > div > div:first-child {
+    body:has(#task-list) > header.glass-nav > div > div:first-child {
         flex: 1 1 100%;
     }
 
-    body > header.glass-nav > div > div:last-child {
+    body:has(#task-list) > header.glass-nav > div > div:last-child {
         width: 100%;
         justify-content: flex-start;
         flex-wrap: wrap;
     }
 
-    body > header.glass-nav > div > div:last-child > a,
-    body > header.glass-nav > div > div:last-child > button {
+    body:has(#task-list) > header.glass-nav > div > div:last-child > a,
+    body:has(#task-list) > header.glass-nav > div > div:last-child > button {
         flex: 1 1 auto;
         justify-content: center;
         min-height: 40px;
