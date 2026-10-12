@@ -130,7 +130,7 @@ def test_legacy_filename_rule_migrates_into_new_rule_list():
     card = FilenameRecognitionCard()
     legacy = {
         "pattern": "^Old-Episode-([0-9]+)[.]mkv$",
-        "replace": r"Show.S01E\\1.mkv",
+        "replace": r"Show.S01E\1.mkv",
     }
 
     normalized = card.validate_config({"magic_regex": legacy})
@@ -149,11 +149,11 @@ def test_legacy_filename_rule_is_preserved_when_new_rules_already_exist():
     card = FilenameRecognitionCard()
     legacy = {
         "pattern": "^Old-Episode-([0-9]+)[.]mkv$",
-        "replace": r"Show.S01E\\1.mkv",
+        "replace": r"Show.S01E\1.mkv",
     }
     current = {
         "pattern": r"^New-Episode-([0-9]+)[.]mkv$",
-        "replace": r"Show.S01E\\1.mkv",
+        "replace": r"Show.S01E\1.mkv",
         "source_ids": [],
     }
 
