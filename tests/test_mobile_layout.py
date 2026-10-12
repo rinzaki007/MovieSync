@@ -48,3 +48,13 @@ def test_admin_and_resource_pages_have_dedicated_mobile_layouts():
     assert "body:has(#panel-global) > div.flex-1.flex.overflow-hidden > aside.w-60" in stylesheet
     assert "body:has(#resource-list) > header.glass-nav > div" in stylesheet
     assert "body:has(#resource-list) > main" in stylesheet
+
+
+
+def test_mobile_task_admin_and_openlist_controls_are_compact():
+    stylesheet = MOBILE.read_text(encoding="utf-8")
+    assert "body:has(#movie-grid) > div.glass-subnav a" in stylesheet
+    assert "body:has(#task-list) > main > section:nth-child(2)" in stylesheet
+    assert "body:has(#panel-global) > header.glass-nav > div:last-child" in stylesheet
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in stylesheet
+    assert stylesheet.rstrip().endswith("}")
