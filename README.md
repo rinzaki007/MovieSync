@@ -230,6 +230,38 @@ docker run -d \
 
 配置文件会自动维护 schema version，并兼容旧版本配置。
 
+### 备份与恢复（建议更新前执行）
+
+MovieSync 的账号、Cookie、卡片配置、已安装卡片、任务和追剧记录都可能位于挂载的数据目录中。**更新容器前建议备份整个数据目录，而不是只备份某一个 JSON 文件。** 备份文件包含敏感信息，请妥善保管，不要上传到公开仓库。
+
+以下以 iStoreOS 上的 `/mnt/sata1-1/moviesync` 为例；如果你的宿主机挂载路径不同，请替换为实际路径。
+
+备份时先停止容器，避免任务运行期间只复制到一部分状态：
+
+```bash
+docker stop MovieSync
+mkdir -p /mnt/sata1-1/moviesync-backups
+tar -czf "/mnt/sata1-1/moviesync-backups/moviesync-$(date +%Y%m%d-%H%M%S).tar.gz" -C /mnt/sata1-1 moviesync
+docker start MovieSync
+```
+
+确认压缩包已生成后，再执行镜像更新。备份文件建议保存到与数据目录不同的位置；有条件时可再复制一份到另一块磁盘。
+
+恢复时先确认备份文件存在且可读取，并先解压到临时目录；确认其中包含 `moviesync/` 目录后，再替换当前数据目录。这样即使备份包有问题，也不会一开始就移走现有数据：
+
+```bash
+docker stop MovieSync
+mkdir -p /mnt/sata1-1/moviesync-restore
+tar -tzf "/mnt/sata1-1/moviesync-backups/替换为实际备份文件名.tar.gz" | head
+tar -xzf "/mnt/sata1-1/moviesync-backups/替换为实际备份文件名.tar.gz" -C /mnt/sata1-1/moviesync-restore
+# 确认 /mnt/sata1-1/moviesync-restore/moviesync 存在后，再执行下面两行
+mv /mnt/sata1-1/moviesync "/mnt/sata1-1/moviesync-before-restore-$(date +%Y%m%d-%H%M%S)"
+mv /mnt/sata1-1/moviesync-restore/moviesync /mnt/sata1-1/moviesync
+docker start MovieSync
+```
+
+请将示例中的备份文件名替换为实际文件名。如果解压或检查失败，不要执行替换目录的两行；可以先执行 `docker start MovieSync` 恢复原服务。恢复后检查容器日志、登录状态、卡片配置和任务记录；不要在容器运行时覆盖正在使用的数据目录。
+
 ## 🔧 常用命令
 
 查看容器：
