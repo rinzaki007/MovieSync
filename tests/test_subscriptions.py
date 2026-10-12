@@ -1909,3 +1909,93 @@ def test_channel_subscription_transfers_selected_fid_when_creation_payload_omits
         ]
     finally:
         manager.stop_scheduler()
+
+
+
+def test_channel_subscription_recovers_initial_selection_pretracked_by_legacy_version(tmp_path):
+    storage = ChannelStorageTargets()
+    storage.shares = {
+        "share-45": [
+            {"fid": f"ep{episode}", "file_name": f"Show.S01E{episode:02d}.mkv"}
+            for episode in range(45, 59)
+        ],
+    }
+    sources = FakeResourceSources()
+    sources.shares = [{"channel": "demo", "pwd_id": "share-45"}]
+    manager = SubscriptionManager(
+        tmp_path / "legacy-pretracked-selected-file.json",
+        storage,
+        sources,
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-45",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        source_id="telegram",
+        channel="demo",
+        files=[{"fid": "ep45", "file_name": "Show.S01E45.mkv"}],
+    )
+
+    try:
+        # Reproduce the persisted state written by older releases when a selected
+        # file was not parseable at creation time: tracked marker exists, but no
+        # confirmed-success record exists. Upgrade must not lose the selected file.
+        persisted = manager.get_subscriptions()
+        current = next(item for item in persisted if item["id"] == sub["id"])
+        current["tracked_file_keys"] = ["share-45:ep45"]
+        current["saved_episodes"] = []
+        manager.store.write(persisted)
+
+        ok, message = manager.check_subscription_now(sub["id"])
+
+        assert ok is True
+        assert "成功追更 14 项" in message
+        assert storage.transfers == [
+            ("share-45", [f"ep{episode}" for episode in range(45, 59)])
+        ]
+        saved = manager.get_subscriptions()[0]
+        assert "share-45:ep45" in saved["tracked_file_keys"]
+        assert "share-45:ep45" in saved["saved_episodes"]
+    finally:
+        manager.stop_scheduler()
+
+
+def test_channel_subscription_transfers_explicitly_selected_file_with_unrecognized_episode(tmp_path):
+    storage = ChannelStorageTargets()
+    storage.shares = {
+        "share-unrecognized": [
+            {"fid": "selected-cut", "file_name": "Show.special-cut.mkv"},
+            {"fid": "new-episode", "file_name": "Show.S01E46.mkv"},
+        ],
+    }
+    sources = FakeResourceSources()
+    sources.shares = [{"channel": "demo", "pwd_id": "share-unrecognized"}]
+    manager = SubscriptionManager(
+        tmp_path / "selected-unrecognized-episode.json",
+        storage,
+        sources,
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-unrecognized",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        source_id="telegram",
+        channel="demo",
+        start_ep=45,
+        files=[{"fid": "selected-cut", "file_name": "Show.special-cut.mkv"}],
+    )
+
+    try:
+        ok, message = manager.check_subscription_now(sub["id"])
+
+        assert ok is True
+        assert "成功追更 2 项" in message
+        assert storage.transfers == [
+            ("share-unrecognized", ["selected-cut", "new-episode"])
+        ]
+    finally:
+        manager.stop_scheduler()
