@@ -377,7 +377,6 @@ class SubscriptionManager:
         target_fids = []
         selected_episode_numbers: list[int] = []
         selected_season_episodes: list[tuple[int, int]] = []
-        initial_tracked_keys: list[str] = []
         seen = set()
 
         for item in (files or [])[:200]:
@@ -416,12 +415,11 @@ class SubscriptionManager:
                     selected_episode_numbers.append(ep_num)
                     if season_num is not None:
                         selected_season_episodes.append((season_num, ep_num))
-                elif source_id and channel:
-                    initial_tracked_keys.append(
-                        f"{resource_type}:{resource_id}:{fid}"
-                        if resource_type and resource_type != "quark_share"
-                        else f"{resource_id}:{fid}"
-                    )
+                # Files supplied to add_subscription are the user's explicit
+                # initial selection. Do not pre-mark them as tracked merely because
+                # the request omitted file_name: the channel scan resolves the full
+                # filename later, and pre-tracking here would skip the selected file
+                # before is_selected_initial can allow its first transfer.
 
         selected_baseline = max(selected_season_episodes, default=(0, 0))
         baseline_episode = (
@@ -458,7 +456,7 @@ class SubscriptionManager:
             "phase": "waiting",
             "phase_label": "等待下次检查",
             "tracked_file_keys": (
-                initial_tracked_keys
+                []
                 if source_id and channel
                 else target_fids
             ),
