@@ -251,6 +251,88 @@
         word-break: break-word;
     }
 
+    /* Resource selection: keep the page header and destination controls usable on narrow screens. */
+    body:has(#resource-list) > header.glass-nav > div {
+        align-items: flex-start;
+        gap: .65rem;
+        padding-left: .75rem;
+        padding-right: .75rem;
+    }
+
+    body:has(#resource-list) > header.glass-nav > div > div:first-child {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    body:has(#resource-list) > header.glass-nav > div > a {
+        flex: 0 0 auto;
+    }
+
+    body:has(#resource-list) > main {
+        padding: .75rem;
+    }
+
+    body:has(#resource-list) #movie-title {
+        font-size: clamp(1rem, 4.5vw, 1.25rem);
+        overflow-wrap: anywhere;
+    }
+
+    /* Admin: stack the sidebar above content instead of squeezing the settings panel. */
+    body:has(#panel-global) > header.glass-nav {
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: .75rem;
+        padding: .75rem;
+    }
+
+    body:has(#panel-global) > header.glass-nav > div {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    body:has(#panel-global) > div.flex-1.flex.overflow-hidden {
+        flex-direction: column;
+        overflow: visible;
+    }
+
+    body:has(#panel-global) > div.flex-1.flex.overflow-hidden > aside.w-60 {
+        width: 100%;
+        flex: 0 0 auto;
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: .5rem;
+        padding: .75rem;
+        border-right: 0;
+        border-bottom: 1px solid rgba(148, 163, 184, .14);
+    }
+
+    body:has(#panel-global) > div.flex-1.flex.overflow-hidden > aside.w-60 > button {
+        flex: 1 1 calc(50% - .5rem);
+        min-width: 0;
+        min-height: 42px;
+        padding: .65rem .75rem;
+        text-align: left;
+        overflow-wrap: anywhere;
+    }
+
+    body:has(#panel-global) > div.flex-1.flex.overflow-hidden > main {
+        width: 100%;
+        min-width: 0;
+        overflow: visible;
+        padding: .9rem .75rem;
+    }
+
+    body:has(#panel-global) .panel-content {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    body:has(#panel-global) .generic-card-dialog-wide {
+        height: calc(100vh - 1rem);
+        height: calc(100dvh - 1rem);
+        margin-top: .5rem;
+    }
+
     /* Inputs must remain visible when the mobile keyboard opens. */
     .login-card {
         width: min(430px, calc(100vw - 24px));
@@ -259,7 +341,6 @@
         max-height: calc(100dvh - 24px);
         overflow-y: auto;
     }
-}
 
 @media (max-width: 380px) {
     #movie-grid {
