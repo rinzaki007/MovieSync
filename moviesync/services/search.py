@@ -313,7 +313,15 @@ class SearchService:
             f"（存储目标：{selected_target_id}）" if selected_target_id else "",
         )
 
+        # Preserve the selected work's identity for resource cards that can use it.
+        # Legacy cards may continue to read only "title"; media-aware cards can use
+        # category, media_type, year and alternate/original titles without core coupling.
         search_context = {"title": cleaned_title}
+        if isinstance(movie, dict):
+            for key in ("tag", "media_type", "year", "original_title", "genres"):
+                value = movie.get(key)
+                if value not in (None, "", [], {}):
+                    search_context[key] = value
         if selected_target_id:
             search_context.update({
                 "storage_target_id": selected_target_id,
