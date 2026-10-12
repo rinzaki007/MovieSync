@@ -486,7 +486,7 @@ async function loadTaskDestinationFiles() {
     const section = document.getElementById('task-destination-files');
     const body = document.getElementById('task-destination-files-body');
     if (!task || !section || !body) return;
-    body.innerHTML = '<div class="py-3 text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-2"></i>正在读取夸克转存目录及子目录…</div>';
+    body.innerHTML = '<div class="py-3 text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-2"></i>正在读取目标网盘目录及子目录…</div>';
     try {
         // Read the capability from card manifests. The UI stays provider-agnostic;
         // only cards declaring storage.list_destination_files get this feature.
