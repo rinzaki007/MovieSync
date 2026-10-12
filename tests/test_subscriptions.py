@@ -1720,3 +1720,52 @@ def test_channel_subscription_resolves_multiple_shares_concurrently(tmp_path):
     assert "成功追更 2 项" in message
     assert storage.transfers == [("share1", ["ep1"]), ("share2", ["ep2"])]
 
+
+def test_channel_subscription_with_legacy_all_mode_still_applies_episode_baseline(tmp_path):
+    storage = ChannelStorageTargets()
+    storage.shares = {
+        "share-seasons": [
+            {"fid": "ep101", "file_name": "Show.S01E01.mkv"},
+            {"fid": "ep108", "file_name": "Show.S01E08.mkv"},
+            {"fid": "ep109", "file_name": "Show.S01E09.mkv"},
+            {"fid": "ep201", "file_name": "Show.S02E01.mkv"},
+        ],
+    }
+    sources = FakeResourceSources()
+    sources.shares = [{"channel": "demo", "pwd_id": "share-seasons"}]
+    manager = SubscriptionManager(
+        tmp_path / "legacy-all-channel.json",
+        storage,
+        sources,
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-seasons",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        source_id="telegram",
+        channel="demo",
+        files=[{"fid": "ep108", "file_name": "Show.S01E08.mkv"}],
+    )
+
+    # Reproduce a legacy/migrated record whose old mode would otherwise
+    # bypass the channel-specific season/episode guard.
+    persisted = manager.get_subscriptions()
+    current = next(item for item in persisted if item["id"] == sub["id"])
+    current["tracking_mode"] = "all"
+    manager.store.write(persisted)
+
+    ok, message = manager.check_subscription_now(sub["id"])
+
+    assert ok is True
+    assert "成功追更 3 项" in message
+    assert storage.transfers == [
+        ("share-seasons", ["ep108", "ep109", "ep201"]),
+    ]
+    assert all(
+        fid != "ep101"
+        for _share, fids in storage.transfers
+        for fid in fids
+    )
+

@@ -636,7 +636,12 @@ class SubscriptionManager:
         self,
         sub: dict,
     ) -> tuple[bool, str]:
-        if sub.get("tracking_mode") == "channel" and sub.get("source_id") and sub.get("channel"):
+        # Channel/source metadata is the durable signal for channel-based Smart Follow.
+        # Older or migrated records may still carry tracking_mode="all"; letting those
+        # records fall through to the generic branch bypasses season/episode filtering
+        # and can queue every video in a share. Always use the guarded channel path when
+        # both channel identity fields are present, regardless of the legacy mode value.
+        if sub.get("source_id") and sub.get("channel"):
             return self._check_channel_subscription(sub)
 
         resource = {
