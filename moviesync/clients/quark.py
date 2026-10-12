@@ -20,6 +20,15 @@ QUARK_HEADERS = {
 VIDEO_EXTENSIONS = (".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv", ".m4v", ".ts", ".m2ts", ".iso")
 
 
+class ShareFileList(list):
+    """List-compatible result that carries share-scan completeness diagnostics."""
+
+    def __init__(self):
+        super().__init__()
+        self.scan_complete = True
+        self.scan_warnings: list[str] = []
+
+
 def sanitize_pwd_id(pwd_id: object) -> str:
     if not pwd_id:
         return ""
@@ -221,19 +230,25 @@ class QuarkClient:
         if not stoken:
             return None, None, "上游未返回 stoken"
 
-        all_files: list[dict[str, Any]] = []
+        all_files = ShareFileList()
         visited: set[str] = set()
         walk_error: str | None = None
+
+        def add_scan_warning(message: str) -> None:
+            if message not in all_files.scan_warnings:
+                all_files.scan_warnings.append(message)
+            all_files.scan_complete = False
 
         def walk(parent_fid: str, depth: int) -> None:
             nonlocal walk_error
 
-            if (
-                walk_error
-                or depth > max_depth
-                or len(all_files) >= max_files
-                or parent_fid in visited
-            ):
+            if walk_error or parent_fid in visited:
+                return
+            if depth > max_depth:
+                add_scan_warning(f"目录嵌套超过扫描深度上限（{max_depth} 层），部分子目录可能未读取")
+                return
+            if len(all_files) >= max_files:
+                add_scan_warning(f"已达到分享文件扫描上限（{max_files} 个），列表可能不完整")
                 return
 
             visited.add(parent_fid)
@@ -285,9 +300,13 @@ class QuarkClient:
                     else:
                         all_files.append(item)
                         if len(all_files) >= max_files:
+                            add_scan_warning(f"已达到分享文件扫描上限（{max_files} 个），列表可能不完整")
                             return
 
                 if len(batch) < 200:
+                    break
+                if page >= 20:
+                    add_scan_warning("单个目录超过分页扫描上限，可能还有未读取的文件")
                     break
 
                 page += 1
