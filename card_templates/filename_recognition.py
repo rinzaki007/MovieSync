@@ -7,7 +7,7 @@ from typing import Any
 from moviesync.cards import CardManifest, FilenameProcessorCard
 from moviesync.errors import ConfigValidationError
 from moviesync.regex_safety import has_nested_unbounded_quantifier
-from moviesync.services.filename_rules import DEFAULT_TV_MAGIC_REGEX, parse_tv_episode
+from moviesync.services.filename_rules import parse_tv_episode
 
 
 class FilenameRecognitionCard(FilenameProcessorCard):
@@ -26,25 +26,19 @@ class FilenameRecognitionCard(FilenameProcessorCard):
         capabilities=("filename.parse", "filename.normalize"),
         config_fields=(
             {
-                "key": "magic_regex",
-                "label": "兼容旧版特殊命名规则",
-                "type": "json",
-                "editor": "object_fields",
-                "item_fields": (
-                    {"key": "pattern", "label": "匹配规则", "placeholder": "例如：自定义文件名匹配表达式"},
-                    {"key": "replace", "label": "替换规则", "placeholder": "例如：统一后的剧名和集数格式"},
-                ),
-                "default": DEFAULT_TV_MAGIC_REGEX,
-                "description": "仅为旧配置保留。新增规则请统一添加到下方列表，默认对所有资源来源生效。",
-            },
-            {
                 "key": "rules",
-                "label": "全局文件名识别规则",
+                "label": "文件名识别规则",
                 "type": "json",
+                "editor": "rule_list",
+                "item_fields": (
+                    {"key": "pattern", "label": "匹配规则", "placeholder": "例如：Raw_S(\\d+)_E(\\d+)"},
+                    {"key": "replace", "label": "替换格式", "placeholder": "例如：S\\1E\\2"},
+                    {"key": "source_ids", "label": "限定来源 ID（可选）", "placeholder": "留空表示所有来源；多个 ID 用逗号分隔"},
+                ),
                 "default": [],
                 "description": (
-                    "所有资源搜索来源共用这套规则，按数组顺序尝试。每项包含 pattern、replace；"
-                    "通常无需填写 source_ids，只有确实存在来源特殊格式时才设置。内置格式始终优先。"
+                    "先尝试内置识别格式，再按列表顺序尝试这里的规则。填写匹配表达式和替换格式；"
+                    "来源 ID 留空时对所有资源来源生效。旧版规则会在保存时自动迁移。"
                 ),
             },
         ),
@@ -99,16 +93,20 @@ class FilenameRecognitionCard(FilenameProcessorCard):
         return parse_tv_episode(file_name, {"pattern": pattern, "replace": replacement})
 
     def validate_config(self, config: dict[str, Any]) -> dict[str, Any]:
+        # 先保留旧版字段用于迁移；新版表单不再展示 magic_regex。
+        legacy_magic = config.get("magic_regex") if isinstance(config, dict) else None
         normalized = super().validate_config(config)
 
-        magic = normalized.get("magic_regex", DEFAULT_TV_MAGIC_REGEX)
-        if magic is None:
-            magic = DEFAULT_TV_MAGIC_REGEX
-        if not isinstance(magic, dict):
-            raise ConfigValidationError("兼容特殊命名规则必须是对象")
-        normalized["magic_regex"] = self._validate_rule(magic, "兼容特殊命名规则")
-
         rules = normalized.get("rules", [])
+        if (
+            not rules
+            and isinstance(legacy_magic, dict)
+            and str(legacy_magic.get("pattern") or "").strip()
+        ):
+            # 旧规则只迁移一次到新版列表，避免保存新表单后丢失用户规则。
+            migrated = self._validate_rule(legacy_magic, "旧版特殊命名规则")
+            migrated["source_ids"] = []
+            rules = [migrated]
         if rules is None:
             rules = []
         if not isinstance(rules, list) or len(rules) > 100:
