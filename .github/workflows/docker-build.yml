@@ -70,7 +70,7 @@ jobs:
 
   publish:
     name: Publish Docker image (manual only)
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
     permissions:
