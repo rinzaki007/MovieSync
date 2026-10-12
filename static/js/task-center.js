@@ -469,12 +469,12 @@ function renderTaskDetail(task) {
         '<div class="rounded-xl border border-slate-800 bg-slate-950 p-4"><div class="text-[10px] text-slate-500">执行统计</div><div class="mt-2 space-y-1 text-[11px] text-slate-300"><div>成功：' + Number(task.success_count || 0) + '</div><div>跳过：' + Number(task.skipped_count || 0) + '</div><div>失败：' + Number(task.failed_count || 0) + '</div></div></div>' +
         '</div>' +
         '<div class="rounded-xl border border-slate-800 bg-slate-950 p-4"><div class="text-xs font-semibold text-slate-200">当前状态</div><div class="mt-2 text-[11px] leading-5 ' + (task.status === 'failed' ? 'text-rose-400' : 'text-slate-400') + '">' + escapeTask(task.message || '') + '</div></div>' +
-        (task.type === 'transfer' && task.status === 'success' && task.storage_target_id ? '<section id="task-destination-files" class="rounded-xl border border-emerald-900/60 bg-slate-950 p-4"><div class="flex flex-wrap items-center justify-between gap-2"><div><div class="text-xs font-semibold text-slate-200"><i class="fa-solid fa-folder-open mr-1 text-emerald-400"></i>转存目录文件</div><div class="mt-1 text-[10px] text-slate-500">以下列表来自目标网盘，可用于核对转存结果。</div></div><div class="flex gap-2"><button type="button" onclick="loadTaskDestinationFiles()" class="rounded-lg border border-slate-700 px-3 py-2 text-[10px] text-slate-300 hover:bg-slate-800"><i class="fa-solid fa-rotate mr-1"></i>刷新</button><a href="https://pan.quark.cn/" target="_blank" rel="noopener noreferrer" class="rounded-lg bg-amber-600 px-3 py-2 text-[10px] font-medium text-white hover:bg-amber-500"><i class="fa-solid fa-arrow-up-right-from-square mr-1"></i>打开夸克</a></div></div><div id="task-destination-files-body" class="mt-3 text-[11px] text-slate-500">正在读取网盘目录…</div></section>' : '') +
+        (task.type === 'transfer' && task.storage_target_id && (task.status === 'success' || task.recovery_uncertain) ? '<section id="task-destination-files" class="rounded-xl border border-emerald-900/60 bg-slate-950 p-4"><div class="flex flex-wrap items-center justify-between gap-2"><div><div class="text-xs font-semibold text-slate-200"><i class="fa-solid fa-folder-open mr-1 text-emerald-400"></i>目标网盘目录核对</div><div class="mt-1 text-[10px] text-slate-500">' + (task.recovery_uncertain ? '转存结果尚不确定；请先核对目标网盘，确认文件未转入前不要重复提交。' : '以下列表来自目标网盘，可用于核对转存结果。') + '</div></div><div class="flex gap-2"><button type="button" onclick="loadTaskDestinationFiles()" class="rounded-lg border border-slate-700 px-3 py-2 text-[10px] text-slate-300 hover:bg-slate-800"><i class="fa-solid fa-rotate mr-1"></i>刷新</button></div></div><div id="task-destination-files-body" class="mt-3 text-[11px] text-slate-500">正在读取网盘目录…</div></section>' : '') +
         '<details class="rounded-xl border border-slate-800 bg-slate-950 p-4"><summary class="cursor-pointer text-xs font-semibold text-slate-300">执行日志</summary><div class="mt-3 space-y-2">' +
         (task.events || []).map(e => '<div class="flex gap-3 text-[11px]"><span class="shrink-0 font-mono text-slate-600">' + new Date(Number(e.at || 0)*1000).toLocaleTimeString() + '</span><span class="' + (e.level === 'error' ? 'text-rose-400' : e.level === 'success' ? 'text-emerald-400' : 'text-slate-400') + '">' + escapeTask(e.message) + '</span></div>').join('') +
         '</div></details>' +
         (task.status === 'failed' && task.type === 'transfer' && !task.recovery_uncertain ? '<button onclick="retryTask(\'' + escapeTask(task.id) + '\'); closeTaskDetail()" class="w-full rounded-xl bg-amber-600 px-4 py-3 text-xs font-medium text-white hover:bg-amber-500"><i class="fa-solid fa-rotate-right mr-1"></i>失败重试</button>' : '');
-    if (task.type === 'transfer' && task.status === 'success' && task.storage_target_id) {
+    if (task.type === 'transfer' && task.storage_target_id && (task.status === 'success' || task.recovery_uncertain)) {
         window.currentDestinationTask = {targetId: task.storage_target_id, parentFid: task.target_fid || '0'};
         loadTaskDestinationFiles();
     }
@@ -486,7 +486,7 @@ async function loadTaskDestinationFiles() {
     const section = document.getElementById('task-destination-files');
     const body = document.getElementById('task-destination-files-body');
     if (!task || !section || !body) return;
-    body.innerHTML = '<div class="py-3 text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-2"></i>正在读取夸克转存目录及子目录…</div>';
+    body.innerHTML = '<div class="py-3 text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-2"></i>正在读取目标网盘目录及子目录…</div>';
     try {
         // Read the capability from card manifests. The UI stays provider-agnostic;
         // only cards declaring storage.list_destination_files get this feature.
@@ -495,7 +495,9 @@ async function loadTaskDestinationFiles() {
         if (cardsResponse.ok && cardsResult.success && Array.isArray(cardsResult.cards)) {
             const card = cardsResult.cards.find(item => item && item.id === task.targetId);
             if (!card || !Array.isArray(card.capabilities) || !card.capabilities.includes('storage.list_destination_files')) {
-                section.remove();
+                body.innerHTML = '<div class="py-3 text-amber-200">此存储卡片暂不支持在 MovieSync 内读取网盘目录。请打开对应网盘客户端核对；如果转存结果待核实，确认文件未转入前不要重复提交。</div>';
+                const refreshButton = section.querySelector('button');
+                if (refreshButton) refreshButton.disabled = true;
                 return;
             }
         }
