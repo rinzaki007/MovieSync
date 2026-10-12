@@ -1812,3 +1812,56 @@ def test_channel_subscription_falls_back_to_generic_parser_for_numeric_episode(t
         assert storage.transfers == [("share-numeric", ["ep45", "ep46"])]
     finally:
         manager.stop_scheduler()
+
+
+
+def test_channel_subscription_preserves_season_when_card_parser_omits_it(tmp_path):
+    class SeasonDroppingSources(FakeResourceSources):
+        def parse_tv_episode(self, source_id, file_name):
+            # Simulate a card rule that recognizes E06 but drops season 03.
+            if file_name == "Show.S03E06.mkv":
+                return None, 6
+            return None, None
+
+    storage = ChannelStorageTargets()
+    storage.shares = {
+        "share-season-baseline": [
+            {"fid": "s2e8", "file_name": "Show.S02E08.mkv"},
+            {"fid": "s3e5", "file_name": "Show.S03E05.mkv"},
+            {"fid": "s3e6", "file_name": "Show.S03E06.mkv"},
+            {"fid": "s3e7", "file_name": "Show.S03E07.mkv"},
+            {"fid": "s4e1", "file_name": "Show.S04E01.mkv"},
+        ],
+    }
+    sources = SeasonDroppingSources()
+    sources.shares = [
+        {"channel": "demo", "pwd_id": "share-season-baseline"},
+    ]
+    manager = SubscriptionManager(
+        tmp_path / "season-baseline.json",
+        storage,
+        sources,
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-season-baseline",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        source_id="telegram",
+        channel="demo",
+        files=[{"fid": "s3e6", "file_name": "Show.S03E06.mkv"}],
+    )
+
+    try:
+        assert sub["start_season"] == 3
+        assert sub["start_ep"] == 6
+        ok, message = manager.check_subscription_now(sub["id"])
+
+        assert ok is True
+        assert "成功追更 3 项" in message
+        assert storage.transfers == [
+            ("share-season-baseline", ["s3e6", "s3e7", "s4e1"]),
+        ]
+    finally:
+        manager.stop_scheduler()
