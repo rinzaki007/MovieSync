@@ -103,6 +103,28 @@ def test_admin_can_upload_load_and_uninstall_a_single_file_card(tmp_path):
     assert not (tmp_path / "cards" / "upload-demo.py").exists()
 
 
+def test_fresh_install_does_not_seed_cards_by_default(tmp_path, monkeypatch):
+    """A fresh installation stays empty unless bundled cards are explicitly enabled."""
+    from moviesync.app import create_app
+
+    monkeypatch.setenv("MOVIESYNC_AUTO_INSTALL_BUNDLED_CARDS", "0")
+    app = create_app({"MOVIESYNC_DATA_DIR": str(tmp_path)}, start_scheduler=False)
+    services = app.extensions["moviesync"]
+
+    assert services["file_card_plugins"].list_plugins() == []
+    assert all(
+        services["card_registry"].get(card_id) is None
+        for card_id in (
+            "douban",
+            "tmdb",
+            "pansou",
+            "telegram",
+            "quark",
+            "filename_recognition",
+        )
+    )
+
+
 def test_pansou_is_seeded_as_a_removable_file_card(tmp_path):
     from moviesync.app import create_app
 
