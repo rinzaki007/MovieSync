@@ -240,7 +240,8 @@ class SearchService:
 
         media_type = str(movie.get("media_type") or "").strip().lower()
         tag = str(movie.get("tag") or "").strip().lower()
-        is_tv = media_type in {"tv", "tv_show", "series", "anime", "variety", "电视剧", "综艺", "动画"} or any(
+        tv_types = {"tv", "tv_show", "series", "anime", "variety", "电视剧", "综艺", "动画"}
+        is_tv = media_type in tv_types or any(
             marker in tag for marker in ("电视剧", "剧集", "综艺", "动漫", "动画")
         )
         if not is_tv or not source_title or not videos:
@@ -268,12 +269,17 @@ class SearchService:
             return False
 
         # 收集视频文件名中较长的中文名称片段，忽略“全集/高清/国语”等常见描述词。
-        generic = {"全集", "高清", "超清", "国语", "中字", "合集", "更新", "资源", "分享", "动画", "动漫"}
+        generic = {
+            "全集", "高清", "超清", "国语", "中字", "合集", "更新", "资源", "分享", "动画", "动漫"
+        }
         occurrences: Counter[str] = Counter()
         for video in videos:
             name = str(video.get("file_name") or "")
-            for token in re.findall(r"[\\u4e00-\\u9fff]{3,}", name):
-                if token not in generic and not any(title in cls._simplify(token).lower() for title in target_titles):
+            for token in re.findall(r"[\u4e00-\u9fff]{3,}", name):
+                normalized_token = cls._simplify(token).lower()
+                if token not in generic and not any(
+                    title in normalized_token for title in target_titles
+                ):
                     occurrences[token] += 1
 
         if not occurrences:
