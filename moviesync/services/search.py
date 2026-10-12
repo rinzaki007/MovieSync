@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import hashlib
 import re
-from collections import Counter
 import threading
 import time
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
