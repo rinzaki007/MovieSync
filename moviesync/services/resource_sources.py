@@ -176,8 +176,16 @@ class ResourceSourceManager:
         """优先使用全局文件名识别规则，兼容旧资源卡片的专属规则。"""
         config = self.config_store.load()
         cards = config.get("cards") if isinstance(config, dict) else {}
-        # 通过 filename_processor 类型发现识别能力，不绑定固定卡片 ID。
-        for processor in self.registry.find_by_type("filename_processor"):
+        # 通过卡片类型发现识别能力，不绑定固定卡片 ID。高优先级规则先尝试；
+        # 同优先级按卡片 ID 排序，避免依赖注册顺序造成结果不稳定。
+        processors = sorted(
+            self.registry.find_by_type("filename_processor"),
+            key=lambda item: (
+                -int(getattr(item, "rule_priority", 100)),
+                str(getattr(item, "card_id", "")),
+            ),
+        )
+        for processor in processors:
             if not isinstance(processor, FilenameProcessorCard):
                 continue
             saved = cards.get(processor.card_id) if isinstance(cards, dict) else {}
@@ -185,7 +193,9 @@ class ResourceSourceManager:
                 continue
             processor_config = self._card_config(config, processor.card_id)
             try:
-                parsed = processor.parse_episode(file_name, processor_config)
+                parsed = processor.parse_episode_for_source(
+                    file_name, str(source_id or ""), processor_config
+                )
             except Exception:
                 self.logger.exception("文件名识别卡片 %s 执行失败", processor.card_id)
                 continue

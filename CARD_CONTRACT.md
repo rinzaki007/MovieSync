@@ -29,7 +29,16 @@
 
 ## 文件名与集数识别
 
-集数识别统一使用 `moviesync/services/filename_rules.py` 中的 `parse_tv_episode()`。资源卡片可通过各自的 `magic_regex` 配置增强识别；不要在平台客户端另写一套正则，否则搜索、追剧和文件重命名可能得到不同结果。兼容旧接口应委托给共享解析器，并保留原有返回值形状。
+共享基础解析器位于 `moviesync/services/filename_rules.py`，统一入口为 `parse_tv_episode()`。可扩展规则通过 `FilenameProcessorCard` 注册，必须返回兼容的 `(season, episode)` 二元组；无法识别时返回 `(None, None)`，核心会继续尝试后续识别卡片和内置解析器。
+
+- 旧卡片只实现 `parse_episode(file_name, config)` 即可继续使用。
+- 需要按资源来源定制规则时，可覆盖 `parse_episode_for_source(file_name, source_id, config)`。
+- `rule_priority` 越大越先尝试；相同优先级按卡片 ID 排序，避免结果依赖加载顺序。
+- 内置「文件名识别」卡片支持按顺序配置多条 `rules`；每条规则可使用 `source_ids` 限定适用来源。未填写 `source_ids` 时规则对所有来源生效。
+- 旧的单条 `magic_regex` 配置仍然有效。来源卡片历史配置中的旧规则也保留兼容回退。
+- 规则卡片只识别季集，不得决定是否转存；起追基线、跨季比较、去重与任务执行仍由核心统一负责。
+
+不要在平台客户端、订阅服务和各卡片中重复实现互不一致的正则。所有新增规则必须覆盖有效匹配、未匹配回退、来源限定、停用卡片、错误配置和跨季季集结果。
 
 ## 接入检查清单
 
