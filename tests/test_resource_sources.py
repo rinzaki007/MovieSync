@@ -1,7 +1,7 @@
 import pytest
 
 from card_templates.telegram import TelegramResourceSource
-from moviesync.cards import Card, CardManifest, ResourceSourceCard, FilenameProcessorCard
+from moviesync.cards import Card, CardManifest, CardRegistry, ResourceSourceCard, FilenameProcessorCard
 from moviesync.services import resource_sources as resource_sources_module
 from moviesync.services.resource_sources import ResourceSourceManager
 
@@ -711,10 +711,9 @@ def test_filename_processor_invalid_output_does_not_block_next_processor(malform
         def parse_episode(self, file_name, config):
             return (2, 7)
 
-    manager = ResourceSourceManager(
-        Store(),
-        FakeLogger(),
-        resource_cards=[BrokenProcessor(), ValidProcessor()],
-    )
+    registry = CardRegistry()
+    registry.register(BrokenProcessor())
+    registry.register(ValidProcessor())
+    manager = ResourceSourceManager(Store(), FakeLogger(), registry=registry)
 
     assert manager.parse_tv_episode("unknown-source", "example-video.mkv") == (2, 7)
