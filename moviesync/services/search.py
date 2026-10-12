@@ -473,7 +473,7 @@ class SearchService:
                     total_size = sum(int(v.get("size") or 0) for v in all_videos)
                     source_title = next(
                         (
-                            str(source.get(key) or "").strip()
+                            str(source.get(key) or "").strip()[:200]
                             for key in ("title", "name", "resource_name", "share_name", "content")
                             if str(source.get(key) or "").strip()
                         ),
