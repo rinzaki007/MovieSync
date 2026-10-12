@@ -36,6 +36,65 @@ def normalize_media_category(value: object) -> str | None:
     return text if text in MEDIA_CATEGORIES else None
 
 
+def filter_metadata_items_by_category(
+    items: list[dict[str, Any]],
+    category: str | None,
+) -> list[dict[str, Any]]:
+    """Filter by known media type while retaining unknown legacy-provider results.
+
+    This lets an older installed metadata card that only supports mixed search
+    avoid movie/TV collisions without requiring the user's persistent card file
+    to be overwritten by a newer template.
+    """
+    category = normalize_media_category(category)
+    if not category:
+        return list(items)
+    expected_type = "movie" if category == "电影" else "tv"
+    wanted_genres = {
+        "综艺": {10764, 10767},
+        "动漫": {16},
+        "纪录片": {99, 10763},
+    }
+    special_tv_genres = {16, 99, 10763, 10764, 10767}
+    filtered = []
+    for item in items:
+        media_type = str(item.get("media_type") or item.get("type") or "").strip().lower()
+        if media_type in {"movie", "tv"} and media_type != expected_type:
+            continue
+        if media_type == "tv":
+            raw_ids = item.get("genre_ids")
+            genre_ids = {
+                value for value in raw_ids
+                if isinstance(value, int) and not isinstance(value, bool)
+            } if isinstance(raw_ids, list) else set()
+            if category in wanted_genres and genre_ids and not genre_ids.intersection(wanted_genres[category]):
+                continue
+            if category == "电视剧" and genre_ids.intersection(special_tv_genres):
+                continue
+            genres = item.get("genres")
+            genre_text = " ".join(str(value).lower() for value in genres) if isinstance(genres, list) else str(item.get("tag") or "").lower()
+            if category in {"综艺", "动漫", "纪录片"} and not genre_ids:
+                markers = {
+                    "综艺": ("reality", "talk show", "综艺", "真人秀", "脱口秀"),
+                    "动漫": ("animation", "动画", "动漫"),
+                    "纪录片": ("documentary", "纪录片"),
+                }[category]
+                if genre_text and any(marker in genre_text for marker in markers):
+                    filtered.append(item)
+                    continue
+                # Old cards may not return genres at all. Keep unknown rather
+                # than silently hiding a valid result.
+                if genre_text:
+                    continue
+            if category == "电视剧" and not genre_ids and any(
+                marker in genre_text for marker in
+                ("animation", "动画", "动漫", "reality", "综艺", "真人秀", "documentary", "纪录片")
+            ):
+                continue
+        filtered.append(item)
+    return filtered
+
+
 def classify_metadata_item(
     item: dict[str, Any],
     fallback_category: str | None = None,
