@@ -99,14 +99,21 @@ class FilenameRecognitionCard(FilenameProcessorCard):
 
         rules = normalized.get("rules", [])
         if (
-            not rules
+            isinstance(rules, list)
             and isinstance(legacy_magic, dict)
             and str(legacy_magic.get("pattern") or "").strip()
         ):
-            # 旧规则只迁移一次到新版列表，避免保存新表单后丢失用户规则。
+            # 把旧规则追加到新版列表末尾；若内容已存在则不重复添加。
             migrated = self._validate_rule(legacy_magic, "旧版特殊命名规则")
             migrated["source_ids"] = []
-            rules = [migrated]
+            if not any(
+                isinstance(item, dict)
+                and item.get("pattern") == migrated["pattern"]
+                and item.get("replace") == migrated["replace"]
+                and not item.get("source_ids")
+                for item in rules
+            ):
+                rules = [*rules, migrated]
         if rules is None:
             rules = []
         if not isinstance(rules, list) or len(rules) > 100:
