@@ -267,4 +267,5 @@ def test_tmdb_category_search_filters_tv_by_variety_and_animation_genres():
     variety = card.search_by_category("测试", "综艺")
     assert [item["title"] for item in variety] == ["综艺节目"]
     assert variety[0]["tag"] == "综艺"
-    assert http.calls[1][1] == "https://api.themoviedb.org/3/search/tv"
+    assert http.calls[0][1] == "https://api.themoviedb.org/3/search/tv"
+    assert len(http.calls) == 1
