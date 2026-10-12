@@ -254,6 +254,13 @@ class SearchService:
             for key in ("title", "name", "original_title")
             if str(movie.get(key) or "").strip()
         ]
+        has_known_alternate_title = bool(
+            movie.get("original_title")
+            or movie.get("aliases")
+            or movie.get("alternative_titles")
+            or movie.get("aka")
+        )
+        target_is_chinese = any(re.search(r"[\u4e00-\u9fff]", value) for value in target_titles)
         for alias_key in ("aliases", "alternative_titles", "aka"):
             aliases = movie.get(alias_key)
             if isinstance(aliases, str):
@@ -296,10 +303,14 @@ class SearchService:
             normalized_candidates = set()
             for candidate in file_candidates:
                 normalized = cls._simplify(candidate).replace("_", "").lower()
+                # Chinese title searches often use a translated name while shares use
+                # an English original title. Without metadata aliases, keep such candidates.
+                looks_english = bool(re.search(r"[A-Za-z]", candidate))
                 if (
                     len(normalized) >= 3
                     and normalized not in {cls._simplify(item).replace("_", "").lower() for item in generic}
                     and not any(title in normalized for title in target_titles)
+                    and not (target_is_chinese and looks_english and not has_known_alternate_title)
                 ):
                     normalized_candidates.add(normalized)
             for normalized in normalized_candidates:
