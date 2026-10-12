@@ -223,6 +223,74 @@ class SearchService:
 
         return files, token, error, target_id
 
+    @classmethod
+    def _has_conflicting_tv_title(
+        cls,
+        movie: object,
+        source_title: str,
+        videos: list[dict[str, Any]],
+    ) -> bool:
+        """仅在分享标题与视频文件名共同指向另一部作品时，过滤电视剧误命中。
+
+        不因标题缺少目标剧名就直接拒绝候选：简称、别名、合集标题仍有机会保留。
+        这里要求能从实际视频文件名中识别出稳定的另一部中文作品名，降低误杀风险。
+        """
+        if not isinstance(movie, dict):
+            return False
+
+        media_type = str(movie.get("media_type") or "").strip().lower()
+        tag = str(movie.get("tag") or "").strip().lower()
+        is_tv = media_type in {"tv", "tv_show", "series", "anime", "variety", "电视剧", "综艺", "动画"} or any(
+            marker in tag for marker in ("电视剧", "剧集", "综艺", "动漫", "动画")
+        )
+        if not is_tv or not source_title or not videos:
+            return False
+
+        target_titles = [
+            str(movie.get(key) or "").strip()
+            for key in ("title", "name", "original_title")
+            if str(movie.get(key) or "").strip()
+        ]
+        target_titles = [cls._simplify(value).lower() for value in target_titles]
+        target_titles = [value for value in target_titles if len(value) >= 2]
+        if not target_titles:
+            return False
+
+        source_name = cls._simplify(source_title).lower()
+        file_names = [
+            cls._simplify(str(video.get("file_name") or "")).lower()
+            for video in videos
+        ]
+        # 目标标题在分享名或任一实际视频名中出现时，不能仅凭其他词语判定误命中。
+        if any(title in source_name for title in target_titles) or any(
+            title in name for title in target_titles for name in file_names
+        ):
+            return False
+
+        # 收集视频文件名中较长的中文名称片段，忽略“全集/高清/国语”等常见描述词。
+        generic = {"全集", "高清", "超清", "国语", "中字", "合集", "更新", "资源", "分享", "动画", "动漫"}
+        occurrences: Counter[str] = Counter()
+        for video in videos:
+            name = str(video.get("file_name") or "")
+            for token in re.findall(r"[\\u4e00-\\u9fff]{3,}", name):
+                if token not in generic and not any(title in cls._simplify(token).lower() for title in target_titles):
+                    occurrences[token] += 1
+
+        if not occurrences:
+            return False
+
+        # 至少一半文件重复指向同一部其他作品；单文件分享则要求分享标题也佐证该名称。
+        minimum = max(1, (len(videos) + 1) // 2)
+        for foreign_title, count in occurrences.items():
+            if count < minimum:
+                continue
+            simplified_foreign = cls._simplify(foreign_title).lower()
+            if simplified_foreign and simplified_foreign in source_name and (
+                len(videos) == 1 or count >= 2 or count * 2 >= len(videos)
+            ):
+                return True
+        return False
+
     @staticmethod
     def _candidate_priority(
         source: dict,
@@ -446,6 +514,23 @@ class SearchService:
                         and f.get("fid")
                         and str(f.get("file_name", "")).lower().endswith(VIDEO_EXTENSIONS)
                     ]
+                    source_title = next(
+                        (
+                            str(source.get(key) or "").strip()[:200]
+                            for key in ("title", "name", "resource_name", "share_name", "content")
+                            if str(source.get(key) or "").strip()
+                        ),
+                        "",
+                    )
+                    if self._has_conflicting_tv_title(movie, source_title, all_videos):
+                        self.logger.info(
+                            "过滤疑似错误剧集候选：目标《%s》，分享标题《%s》，视频文件与分享标题指向其他作品",
+                            title,
+                            source_title,
+                        )
+                        seen_resource_keys.add(resource_key)
+                        continue
+
                     total_video_count = len(all_videos)
                     videos = all_videos[:MAX_VIDEO_FILES_PER_CANDIDATE]
                     files_truncated = total_video_count > len(videos)
@@ -471,14 +556,6 @@ class SearchService:
                     )
 
                     total_size = sum(int(v.get("size") or 0) for v in all_videos)
-                    source_title = next(
-                        (
-                            str(source.get(key) or "").strip()[:200]
-                            for key in ("title", "name", "resource_name", "share_name", "content")
-                            if str(source.get(key) or "").strip()
-                        ),
-                        "",
-                    )
                     simplified_movie_title = self._simplify(title).lower()
                     simplified_source_title = self._simplify(source_title).lower()
                     sequel_match = re.search(r"(\d+)$", simplified_movie_title)
