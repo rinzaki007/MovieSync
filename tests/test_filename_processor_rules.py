@@ -131,3 +131,43 @@ def test_filename_card_validates_rule_shape_and_regex_safety():
         card.validate_config({
             "rules": [{"pattern": r"(.+)+$", "replace": r"Show.S01E\1.mkv"}]
         })
+
+
+def test_global_rules_are_shared_by_all_resource_sources():
+    card = FilenameRecognitionCard()
+    config = {
+        "cards": {
+            "filename_recognition": {
+                "enabled": True,
+                "config": {
+                    "rules": [
+                        {
+                            "pattern": r"^Raw_(\\d+)[.]mkv$",
+                            "replace": r"Show.S02E\\1.mkv",
+                        }
+                    ]
+                },
+            }
+        }
+    }
+    manager = _manager(config, card)
+
+    # The same configured rule applies regardless of which resource source found it.
+    assert manager.parse_tv_episode("pansou", "Raw_07.mkv") == (2, 7)
+    assert manager.parse_tv_episode("telegram", "Raw_07.mkv") == (2, 7)
+    assert manager.parse_tv_episode("future_source", "Raw_07.mkv") == (2, 7)
+
+
+def test_source_scoped_rules_are_opt_in_not_required_for_global_rules():
+    card = FilenameRecognitionCard()
+    global_config = {
+        "rules": [
+            {
+                "pattern": r"^Shared-(\\d+)[.]mkv$",
+                "replace": r"Show.S01E\\1.mkv",
+            }
+        ]
+    }
+
+    assert card.parse_episode_for_source("Shared-03.mkv", "pansou", global_config) == (1, 3)
+    assert card.parse_episode_for_source("Shared-03.mkv", "telegram", global_config) == (1, 3)
