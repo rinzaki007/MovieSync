@@ -714,9 +714,29 @@ class SubscriptionManager:
         found_keys = []
         selected_fids = set()
         if sub.get("tracking_mode") == "all":
+            # An explicitly selected initial file is a transfer request, not
+            # merely a tracking watermark. Older records may already contain its
+            # FID in tracked_file_keys before the first confirmed transfer.
+            initial_file_keys = {
+                str(key).strip()
+                for key in (sub.get("initial_file_keys", []) or [])
+                if str(key).strip()
+            }
+            saved_keys = {
+                str(key).strip()
+                for key in (sub.get("saved_episodes", []) or [])
+                if str(key).strip()
+            }
             for item in files:
                 fid = str(item.get("fid") or "").strip()
-                if fid and fid not in tracked_keys and fid not in selected_fids:
+                is_initial = fid in initial_file_keys
+                already_saved = fid in saved_keys
+                if (
+                    fid
+                    and not already_saved
+                    and (fid not in tracked_keys or is_initial)
+                    and fid not in selected_fids
+                ):
                     selected.append({"fid": fid})
                     found_keys.append(fid)
                     selected_fids.add(fid)

@@ -92,7 +92,7 @@ class DynamicStorageTargets(FakeStorageTargets):
         return True, "ok"
 
 
-def test_subscription_tracks_new_files_from_selected_source(tmp_path):
+def test_subscription_transfers_selected_initial_files_and_tracks_new_files(tmp_path):
     storage = DynamicStorageTargets()
     manager = SubscriptionManager(
         tmp_path / "subscriptions.json",
@@ -108,10 +108,12 @@ def test_subscription_tracks_new_files_from_selected_source(tmp_path):
         files=[{"fid": "ep1"}, {"fid": "ep2"}],
     )
 
+    # Explicitly selected initial files must be included in the first transfer,
+    # even though task creation also stores them as tracking markers.
     ok, message = manager.check_subscription_now(sub["id"])
     assert ok is True
-    assert "暂无新更新" in message
-    assert storage.transfers == []
+    assert "成功追更 2 项" in message
+    assert storage.transfers == [["ep1", "ep2"]]
 
     storage.files.append(
         {"fid": "ep3", "file_name": "Show.S01E03.1080p.mkv"}
@@ -120,7 +122,7 @@ def test_subscription_tracks_new_files_from_selected_source(tmp_path):
     ok, message = manager.check_subscription_now(sub["id"])
     assert ok is True
     assert "成功追更 1 项" in message
-    assert storage.transfers == [["ep3"]]
+    assert storage.transfers == [["ep1", "ep2"], ["ep3"]]
 
     saved = manager.get_subscriptions()[0]
     assert "ep3" in saved["tracked_file_keys"]
@@ -1997,5 +1999,80 @@ def test_channel_subscription_transfers_explicitly_selected_file_with_unrecogniz
         assert storage.transfers == [
             ("share-unrecognized", ["selected-cut", "new-episode"])
         ]
+    finally:
+        manager.stop_scheduler()
+
+
+
+def test_generic_all_mode_transfers_selected_initial_fid_even_when_pretracked(tmp_path):
+    storage = DynamicStorageTargets()
+    storage.files = [
+        {"fid": f"ep{episode}", "file_name": f"Show.S01E{episode:02d}.mkv"}
+        for episode in range(45, 59)
+    ]
+    manager = SubscriptionManager(
+        tmp_path / "generic-all-initial-selection.json",
+        storage,
+        FakeResourceSources(),
+        FakeLogger(),
+    )
+    # Without channel/source metadata this task takes the generic "all" path.
+    # The selected FID is pre-marked tracked by legacy task creation logic, but
+    # that marker alone must not suppress its first transfer.
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-45",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        files=[{"fid": "ep45", "file_name": "Show.S01E45.mkv"}],
+    )
+
+    try:
+        assert sub["tracking_mode"] == "all"
+        assert "ep45" in sub["tracked_file_keys"]
+        ok, message = manager.check_subscription_now(sub["id"])
+
+        assert ok is True
+        assert "成功追更 14 项" in message
+        assert storage.transfers == [
+            [f"ep{episode}" for episode in range(45, 59)]
+        ]
+        saved = manager.get_subscriptions()[0]
+        assert "ep45" in saved["saved_episodes"]
+    finally:
+        manager.stop_scheduler()
+
+
+def test_generic_all_mode_does_not_retransfer_initial_fid_with_confirmed_success(tmp_path):
+    storage = DynamicStorageTargets()
+    storage.files = [
+        {"fid": "ep45", "file_name": "Show.S01E45.mkv"},
+        {"fid": "ep46", "file_name": "Show.S01E46.mkv"},
+    ]
+    manager = SubscriptionManager(
+        tmp_path / "generic-all-initial-already-saved.json",
+        storage,
+        FakeResourceSources(),
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-45",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        files=[{"fid": "ep45", "file_name": "Show.S01E45.mkv"}],
+    )
+
+    try:
+        persisted = manager.get_subscriptions()
+        current = next(item for item in persisted if item["id"] == sub["id"])
+        current["saved_episodes"] = ["ep45"]
+        manager.store.write(persisted)
+
+        ok, message = manager.check_subscription_now(sub["id"])
+
+        assert ok is True
+        assert "成功追更 1 项" in message
+        assert storage.transfers == [["ep46"]]
     finally:
         manager.stop_scheduler()
