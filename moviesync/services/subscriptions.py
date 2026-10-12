@@ -998,6 +998,16 @@ class SubscriptionManager:
             if str(fid).strip()
         }
         selected_pwd_id = str(sub.get("resource_id") or sub.get("pwd_id") or "").strip()
+        if initial_file_keys:
+            self.logger.info(
+                "智能追剧初选诊断：标题=%s，初选分享=%s，初选文件数=%d，初选FID=%s，已保存记录数=%d，已追踪记录数=%d",
+                title,
+                selected_pwd_id,
+                len(initial_file_keys),
+                ",".join(sorted(initial_file_keys)[:20]),
+                len(saved_episode_keys),
+                len(tracked),
+            )
         baseline_episode = int(sub.get("start_ep", 0) or 0)
         baseline_season = int(sub.get("start_season", 0) or 0)
         grouped: dict[tuple[str, str, str], dict] = {}
@@ -1075,6 +1085,25 @@ class SubscriptionManager:
                 resolution_errors.append(f"{resource_id}: 解析失败")
                 continue
 
+            file_fids = {
+                str(file_item.get("fid") or "").strip()
+                for file_item in files
+                if str(file_item.get("fid") or "").strip()
+            }
+            if resource_id == selected_pwd_id and initial_file_keys:
+                missing_selected = sorted(initial_file_keys - file_fids)
+                if missing_selected:
+                    self.logger.warning(
+                        "智能追剧初选诊断：初选分享=%s，以下初选FID未出现在网盘返回的文件列表中：%s",
+                        resource_id,
+                        ",".join(missing_selected[:20]),
+                    )
+                else:
+                    self.logger.info(
+                        "智能追剧初选诊断：初选分享=%s，全部%d个初选FID均存在于网盘文件列表",
+                        resource_id,
+                        len(initial_file_keys),
+                    )
             for item in files:
                 fid = str(item.get("fid") or "").strip()
                 if not fid:
@@ -1099,15 +1128,46 @@ class SubscriptionManager:
                 confirmed_saved = key in saved_episode_keys or (
                     target_id == selected_target_id and legacy_key in saved_episode_keys
                 )
+                is_initial_fid = fid in initial_file_keys
+                if is_initial_fid and not is_selected_initial:
+                    self.logger.warning(
+                        "智能追剧初选诊断：FID=%s 命中初选列表但分享不匹配，当前分享=%s，初选分享=%s，资源类型=%s",
+                        fid,
+                        resource_id,
+                        selected_pwd_id,
+                        resource_type,
+                    )
+                if is_selected_initial:
+                    self.logger.info(
+                        "智能追剧初选诊断：命中初选文件，FID=%s，文件名=%s，目标=%s，tracked=%s，saved=%s，key=%s",
+                        fid,
+                        str(item.get("file_name") or ""),
+                        target_id,
+                        key in tracked or legacy_selected_key,
+                        confirmed_saved,
+                        key,
+                    )
                 # Do not re-copy files with a durable success record. A tracked-only
                 # marker on a selected initial file may be the false-positive written
                 # by older versions before filename recognition was available.
                 if confirmed_saved:
+                    if is_selected_initial:
+                        self.logger.warning(
+                            "智能追剧初选诊断：初选文件被已保存记录拦截，FID=%s，key=%s",
+                            fid,
+                            key,
+                        )
                     continue
                 if ((key in tracked or legacy_selected_key) and not is_selected_initial) or queue_key in queued_keys:
                     continue
                 file_name = str(item.get("file_name") or "")
                 if not file_name.lower().endswith(VIDEO_EXTENSIONS):
+                    if is_selected_initial:
+                        self.logger.warning(
+                            "智能追剧初选诊断：初选文件因扩展名被过滤，FID=%s，文件名=%s",
+                            fid,
+                            file_name,
+                        )
                     continue
                 season, episode = _parse_source_episode(
                     self.resource_sources,
@@ -1124,6 +1184,13 @@ class SubscriptionManager:
                     # identify the episode. Unselected unclassified files are skipped.
                     if not is_selected_initial:
                         continue
+                if is_selected_initial:
+                    self.logger.info(
+                        "智能追剧初选诊断：初选文件已进入转存队列，FID=%s，解析集数=%s，季=%s",
+                        fid,
+                        episode,
+                        season,
+                    )
                 if not is_selected_initial:
                     if episode is None:
                         continue
@@ -1140,6 +1207,15 @@ class SubscriptionManager:
                     if previous_group is not None and previous_group != group_key:
                         # Another share already covers this episode. Do not transfer
                         # the overlap twice, but keep scanning for later episodes.
+                        if is_selected_initial:
+                            self.logger.warning(
+                                "智能追剧初选诊断：初选文件被跨分享同集去重拦截，FID=%s，文件名=%s，集数=%s，当前分享=%s，优先分享=%s",
+                                fid,
+                                file_name,
+                                episode,
+                                resource_id,
+                                previous_group[1],
+                            )
                         continue
                 grouped.setdefault(group_key, {
                     "resource": resource,
