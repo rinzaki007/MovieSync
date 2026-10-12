@@ -26,3 +26,9 @@ def test_mobile_stylesheet_covers_core_portrait_layouts():
 def test_login_page_loads_mobile_stylesheet():
     login = (TEMPLATES / "login.html").read_text(encoding="utf-8")
     assert "filename='css/mobile.css'" in login
+
+
+def test_page_specific_mobile_rules_are_scoped_to_their_pages():
+    stylesheet = MOBILE.read_text(encoding="utf-8")
+    assert "body:has(#movie-grid) > header.glass-nav" in stylesheet
+    assert "body:has(#task-list) > header.glass-nav > div" in stylesheet
