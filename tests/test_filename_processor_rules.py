@@ -142,8 +142,8 @@ def test_global_rules_are_shared_by_all_resource_sources():
                 "config": {
                     "rules": [
                         {
-                            "pattern": r"^Raw_(\\d+)[.]mkv$",
-                            "replace": r"Show.S02E\\1.mkv",
+                            "pattern": r"^Raw_(\d+)[.]mkv$",
+                            "replace": r"Show.S02E\1.mkv",
                         }
                     ]
                 },
@@ -163,8 +163,8 @@ def test_source_scoped_rules_are_opt_in_not_required_for_global_rules():
     global_config = {
         "rules": [
             {
-                "pattern": r"^Shared-(\\d+)[.]mkv$",
-                "replace": r"Show.S01E\\1.mkv",
+                "pattern": r"^Shared-(\d+)[.]mkv$",
+                "replace": r"Show.S01E\1.mkv",
             }
         ]
     }
