@@ -578,3 +578,39 @@ def test_search_preserves_selected_media_identity_for_resource_cards():
         "original_title": "The Final Chapter",
         "genres": ["恐怖"],
     }
+
+
+
+def test_candidate_ranking_demotes_tv_shares_when_searching_for_numbered_movie():
+    from moviesync.services.search import SearchService
+
+    tv_share = {"title": "潜伏 第1季 S01E01 1080p"}
+    matching_movie = {"title": "潜伏6 2026 1080p"}
+    wrong_score = SearchService._candidate_priority(tv_share, "潜伏6", "movie")
+    matching_score = SearchService._candidate_priority(matching_movie, "潜伏6", "movie")
+
+    assert matching_score > wrong_score
+
+
+def test_search_flags_numbered_title_and_episode_format_mismatches():
+    import logging
+
+    class MismatchSources:
+        def search(self, movie, config):
+            return [{
+                "source_id": "test-source",
+                "source_name": "Test",
+                "title": "潜伏 第1季 S01E01",
+                "pwd_id": "series-share",
+            }]
+
+    service = SearchService(MismatchSources(), FakeStorageTargets(), logging.getLogger("test"))
+    candidates = service.search_movie_candidates(
+        {"title": "潜伏6", "tag": "电影", "media_type": "movie"},
+        {},
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0]["resource_title"] == "潜伏 第1季 S01E01"
+    assert candidates[0]["title_mismatch"] is True
+    assert candidates[0]["format_mismatch"] is True
