@@ -20,7 +20,7 @@ class FilenameRecognitionCard(FilenameProcessorCard):
     manifest = CardManifest(
         id="filename_recognition",
         name="文件名识别",
-        version="1.1.0",
+        version="1.2.0",
         type="filename_processor",
         description="自动识别电影年份、剧集季集、动画集数和综艺期数；大多数情况无需手动配置。",
         capabilities=("filename.parse", "filename.normalize"),
