@@ -231,8 +231,16 @@ class SearchService:
         )
         text = " ".join(str(source.get(key) or "") for key in name_fields).lower()
         score = 0
-        if re.search(r"(?:s\d{1,2}\s*e\d{1,4}|第\s*\d+\s*[集话]|(?:ep|e)\s*\d{1,4})", text, re.I):
-            score += 4
+        # 多个集数标记通常意味着资源标题包含更明确的剧集范围；
+        # 只用于排序，不过滤候选，也不把分辨率差异当作重复资源。
+        episode_markers = re.findall(
+            r"(?:s\d{1,2}\s*e\d{1,4}|第\s*\d+\s*[集话]|(?:ep|e)\s*\d{1,4})",
+            text,
+            re.I,
+        )
+        score += min(len(episode_markers), 4) * 2
+        if re.search(r"s\d{1,2}", text, re.I):
+            score += 1
         if re.search(r"\.(?:mp4|mkv|avi|mov|flv|wmv|m4v|ts|m2ts|iso)(?:\b|$)", text, re.I):
             score += 2
         if re.search(r"\b(?:2160p|1080p|720p|4k|web[- .]?dl|bluray|bdrip|remux)\b", text, re.I):
@@ -241,6 +249,14 @@ class SearchService:
         simplified_text = re.sub(r"[^\w\u4e00-\u9fa5]", "", text)
         if simplified_title and simplified_title in simplified_text:
             score += 3
+        # 标题过于简短或主要由分享说明组成时，降低优先级但仍保留候选。
+        meaningful_text = re.sub(
+            r"(?:分享|资源|链接|下载|转存|合集|全集|更新|推荐)",
+            "",
+            simplified_text,
+        )
+        if len(meaningful_text) < 3:
+            score -= 2
         return score
 
     def search_movie_candidates(
