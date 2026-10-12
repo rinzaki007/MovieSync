@@ -506,6 +506,63 @@ class SearchService:
         )
         return ok, message
 
+    def _verify_destination_transfer(
+        self,
+        storage_target_id: str,
+        folder_fid: str,
+        selected_fids: list[str],
+        source_files: list[dict],
+    ) -> bool | None:
+        """Verify files for cards that advertise destination listing.
+
+        None means the storage card does not support verification. False means
+        verification was advertised but could not confirm every selected file.
+        """
+        get_card = getattr(self.storage_targets, "get", None)
+        if not callable(get_card):
+            return None
+        card = get_card(storage_target_id or None)
+        capabilities = set(getattr(card, "capabilities", ()) or ())
+        list_destination_files = getattr(card, "list_destination_files", None)
+        if (
+            "storage.list_destination_files" not in capabilities
+            or not callable(list_destination_files)
+        ):
+            return None
+
+        from collections import Counter
+
+        selected = set(selected_fids)
+        expected_names = [
+            str(item.get("file_name") or "").strip()
+            for item in source_files
+            if isinstance(item, dict)
+            and str(item.get("fid") or "") in selected
+        ]
+        if len(expected_names) != len(selected) or any(not name for name in expected_names):
+            return False
+
+        try:
+            destination_files = list_destination_files(folder_fid)
+            if not isinstance(destination_files, list) or any(
+                not isinstance(item, dict) for item in destination_files
+            ):
+                raise TypeError("目标目录文件列表格式无效")
+        except Exception:
+            self.logger.warning(
+                "转存请求已返回成功，但无法读取目标目录进行结果核实",
+                exc_info=True,
+            )
+            return False
+
+        expected = Counter(name.casefold() for name in expected_names)
+        observed = Counter(
+            str(item.get("file_name") or "").strip().casefold()
+            for item in destination_files
+            if not item.get("is_dir") and str(item.get("file_name") or "").strip()
+        )
+        return all(observed[name] >= count for name, count in expected.items())
+
     def transfer_selected_resource_with_progress(
         self,
         movie: object,
@@ -577,9 +634,31 @@ class SearchService:
             fresh_stoken,
         )
         if ok:
+            verified = self._verify_destination_transfer(
+                storage_target_id,
+                str(folder_fid),
+                selected_fids,
+                files,
+            )
+            if verified is False:
+                message = (
+                    "网盘接口已接受转存请求，但暂未能核实所选文件已出现在目标目录。"
+                    "请检查目标网盘后再决定是否重试"
+                )
+                self.logger.warning("《%s》转存结果待核实，resource_id=%s", title, resource_id)
+                return False, message, {
+                    "success": 0,
+                    "skipped": 0,
+                    "failed": total,
+                    "uncertain": True,
+                }
             self.logger.info("《%s》转存成功，resource_id=%s", title, resource_id)
             progress(100, "转存完成")
-            return True, f"《{title}》转存成功！已精准归档至专属文件夹", {"success": total, "skipped": 0, "failed": 0}
+            if verified is True:
+                message = f"《{title}》转存成功！已在目标目录核实 {total} 个文件"
+            else:
+                message = f"《{title}》转存成功！已精准归档至专属文件夹"
+            return True, message, {"success": total, "skipped": 0, "failed": 0}
         self.logger.warning("《%s》转存失败: %s", title, msg)
         uncertain = is_uncertain_transfer_message(msg)
         safe_message = (
