@@ -10,6 +10,7 @@ from importlib.metadata import entry_points
 from typing import Any, TypeVar
 
 from ..cards import Card, CardRegistry, MetadataProviderCard
+from .media_classification import filter_metadata_items_by_category
 
 T = TypeVar("T")
 
@@ -173,7 +174,14 @@ class MetadataProviderManager:
             category_search = getattr(card, "search_by_category", None)
             if category and callable(category_search):
                 return category_search(query, category)
-            return card.search(query)
+            results = card.search(query)
+            if category and isinstance(results, list) and all(
+                isinstance(item, dict) for item in results
+            ):
+                # Compatibility path for already-installed cards whose persistent
+                # file predates category-aware search support.
+                return filter_metadata_items_by_category(results, category)
+            return results
 
         return self._call(
             "search",
