@@ -18,6 +18,7 @@ def test_application_shutdown_stops_scheduler_and_closes_cards_once(tmp_path, mo
 
     monkeypatch.setattr(app_module, "SubscriptionManager", FakeSubscriptions)
     monkeypatch.setattr(CardRegistry, "close_all", lambda self: calls.append("cards"))
+    monkeypatch.setattr(app_module.TaskManager, "shutdown", lambda self: calls.append("tasks"))
     monkeypatch.setattr(app_module, "configure_logging", lambda path: logging.getLogger("test.app"))
 
     app = app_module.create_app(
@@ -29,7 +30,7 @@ def test_application_shutdown_stops_scheduler_and_closes_cards_once(tmp_path, mo
     shutdown()
     shutdown()
 
-    assert calls == ["scheduler", "cards"]
+    assert calls == ["scheduler", "tasks", "cards"]
 
 
 def test_app_starts_when_bundled_card_loader_fails(tmp_path, monkeypatch):
