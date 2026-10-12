@@ -540,6 +540,6 @@ def test_transfer_success_without_visible_destination_file_is_uncertain_not_retr
 
     assert ok is False
     assert "结果" in message and "核实" in message
-    assert "不要" not in message  # The task center supplies the no-blind-retry guidance.
+    assert "请检查目标网盘后再决定是否重试" in message
     assert counts["uncertain"] is True
     assert counts["success"] == 0
