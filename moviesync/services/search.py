@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections import Counter
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -529,8 +530,6 @@ class SearchService:
             or not callable(list_destination_files)
         ):
             return None
-
-        from collections import Counter
 
         selected = set(selected_fids)
         expected_names = [
