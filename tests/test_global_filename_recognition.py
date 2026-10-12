@@ -84,3 +84,43 @@ def test_global_filename_card_rejects_invalid_regex():
         card.validate_config({
             "magic_regex": {"pattern": "(", "replace": ""}
         })
+
+
+
+def test_search_result_episode_statistics_use_shared_rules_for_each_source():
+    from moviesync.services.search import _episode_statistics
+
+    class RuleConfigStore:
+        def load(self):
+            return {
+                "cards": {
+                    "filename_recognition": {
+                        "enabled": True,
+                        "config": {
+                            "rules": [
+                                {
+                                    "pattern": r"^Raw_S(\d+)_E(\d+)[.]mkv$",
+                                    "replace": r"Show.S\1E\2.mkv",
+                                }
+                            ]
+                        },
+                    }
+                }
+            }
+
+    registry = CardRegistry()
+    registry.register(FilenameRecognitionCard())
+    manager = ResourceSourceManager(RuleConfigStore(), FakeLogger(), registry=registry)
+    files = [
+        {"file_name": "Raw_S02_E07.mkv"},
+        {"file_name": "Raw_S02_E08.mkv"},
+        {"file_name": "Raw_S03_E01.mkv"},
+    ]
+
+    pansou = _episode_statistics(files, "pansou", manager)
+    telegram = _episode_statistics(files, "telegram", manager)
+
+    assert pansou == telegram
+    assert pansou[1:4] == (3, 3, 0)
+    assert "S02 E07-E08" in pansou[0]
+    assert "S03 E01" in pansou[0]
