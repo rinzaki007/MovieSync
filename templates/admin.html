@@ -1412,19 +1412,23 @@
                         '<div class="rounded-lg border border-slate-700/70 bg-slate-950/40 p-2"><div class="text-[11px] font-medium text-slate-200">电影 · 名称 + 年份</div><div class="mt-1 text-[10px] text-slate-400">肖申克的救赎 (1994) 1080p.mkv</div><div class="mt-1 text-[10px] text-emerald-300">名称：肖申克的救赎 · 年份：1994</div></div>' +
                         '<div class="rounded-lg border border-slate-700/70 bg-slate-950/40 p-2"><div class="text-[11px] font-medium text-slate-200">剧集 · 季 / 集</div><div class="mt-1 text-[10px] text-slate-400">庆余年.S02E07.1080p.mkv</div><div class="mt-1 text-[10px] text-emerald-300">名称：庆余年 · 第 2 季 · 第 7 集</div></div>' +
                         '<div class="rounded-lg border border-slate-700/70 bg-slate-950/40 p-2"><div class="text-[11px] font-medium text-slate-200">中文剧集</div><div class="mt-1 text-[10px] text-slate-400">甄嬛传 第12集.mp4</div><div class="mt-1 text-[10px] text-emerald-300">名称：甄嬛传 · 集数：12（季数未知）</div></div>' +
-                        '<div class="rounded-lg border border-slate-700/70 bg-slate-950/40 p-2"><div class="text-[11px] font-medium text-slate-200">动画 / 综艺</div><div class="mt-1 text-[10px] text-slate-400">动画 S01E03 · 综艺 第12期 · Running Man 2024.06.02 E705</div><div class="mt-1 text-[10px] text-emerald-300">提取名称、类型、年份、季集 / 期数及部分节目日期</div></div>' +
+                        '<div class="rounded-lg border border-slate-700/70 bg-slate-950/40 p-2"><div class="text-[11px] font-medium text-slate-200">动画 / 综艺</div><div class="mt-1 text-[10px] text-slate-400">葬送的芙莉莲.动画.S01E03.mkv · 奔跑吧.2024.06.02.E705.mp4</div><div class="mt-1 text-[10px] text-emerald-300">识别动画集数、综艺期数和节目日期</div></div>' +
                         '</div>' +
-                        '<div class="mt-3 text-[10px] font-semibold text-slate-300">快速试一下文件名</div>' +
+                        '<div class="mt-3 text-[10px] font-semibold text-slate-300">试一试：这个文件名会被识别成什么？</div>' +
                         '<div class="mt-1 flex flex-col gap-2 sm:flex-row"><input data-filename-preview-input type="text" value="庆余年.S02E07.1080p.WEB-DL.mkv" placeholder="粘贴一个真实文件名" class="glass-input min-w-0 flex-1 rounded-lg border border-slate-800 px-3 py-2 text-xs text-slate-200">' +
-                        '<button type="button" data-filename-preview-run class="rounded-lg border border-sky-400/25 px-3 py-2 text-[11px] text-sky-200 hover:bg-sky-400/10">查看识别效果</button></div>' +
-                        '<div data-filename-preview-result class="mt-2 rounded-lg border border-slate-700/70 bg-slate-950/50 p-3 text-[11px] text-slate-300">输入文件名后点击“查看识别效果”。预览用于快速检查常见格式，实际解析以服务端识别结果为准。</div>' +
+                        '<button type="button" data-filename-preview-run class="rounded-lg border border-sky-400/25 px-3 py-2 text-[11px] text-sky-200 hover:bg-sky-400/10" >开始识别</button></div>' +
+                        '<div data-filename-preview-result class="mt-2 rounded-lg border border-slate-700/70 bg-slate-950/50 p-3 text-[11px] text-slate-300">输入一个真实文件名，再点“开始识别”。这里会显示识别出的名称、类型、年份和季集信息。</div>' +
                         '</section>' +
-                        '<div class="mt-4 mb-2 text-[10px] font-semibold text-slate-400">已配置的自定义规则（按顺序尝试）</div>' +
+                        '<details class="mt-4 rounded-xl border border-slate-700/80 bg-slate-950/30 p-3">' +
+                        '<summary class="cursor-pointer select-none text-[11px] font-semibold text-slate-300">高级设置：自定义识别规则（大多数人不需要修改）</summary>' +
+                        '<p class="mt-2 text-[10px] leading-5 text-slate-400">只有内置识别无法处理某种特殊文件名时，才需要在这里添加规则。不确定怎么填，可以先保持空白。</p>' +
+                        '<div class="mt-3 mb-2 text-[10px] font-semibold text-slate-400">当前自定义规则（按顺序尝试）</div>' +
                         '<div data-card-rule-list="' + escapeHtml(key) + '" class="space-y-3">' +
                         (items.length ? items.filter(item => item && typeof item === "object").map(renderRule).join("") :
-                            '<div data-card-rule-empty class="rounded-lg border border-dashed border-slate-700 p-3 text-[11px] text-slate-500">暂未添加自定义规则。内置识别仍会正常工作。</div>') + '</div>' +
-                        '<button type="button" data-card-add-rule class="mt-3 rounded-lg border border-blue-400/25 bg-blue-400/5 px-3 py-2 text-[11px] text-blue-200 hover:bg-blue-400/10">＋ 添加规则</button>' +
-                        '<p class="mt-2 text-[10px] text-slate-500">规则按从上到下的顺序尝试。匹配规则使用正则表达式；替换格式用于提取统一的季集格式。</p>';
+                            '<div data-card-rule-empty class="rounded-lg border border-dashed border-slate-700 p-3 text-[11px] text-slate-500">还没有自定义规则，这很正常；内置识别会继续工作。</div>') + '</div>' +
+                        '<button type="button" data-card-add-rule class="mt-3 rounded-lg border border-blue-400/25 bg-blue-400/5 px-3 py-2 text-[11px] text-blue-200 hover:bg-blue-400/10">＋ 添加特殊规则</button>' +
+                        '<p class="mt-2 text-[10px] leading-5 text-slate-500">这里使用正则表达式，属于进阶功能。保存时会检查规则格式。</p>' +
+                        '</details>';
                 } else if (controlType === "json" && field.editor === "object_list") {
                     const items = Array.isArray(value) ? value : [];
                     const itemFields = Array.isArray(field.item_fields) ? field.item_fields : [];

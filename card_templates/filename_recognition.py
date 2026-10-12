@@ -20,29 +20,29 @@ class FilenameRecognitionCard(FilenameProcessorCard):
     manifest = CardManifest(
         id="filename_recognition",
         name="文件名识别",
-        version="1.1.0",
+        version="1.2.0",
         type="filename_processor",
-        description="统一识别不同资源来源中的季集信息和特殊文件命名。",
+        description="自动识别电影年份、剧集季集、动画集数和综艺期数；大多数情况无需手动配置。",
         capabilities=("filename.parse", "filename.normalize"),
         config_fields=(
             {
                 "key": "rules",
-                "label": "文件名识别规则",
+                "label": "特殊文件名规则（高级设置）",
                 "type": "json",
                 "editor": "rule_list",
                 "item_fields": (
-                    {"key": "pattern", "label": "匹配规则", "placeholder": "例如：Raw_S(\\d+)_E(\\d+)"},
-                    {"key": "replace", "label": "替换格式", "placeholder": "例如：S\\1E\\2"},
+                    {"key": "pattern", "label": "匹配方式（进阶）", "placeholder": "例：Raw_S(\\d+)_E(\\d+)"},
+                    {"key": "replace", "label": "识别标准格式（不改原文件）", "placeholder": "例：Show.S\\1E\\2.mkv"},
                     {
                         "key": "source_ids",
-                        "label": "限定来源 ID（可选）",
+                        "label": "只对哪些资源来源生效（可选）",
                         "placeholder": "留空表示所有来源；多个 ID 用逗号分隔",
                     },
                 ),
                 "default": [],
                 "description": (
-                    "先尝试内置识别格式，再按列表顺序尝试这里的规则。填写匹配表达式和替换格式；"
-                    "来源 ID 留空时对所有资源来源生效。旧版规则会在保存时自动迁移。"
+                    "电影、剧集、动画和综艺通常会自动识别，不需要添加规则。只有文件名特别、识别不到时才使用这里的高级设置；"
+                    "不熟悉正则表达式可以先不填写。来源范围留空时对所有资源来源生效，旧版规则会自动迁移。"
                 ),
             },
         ),

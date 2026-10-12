@@ -13,7 +13,7 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from .filename_rules import parse_tv_episode
+from .filename_rules import parse_media_filename, parse_tv_episode
 from .resource_sources import ResourceSourceManager
 from .storage_targets import StorageTargetManager
 from .transfer_outcome import is_uncertain_transfer_message
@@ -222,6 +222,112 @@ class SearchService:
                 self._share_cache.pop(oldest_key, None)
 
         return files, token, error, target_id
+
+    @classmethod
+    def _has_conflicting_media_title(
+        cls,
+        movie: object,
+        source_title: str,
+        videos: list[dict[str, Any]],
+    ) -> bool:
+        """仅在分享标题与实际视频文件名共同指向另一部作品时，过滤明显的错误候选。
+
+        适用于电影、电视剧、综艺和动画。标题不明确时保留候选，避免误杀简称、别名和合集。
+        同时支持常见中文标题与英文原名，并要求分享元数据和视频文件相互佐证，降低误杀风险。
+        """
+        if not isinstance(movie, dict):
+            return False
+
+        media_type = str(movie.get("media_type") or "").strip().lower()
+        tag = str(movie.get("tag") or "").strip().lower()
+        supported_types = {
+            "movie", "film", "tv", "tv_show", "series", "anime", "variety",
+            "电影", "电视剧", "剧集", "综艺", "动画", "动漫",
+        }
+        category_markers = ("电影", "电视剧", "剧集", "综艺", "动漫", "动画")
+        known_media = media_type in supported_types or any(marker in tag for marker in category_markers)
+        if not known_media or not source_title or not videos:
+            return False
+
+        target_titles = [
+            str(movie.get(key) or "").strip()
+            for key in ("title", "name", "original_title")
+            if str(movie.get(key) or "").strip()
+        ]
+        has_known_alternate_title = bool(
+            movie.get("original_title")
+            or movie.get("aliases")
+            or movie.get("alternative_titles")
+            or movie.get("aka")
+        )
+        target_is_chinese = any(re.search(r"[\u4e00-\u9fff]", value) for value in target_titles)
+        for alias_key in ("aliases", "alternative_titles", "aka"):
+            aliases = movie.get(alias_key)
+            if isinstance(aliases, str):
+                target_titles.extend(part.strip() for part in re.split(r"[,;；、|]", aliases) if part.strip())
+            elif isinstance(aliases, (list, tuple, set)):
+                target_titles.extend(str(part).strip() for part in aliases if str(part).strip())
+        target_titles = [cls._simplify(value).replace("_", "").lower() for value in target_titles]
+        target_titles = [value for value in target_titles if len(value) >= 2]
+        if not target_titles:
+            return False
+
+        source_name = cls._simplify(source_title).replace("_", "").lower()
+        file_names = [
+            cls._simplify(str(video.get("file_name") or "")).replace("_", "").lower()
+            for video in videos
+        ]
+        # 目标标题在分享名或任一实际视频名中出现时，不能仅凭其他词语判定误命中。
+        if any(title in source_name for title in target_titles) or any(
+            title in name for title in target_titles for name in file_names
+        ):
+            return False
+
+        # 同时检查中文作品名片段与清理后的文件标题，兼顾中文剧集和英文原名电影。
+        generic = {
+            "全集", "高清", "超清", "国语", "中字", "合集", "更新", "资源", "分享",
+            "动画", "动漫", "电影", "电视剧", "综艺", "WEB-DL", "BluRay",
+        }
+        occurrences: Counter[str] = Counter()
+        for video in videos:
+            file_name = str(video.get("file_name") or "")
+            file_candidates = set(re.findall(r"[\u4e00-\u9fff]{3,}", file_name))
+            try:
+                parsed_name = str(parse_media_filename(file_name).get("name") or "").strip()
+            except Exception:
+                parsed_name = ""
+            if len(parsed_name) >= 3:
+                file_candidates.add(parsed_name)
+
+            # 每个文件对同一候选标题最多计数一次，避免标题中的重复片段抬高置信度。
+            normalized_candidates = set()
+            for candidate in file_candidates:
+                normalized = cls._simplify(candidate).replace("_", "").lower()
+                # Chinese title searches often use a translated name while shares use
+                # an English original title. Without metadata aliases, keep such candidates.
+                looks_english = bool(re.search(r"[A-Za-z]", candidate))
+                if (
+                    len(normalized) >= 3
+                    and normalized not in {cls._simplify(item).replace("_", "").lower() for item in generic}
+                    and not any(title in normalized for title in target_titles)
+                    and not (target_is_chinese and looks_english and not has_known_alternate_title)
+                ):
+                    normalized_candidates.add(normalized)
+            for normalized in normalized_candidates:
+                occurrences[normalized] += 1
+
+        if not occurrences:
+            return False
+
+        # 过滤需同时满足：候选标题在分享元数据中出现，且在多数视频文件中重复出现。
+        minimum = max(1, (len(videos) + 1) // 2)
+        for normalized_foreign, count in occurrences.items():
+            if count < minimum or normalized_foreign not in source_name:
+                continue
+            # 单文件分享也可判断，但必须有分享标题与文件名两处证据。
+            if len(videos) == 1 or count * 2 >= len(videos):
+                return True
+        return False
 
     @staticmethod
     def _candidate_priority(
@@ -446,6 +552,28 @@ class SearchService:
                         and f.get("fid")
                         and str(f.get("file_name", "")).lower().endswith(VIDEO_EXTENSIONS)
                     ]
+                    source_title = next(
+                        (
+                            str(source.get(key) or "").strip()[:200]
+                            for key in ("title", "name", "resource_name", "share_name", "content")
+                            if str(source.get(key) or "").strip()
+                        ),
+                        "",
+                    )
+                    source_title_evidence = " ".join(
+                        str(source.get(key) or "").strip()
+                        for key in ("title", "name", "resource_name", "share_name", "content", "description")
+                        if str(source.get(key) or "").strip()
+                    )
+                    if self._has_conflicting_media_title(movie, source_title_evidence, all_videos):
+                        self.logger.info(
+                            "过滤疑似错误剧集候选：目标《%s》，分享标题《%s》，视频文件与分享标题指向其他作品",
+                            title,
+                            source_title,
+                        )
+                        seen_resource_keys.add(resource_key)
+                        continue
+
                     total_video_count = len(all_videos)
                     videos = all_videos[:MAX_VIDEO_FILES_PER_CANDIDATE]
                     files_truncated = total_video_count > len(videos)
@@ -471,14 +599,6 @@ class SearchService:
                     )
 
                     total_size = sum(int(v.get("size") or 0) for v in all_videos)
-                    source_title = next(
-                        (
-                            str(source.get(key) or "").strip()[:200]
-                            for key in ("title", "name", "resource_name", "share_name", "content")
-                            if str(source.get(key) or "").strip()
-                        ),
-                        "",
-                    )
                     simplified_movie_title = self._simplify(title).lower()
                     simplified_source_title = self._simplify(source_title).lower()
                     sequel_match = re.search(r"(\d+)$", simplified_movie_title)
