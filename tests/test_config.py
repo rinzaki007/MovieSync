@@ -321,3 +321,27 @@ def test_redacted_config_import_does_not_clear_existing_third_party_secrets(tmp_
     assert card["config"]["cookie"] == "keep-this-cookie"
     assert card["config"]["auth"] == {"refresh_token": "keep-this-token", "region": "eu-west"}
 
+
+
+def test_public_config_does_not_require_legacy_cards(monkeypatch, tmp_path):
+    store = ConfigStore(tmp_path / "config.json", tmp_path / "legacy")
+    monkeypatch.setattr(
+        store,
+        "load",
+        lambda: {
+            "cards": {
+                "custom.storage": {
+                    "enabled": True,
+                    "config": {"cookie": "private-value", "endpoint": "https://storage.example"},
+                },
+            },
+        },
+    )
+
+    public = store.public()
+
+    assert "quark" not in public["cards"]
+    assert "telegram" not in public["cards"]
+    assert public["cards"]["custom.storage"]["config"]["cookie"] == ""
+    assert public["cards"]["custom.storage"]["config"]["has_cookie"] is True
+    assert public["cards"]["custom.storage"]["config"]["endpoint"] == "https://storage.example"
