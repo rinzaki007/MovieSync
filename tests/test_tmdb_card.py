@@ -223,3 +223,48 @@ def test_tmdb_enabled_config_requires_either_supported_credential():
 
     card.validate_enabled_config({"api_read_access_token": "token"})
     card.validate_enabled_config({"api_key": "v3-key"})
+
+
+
+def test_tmdb_category_search_does_not_mix_movies_with_tv_shows():
+    http = FakeHttpClient({
+        "results": [
+            {"id": 101, "title": "潜伏6", "release_date": "2026-01-01", "genre_ids": [27]},
+        ]
+    })
+    card = TMDBMetadataCard(
+        FakeConfigStore({"api_read_access_token": "token"}),
+        http,
+    )
+
+    result = card.search_by_category("潜伏6", "电影")
+
+    assert len(result) == 1
+    assert result[0]["title"] == "潜伏6"
+    assert result[0]["media_type"] == "movie"
+    assert result[0]["tag"] == "电影"
+    assert http.calls[0][1] == "https://api.themoviedb.org/3/search/movie"
+
+
+def test_tmdb_category_search_filters_tv_by_variety_and_animation_genres():
+    http = FakeHttpClient({
+        "results": [
+            {"id": 1, "name": "动画剧", "first_air_date": "2025-01-01", "genre_ids": [16]},
+            {"id": 2, "name": "综艺节目", "first_air_date": "2025-01-01", "genre_ids": [10764]},
+            {"id": 3, "name": "普通剧集", "first_air_date": "2025-01-01", "genre_ids": [18]},
+        ]
+    })
+    card = TMDBMetadataCard(
+        FakeConfigStore({"api_read_access_token": "token"}),
+        http,
+    )
+
+    anime = card.search_by_category("测试", "动漫")
+    assert [item["title"] for item in anime] == ["动画剧"]
+    assert anime[0]["media_type"] == "tv"
+    assert anime[0]["tag"] == "动漫"
+
+    variety = card.search_by_category("测试", "综艺")
+    assert [item["title"] for item in variety] == ["综艺节目"]
+    assert variety[0]["tag"] == "综艺"
+    assert http.calls[1][1] == "https://api.themoviedb.org/3/search/tv"
