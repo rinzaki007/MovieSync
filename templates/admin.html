@@ -1335,8 +1335,10 @@
                                 '" class="glass-input mt-1 w-full rounded-md border border-slate-800 px-2.5 py-2 text-xs text-slate-200"></label>';
                         }).join("") + '</div>' +
                         '<div class="flex justify-end"><button type="button" data-card-remove-rule class="rounded-md border border-rose-400/20 px-2.5 py-1.5 text-[11px] text-rose-300 hover:bg-rose-400/10"><i class="fa-solid fa-trash-can mr-1"></i>删除规则</button></div></div>';
-                    control = '<div data-card-rule-list="' + escapeHtml(key) + '" class="mt-3 space-y-3">' +
-                        items.filter(item => item && typeof item === "object").map(renderRule).join("") + '</div>' +
+                    control = '<div class="mt-3 mb-2 text-[10px] font-semibold text-slate-400">已有规则</div>' +
+                        '<div data-card-rule-list="' + escapeHtml(key) + '" class="space-y-3">' +
+                        (items.length ? items.filter(item => item && typeof item === "object").map(renderRule).join("") :
+                            '<div data-card-rule-empty class="rounded-lg border border-dashed border-slate-700 p-3 text-[11px] text-slate-500">暂未添加自定义规则。内置识别仍会正常工作。</div>') + '</div>' +
                         '<button type="button" data-card-add-rule class="mt-3 rounded-lg border border-blue-400/25 bg-blue-400/5 px-3 py-2 text-[11px] text-blue-200 hover:bg-blue-400/10">＋ 添加规则</button>' +
                         '<p class="mt-2 text-[10px] text-slate-500">规则按从上到下的顺序尝试。匹配规则使用正则表达式；替换格式用于提取统一的季集格式。</p>';
                 } else if (controlType === "json" && field.editor === "object_list") {
@@ -1425,11 +1427,20 @@
                                     '<input data-card-rule-field="' + escapeHtml(sub.key) + '" value="" placeholder="' + escapeHtml(sub.placeholder || '') +
                                     '" class="glass-input mt-1 w-full rounded-md border border-slate-800 px-2.5 py-2 text-xs text-slate-200"></label>').join("") +
                                 '</div><div class="flex justify-end"><button type="button" data-card-remove-rule class="rounded-md border border-rose-400/20 px-2.5 py-1.5 text-[11px] text-rose-300 hover:bg-rose-400/10"><i class="fa-solid fa-trash-can mr-1"></i>删除规则</button></div>';
+                            list.querySelector("[data-card-rule-empty]")?.remove();
                             list.appendChild(row);
                             row.querySelector("[data-card-rule-field]")?.focus();
                         }
                     } else if (event.target.closest("[data-card-remove-rule]")) {
                         event.target.closest("[data-card-rule-row]")?.remove();
+                        const list = wrapper.querySelector('[data-card-rule-list="' + CSS.escape(key) + '"]');
+                        if (list && !list.querySelector("[data-card-rule-row]")) {
+                            const empty = document.createElement("div");
+                            empty.setAttribute("data-card-rule-empty", "");
+                            empty.className = "rounded-lg border border-dashed border-slate-700 p-3 text-[11px] text-slate-500";
+                            empty.textContent = "暂未添加自定义规则。内置识别仍会正常工作。";
+                            list.appendChild(empty);
+                        }
                     } else if (event.target.closest("[data-card-add-row]")) {
                         const list = wrapper.querySelector('[data-card-structured-list="' + CSS.escape(key) + '"]');
                         const itemFields = Array.isArray(field.item_fields) ? field.item_fields : [];
