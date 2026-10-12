@@ -512,6 +512,46 @@ def test_transfer_success_is_verified_when_storage_card_supports_destination_lis
     assert counts == {"success": 1, "skipped": 0, "failed": 0}
 
 
+def test_transfer_verification_retries_when_destination_listing_is_eventually_consistent():
+    import logging
+
+    class EventuallyConsistentStorage(FakeStorageTargets):
+        capabilities = ("storage.list_destination_files",)
+
+        def __init__(self):
+            self.list_calls = 0
+
+        def get(self, _target_id=None):
+            return self
+
+        def create_folder(self, name, parent_id="0", target_id=None):
+            return "folder-1"
+
+        def transfer(self, resource, files, target_id="0", storage_target_id=None, token=None):
+            return True, "转存成功"
+
+        def list_destination_files(self, parent_id="0"):
+            assert parent_id == "folder-1"
+            self.list_calls += 1
+            if self.list_calls < 2:
+                return []
+            return [{"fid": "saved-1", "file_name": "Show.S01E01.1080p.mkv", "is_dir": False}]
+
+    storage = EventuallyConsistentStorage()
+    service = SearchService(FakeResourceSources(), storage, logging.getLogger("test"))
+
+    ok, message, counts = service.transfer_selected_resource_with_progress(
+        {"title": "Show"},
+        {"pwd_id": "same123", "storage_target_id": "quark", "files": [{"fid": "f1"}]},
+        "0",
+    )
+
+    assert ok is True
+    assert "核实 1 个文件" in message
+    assert storage.list_calls == 2
+    assert counts == {"success": 1, "skipped": 0, "failed": 0}
+
+
 def test_transfer_success_without_visible_destination_file_is_uncertain_not_retryable_as_success():
     import logging
 
