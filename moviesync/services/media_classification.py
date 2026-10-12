@@ -134,6 +134,12 @@ def classify_metadata_item(
         category = genre_category or category or "电视剧"
     else:
         category = category or normalize_media_category(fallback_category) or "未知"
+        # Legacy providers may expose only a title. In that case the active
+        # category tab is the best available format hint, not provider evidence.
+        if category == "电影":
+            media_type = "movie"
+        elif category in SERIES_CATEGORIES:
+            media_type = "tv"
 
     if media_type:
         result["media_type"] = media_type
