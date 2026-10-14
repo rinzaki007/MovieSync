@@ -20,10 +20,10 @@ def test_filename_preview_uses_shared_parser_and_unsaved_rules(tmp_path):
             "/api/filename-recognition/preview",
             headers={"X-CSRF-Token": csrf_token},
             json={
-                "file_name": "Raw_S02_E07.mkv",
+                "file_name": "RawSeason02Episode07.mkv",
                 "source_id": "pansou",
                 "rules": [{
-                    "pattern": r"^Raw_S(\d+)_E(\d+)[.]mkv$",
+                    "pattern": r"^RawSeason(\d+)Episode(\d+)[.]mkv$",
                     "replace": r"Show.S\1E\2.mkv",
                     "source_ids": ["pansou"],
                 }],
