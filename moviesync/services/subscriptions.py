@@ -1388,7 +1388,7 @@ class SubscriptionManager:
                     if share_diag is not None:
                         share_diag["skipped_files"] += 1
                     diagnostics["already_saved"] += 1
-                    if len(diagnostics["examples"]) < 20:
+                    if len(diagnostics["examples"]) < 50:
                         diagnostics["examples"].append({
                             "file": str(item.get("file_name") or fid),
                             "reason": "已确认保存，跳过重复转存",
@@ -1404,7 +1404,7 @@ class SubscriptionManager:
                     if share_diag is not None:
                         share_diag["skipped_files"] += 1
                     diagnostics["already_tracked"] += 1
-                    if len(diagnostics["examples"]) < 20:
+                    if len(diagnostics["examples"]) < 50:
                         diagnostics["examples"].append({
                             "file": str(item.get("file_name") or fid),
                             "reason": "已追踪或重复文件，跳过",
@@ -1429,7 +1429,7 @@ class SubscriptionManager:
                     if share_diag is not None:
                         share_diag["skipped_files"] += 1
                     diagnostics["unrecognized"] += 1
-                    if len(diagnostics["examples"]) < 20:
+                    if len(diagnostics["examples"]) < 50:
                         diagnostics["examples"].append({
                             "file": file_name[:240],
                             "reason": "无法识别季集，未自动转存",
@@ -1460,7 +1460,7 @@ class SubscriptionManager:
                         if share_diag is not None:
                             share_diag["skipped_files"] += 1
                         diagnostics["already_saved"] += 1
-                        if len(diagnostics["examples"]) < 20:
+                        if len(diagnostics["examples"]) < 50:
                             diagnostics["examples"].append({
                                 "file": file_name[:240],
                                 "reason": "该季集已从其他分享转存，跳过重复集",
@@ -1481,7 +1481,7 @@ class SubscriptionManager:
                             if share_diag is not None:
                                 share_diag["skipped_files"] += 1
                             diagnostics["filtered_old"] += 1
-                            if len(diagnostics["examples"]) < 20:
+                            if len(diagnostics["examples"]) < 50:
                                 diagnostics["examples"].append({
                                     "file": file_name[:240],
                                     "reason": "早于追剧起始集，已过滤",
@@ -1492,7 +1492,7 @@ class SubscriptionManager:
                         if share_diag is not None:
                             share_diag["skipped_files"] += 1
                         diagnostics["filtered_old"] += 1
-                        if len(diagnostics["examples"]) < 20:
+                        if len(diagnostics["examples"]) < 50:
                             diagnostics["examples"].append({
                                 "file": file_name[:240],
                                 "reason": "早于追剧起始集，已过滤",
@@ -1517,7 +1517,7 @@ class SubscriptionManager:
                         if share_diag is not None:
                             share_diag["skipped_files"] += 1
                         diagnostics["duplicate_episodes"] += 1
-                        if len(diagnostics["examples"]) < 20:
+                        if len(diagnostics["examples"]) < 50:
                             diagnostics["examples"].append({
                                 "file": file_name[:240],
                                 "reason": "与优先分享中的同集重复，已去重",
