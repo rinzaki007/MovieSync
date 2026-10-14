@@ -675,6 +675,16 @@ class SubscriptionManager:
         self,
         sub: dict,
     ) -> tuple[bool, str]:
+        # Every subscription path must initialize diagnostics before doing work.
+        # The channel-based path adds detailed counters; legacy/direct-share
+        # subscriptions still need a persisted summary instead of an empty panel.
+        sub["_run_diagnostics"] = {
+            "source_candidates": 0, "unique_shares": 0, "resolved_shares": 0,
+            "resolution_failures": 0, "files_scanned": 0, "video_files": 0,
+            "already_saved": 0, "already_tracked": 0, "unrecognized": 0,
+            "filtered_old": 0, "duplicate_episodes": 0, "queued_files": 0,
+            "transferred_files": 0, "examples": [],
+        }
         # Channel/source metadata is the durable signal for channel-based Smart Follow.
         # Older or migrated records may still carry tracking_mode="all"; letting those
         # records fall through to the generic branch bypasses season/episode filtering
@@ -689,6 +699,9 @@ class SubscriptionManager:
             "resource_type": str(sub.get("resource_type") or "").strip().lower(),
             "storage_target_id": str(sub.get("storage_target_id") or "").strip(),
         }
+        diagnostics = sub["_run_diagnostics"]
+        diagnostics["source_candidates"] = 1
+        diagnostics["unique_shares"] = 1
         resolved = self.storage_targets.resolve_resource(
             resource,
             resource.get("storage_target_id") or None,
@@ -703,7 +716,20 @@ class SubscriptionManager:
         err = resolved.get("error")
 
         if err or not files or not fetched_stoken:
+            diagnostics["resolution_failures"] = 1
+            if err:
+                diagnostics["examples"].append({
+                    "file": resource.get("resource_id") or resource.get("pwd_id") or "当前分享",
+                    "reason": str(err)[:200],
+                })
             return self._finish(sub, False, f"解析链接失败: {err or '未找到文件'}")
+
+        diagnostics["resolved_shares"] = 1
+        diagnostics["files_scanned"] = len(files)
+        diagnostics["video_files"] = sum(
+            1 for item in files
+            if str(item.get("file_name") or item.get("name") or "").lower().endswith(VIDEO_EXTENSIONS)
+        )
 
         tracked_keys = {
             str(key).strip()
@@ -797,6 +823,7 @@ class SubscriptionManager:
                     found_keys.append(ep_num)
                     selected_fids.add(fid)
 
+        diagnostics["queued_files"] = len(selected)
         if not selected:
             return self._finish(sub, True, f"《{sub.get('title', '')}》暂无新更新", success_keys=[])
 
@@ -843,6 +870,7 @@ class SubscriptionManager:
                 outcome_uncertain=uncertain,
             )
 
+        diagnostics["transferred_files"] = len(selected)
         return self._finish(
             sub,
             True,
