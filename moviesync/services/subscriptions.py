@@ -1102,6 +1102,7 @@ class SubscriptionManager:
                 != selected_pwd_id,
             ),
         )
+        diagnostics["source_candidates"] = len(sources)
         diagnostics["unique_shares"] = len(sources)
 
         if not sources:
@@ -1208,8 +1209,23 @@ class SubscriptionManager:
             resolved_sources = list(executor.map(resolve_source, sources))
 
         for _source, resource, resolved in resolved_sources:
+            share_diag = None
             if resource is None:
                 diagnostics["resolution_failures"] += 1
+                diagnostics["examples"].append({
+                    "file": "频道搜索结果",
+                    "reason": "资源条目缺少分享 ID，无法解析",
+                })
+                diagnostics["shares"].append({
+                    "resource_id": "",
+                    "resource_type": "",
+                    "status": "无效资源",
+                    "files_scanned": 0,
+                    "video_files": 0,
+                    "queued_files": 0,
+                    "skipped_files": 0,
+                    "error": "资源条目缺少分享 ID",
+                })
                 continue
             resource_id = resource["resource_id"]
             resource_type = resource["resource_type"]
@@ -1227,11 +1243,32 @@ class SubscriptionManager:
                 self.logger.warning("自动追剧资源解析失败，资源 ID=%s，原因=%s", resource_id, reason)
                 resolution_errors.append(f"{resource_id}: 解析失败")
                 diagnostics["resolution_failures"] += 1
-                if len(diagnostics["examples"]) < 20:
-                    diagnostics["examples"].append({"file": resource_id, "reason": "资源解析失败"})
+                diagnostics["examples"].append({"file": resource_id, "reason": reason[:200]})
+                diagnostics["shares"].append({
+                    "resource_id": resource_id[:120],
+                    "resource_type": resource_type[:60],
+                    "status": "解析失败",
+                    "files_scanned": 0,
+                    "video_files": 0,
+                    "queued_files": 0,
+                    "skipped_files": 0,
+                    "error": reason[:200],
+                })
                 continue
 
             diagnostics["resolved_shares"] += 1
+            share_diag = {
+                "resource_id": resource_id[:120],
+                "resource_type": resource_type[:60],
+                "status": "已解析",
+                "files_scanned": 0,
+                "video_files": 0,
+                "queued_files": 0,
+                "skipped_files": 0,
+                "error": "",
+            }
+            if len(diagnostics["shares"]) < 50:
+                diagnostics["shares"].append(share_diag)
             file_fids = {
                 str(file_item.get("fid") or "").strip()
                 for file_item in files
@@ -1258,15 +1295,21 @@ class SubscriptionManager:
                     )
             for item in files:
                 diagnostics["files_scanned"] += 1
+                if share_diag is not None:
+                    share_diag["files_scanned"] += 1
                 fid = str(item.get("fid") or "").strip()
                 file_name = str(item.get("file_name") or item.get("name") or "").strip()
                 is_video = bool(file_name.lower().endswith(VIDEO_EXTENSIONS))
                 if is_video:
                     diagnostics["video_files"] += 1
+                    if share_diag is not None:
+                        share_diag["video_files"] += 1
                 else:
                     diagnostics["non_video_files"] += 1
                     diagnostics["examples"].append({"file": file_name or "(无文件名)", "reason": "非视频文件，未进入追剧识别"})
                 if not fid:
+                    if share_diag is not None:
+                        share_diag["skipped_files"] += 1
                     diagnostics["missing_file_id"] += 1
                     diagnostics["examples"].append({"file": file_name or "(无文件名)", "reason": "文件条目缺少 fid，无法追踪或转存"})
                     continue
@@ -1313,6 +1356,8 @@ class SubscriptionManager:
                 # marker on a selected initial file may be the false-positive written
                 # by older versions before filename recognition was available.
                 if confirmed_saved:
+                    if share_diag is not None:
+                        share_diag["skipped_files"] += 1
                     diagnostics["already_saved"] += 1
                     if len(diagnostics["examples"]) < 20:
                         diagnostics["examples"].append({
@@ -1327,6 +1372,8 @@ class SubscriptionManager:
                         )
                     continue
                 if ((key in tracked or legacy_selected_key) and not is_selected_initial) or queue_key in queued_keys:
+                    if share_diag is not None:
+                        share_diag["skipped_files"] += 1
                     diagnostics["already_tracked"] += 1
                     if len(diagnostics["examples"]) < 20:
                         diagnostics["examples"].append({
@@ -1335,6 +1382,8 @@ class SubscriptionManager:
                         })
                     continue
                 if not is_video:
+                    if share_diag is not None:
+                        share_diag["skipped_files"] += 1
                     if is_selected_initial:
                         self.logger.warning(
                             "智能追剧初选诊断：初选文件因扩展名被过滤，FID=%s，文件名=%s",
@@ -1348,6 +1397,8 @@ class SubscriptionManager:
                     file_name,
                 )
                 if episode is None:
+                    if share_diag is not None:
+                        share_diag["skipped_files"] += 1
                     diagnostics["unrecognized"] += 1
                     if len(diagnostics["examples"]) < 20:
                         diagnostics["examples"].append({
@@ -1377,6 +1428,8 @@ class SubscriptionManager:
                         previously_saved_source
                         and previously_saved_source != current_source_identity
                     ):
+                        if share_diag is not None:
+                            share_diag["skipped_files"] += 1
                         diagnostics["already_saved"] += 1
                         if len(diagnostics["examples"]) < 20:
                             diagnostics["examples"].append({
@@ -1396,6 +1449,8 @@ class SubscriptionManager:
                         continue
                     if season is not None and baseline_season > 0:
                         if (season, episode) <= (baseline_season, baseline_episode):
+                            if share_diag is not None:
+                                share_diag["skipped_files"] += 1
                             diagnostics["filtered_old"] += 1
                             if len(diagnostics["examples"]) < 20:
                                 diagnostics["examples"].append({
@@ -1405,6 +1460,8 @@ class SubscriptionManager:
                             continue
                     elif episode <= baseline_episode:
                         # 只过滤未选中的基准集及更早集数；选中集需首次转存。
+                        if share_diag is not None:
+                            share_diag["skipped_files"] += 1
                         diagnostics["filtered_old"] += 1
                         if len(diagnostics["examples"]) < 20:
                             diagnostics["examples"].append({
@@ -1428,6 +1485,8 @@ class SubscriptionManager:
                                 resource_id,
                                 previous_group[1],
                             )
+                        if share_diag is not None:
+                            share_diag["skipped_files"] += 1
                         diagnostics["duplicate_episodes"] += 1
                         if len(diagnostics["examples"]) < 20:
                             diagnostics["examples"].append({
@@ -1444,6 +1503,8 @@ class SubscriptionManager:
                     "episode_sources": {},
                 })["files"].append({"fid": fid})
                 grouped[group_key]["keys"].append(key)
+                if share_diag is not None:
+                    share_diag["queued_files"] += 1
                 diagnostics["queued_files"] += 1
                 queued_keys.add(queue_key)
                 if episode is not None:
