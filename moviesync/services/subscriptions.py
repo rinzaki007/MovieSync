@@ -909,6 +909,14 @@ class SubscriptionManager:
         source_id = str(sub.get("source_id") or "").strip()
         channel = str(sub.get("channel") or "").strip()
         title = str(sub.get("title") or "").strip()
+        diagnostics = {
+            "source_candidates": 0, "unique_shares": 0, "resolved_shares": 0,
+            "resolution_failures": 0, "files_scanned": 0, "video_files": 0,
+            "already_saved": 0, "already_tracked": 0, "unrecognized": 0,
+            "filtered_old": 0, "duplicate_episodes": 0, "queued_files": 0,
+            "transferred_files": 0, "examples": [],
+        }
+        sub["_run_diagnostics"] = diagnostics
         self._set_status(sub, "running", "searching", "正在搜刮频道资源…")
         scan_cursor = None
         scan_complete = False
@@ -952,6 +960,7 @@ class SubscriptionManager:
         if not isinstance(sources, list):
             sources = []
             scan_complete = False
+        diagnostics["source_candidates"] = len(sources)
 
         # 标题搜索可能因频道帖子使用英文名、旧消息超出扫描范围等原因返回空列表。
         # 用户创建订阅时选中的分享是可靠的起点，至少先检查该分享中的后续集数。
@@ -1002,6 +1011,7 @@ class SubscriptionManager:
                 != selected_pwd_id,
             ),
         )
+        diagnostics["unique_shares"] = len(sources)
 
         if not sources:
             if scan_complete:
@@ -1105,6 +1115,7 @@ class SubscriptionManager:
 
         for _source, resource, resolved in resolved_sources:
             if resource is None:
+                diagnostics["resolution_failures"] += 1
                 continue
             resource_id = resource["resource_id"]
             resource_type = resource["resource_type"]
@@ -1121,8 +1132,12 @@ class SubscriptionManager:
                 reason = str(resolved.get("error") or "未获取到文件列表或分享令牌").strip()
                 self.logger.warning("自动追剧资源解析失败，资源 ID=%s，原因=%s", resource_id, reason)
                 resolution_errors.append(f"{resource_id}: 解析失败")
+                diagnostics["resolution_failures"] += 1
+                if len(diagnostics["examples"]) < 20:
+                    diagnostics["examples"].append({"file": resource_id, "reason": "资源解析失败"})
                 continue
 
+            diagnostics["resolved_shares"] += 1
             file_fids = {
                 str(file_item.get("fid") or "").strip()
                 for file_item in files
@@ -1146,6 +1161,7 @@ class SubscriptionManager:
                 fid = str(item.get("fid") or "").strip()
                 if not fid:
                     continue
+                diagnostics["files_scanned"] += 1
                 legacy_key = f"{resource_id}:{fid}"
                 provider_key = (
                     f"{resource_type}:{legacy_key}"
@@ -1189,6 +1205,12 @@ class SubscriptionManager:
                 # marker on a selected initial file may be the false-positive written
                 # by older versions before filename recognition was available.
                 if confirmed_saved:
+                    diagnostics["already_saved"] += 1
+                    if len(diagnostics["examples"]) < 20:
+                        diagnostics["examples"].append({
+                            "file": str(item.get("file_name") or fid),
+                            "reason": "已确认保存，跳过重复转存",
+                        })
                     if is_selected_initial:
                         self.logger.warning(
                             "智能追剧初选诊断：初选文件被已保存记录拦截，FID=%s，key=%s",
@@ -1197,6 +1219,12 @@ class SubscriptionManager:
                         )
                     continue
                 if ((key in tracked or legacy_selected_key) and not is_selected_initial) or queue_key in queued_keys:
+                    diagnostics["already_tracked"] += 1
+                    if len(diagnostics["examples"]) < 20:
+                        diagnostics["examples"].append({
+                            "file": str(item.get("file_name") or fid),
+                            "reason": "已追踪或重复文件，跳过",
+                        })
                     continue
                 file_name = str(item.get("file_name") or "")
                 if not file_name.lower().endswith(VIDEO_EXTENSIONS):
@@ -1207,12 +1235,19 @@ class SubscriptionManager:
                             file_name,
                         )
                     continue
+                diagnostics["video_files"] += 1
                 season, episode = _parse_source_episode(
                     self.resource_sources,
                     source_id,
                     file_name,
                 )
                 if episode is None:
+                    diagnostics["unrecognized"] += 1
+                    if len(diagnostics["examples"]) < 20:
+                        diagnostics["examples"].append({
+                            "file": file_name[:240],
+                            "reason": "无法识别季集，未自动转存",
+                        })
                     # Keep the channel watermark unchanged while a video file
                     # remains unclassified. Otherwise the incremental scan could
                     # permanently skip a share before recognition rules improve.
@@ -1234,9 +1269,21 @@ class SubscriptionManager:
                         continue
                     if season is not None and baseline_season > 0:
                         if (season, episode) <= (baseline_season, baseline_episode):
+                            diagnostics["filtered_old"] += 1
+                            if len(diagnostics["examples"]) < 20:
+                                diagnostics["examples"].append({
+                                    "file": file_name[:240],
+                                    "reason": "早于追剧起始集，已过滤",
+                                })
                             continue
                     elif episode <= baseline_episode:
                         # 只过滤未选中的基准集及更早集数；选中集需首次转存。
+                        diagnostics["filtered_old"] += 1
+                        if len(diagnostics["examples"]) < 20:
+                            diagnostics["examples"].append({
+                                "file": file_name[:240],
+                                "reason": "早于追剧起始集，已过滤",
+                            })
                         continue
                 group_key = (resource_type, resource_id, target_id)
                 episode_key = (target_id, season, episode)
@@ -1254,6 +1301,12 @@ class SubscriptionManager:
                                 resource_id,
                                 previous_group[1],
                             )
+                        diagnostics["duplicate_episodes"] += 1
+                        if len(diagnostics["examples"]) < 20:
+                            diagnostics["examples"].append({
+                                "file": file_name[:240],
+                                "reason": "与优先分享中的同集重复，已去重",
+                            })
                         continue
                 grouped.setdefault(group_key, {
                     "resource": resource,
@@ -1263,6 +1316,7 @@ class SubscriptionManager:
                     "keys": [],
                 })["files"].append({"fid": fid})
                 grouped[group_key]["keys"].append(key)
+                diagnostics["queued_files"] += 1
                 queued_keys.add(queue_key)
                 if episode is not None:
                     queued_episode_sources.setdefault(episode_key, group_key)
@@ -1336,6 +1390,7 @@ class SubscriptionManager:
                     outcome_uncertain=uncertain,
                 )
             all_keys.extend(group["keys"])
+            diagnostics["transferred_files"] += len(group["files"])
             # Commit confirmed success and clear pending state in one write.
             self._record_success_keys(sub, group["keys"])
             total += len(group["files"])
@@ -1577,6 +1632,15 @@ class SubscriptionManager:
                 if success
                 else message
             )
+            diagnostics = sub.get("_run_diagnostics")
+            if isinstance(diagnostics, dict):
+                saved_diagnostics = dict(diagnostics)
+                saved_diagnostics.pop("examples", None)
+                saved_diagnostics["examples"] = list(diagnostics.get("examples") or [])[:20]
+                saved_diagnostics["finished_at"] = time.time()
+                saved_diagnostics["success"] = bool(success)
+                saved_diagnostics["message"] = str(message)[:500]
+                current["last_diagnostics"] = saved_diagnostics
             history = current.get("run_history", [])
             if not isinstance(history, list):
                 history = []

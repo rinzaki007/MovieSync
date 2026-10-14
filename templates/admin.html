@@ -1416,8 +1416,9 @@
                         '</div>' +
                         '<div class="mt-3 text-[10px] font-semibold text-slate-300">试一试：这个文件名会被识别成什么？</div>' +
                         '<div class="mt-1 flex flex-col gap-2 sm:flex-row"><input data-filename-preview-input type="text" value="庆余年.S02E07.1080p.WEB-DL.mkv" placeholder="粘贴一个真实文件名" class="glass-input min-w-0 flex-1 rounded-lg border border-slate-800 px-3 py-2 text-xs text-slate-200">' +
-                        '<button type="button" data-filename-preview-run class="rounded-lg border border-sky-400/25 px-3 py-2 text-[11px] text-sky-200 hover:bg-sky-400/10" >开始识别</button></div>' +
-                        '<div data-filename-preview-result class="mt-2 rounded-lg border border-slate-700/70 bg-slate-950/50 p-3 text-[11px] text-slate-300">输入一个真实文件名，再点“开始识别”。这里会显示识别出的名称、类型、年份和季集信息。</div>' +
+                        '<button type="button" data-filename-preview-run class="rounded-lg border border-sky-400/25 px-3 py-2 text-[11px] text-sky-200 hover:bg-sky-400/10">按实际规则识别</button></div>' +
+                        '<input data-filename-preview-source type="text" placeholder="资源来源 ID（可选；测试限定来源规则时填写）" class="glass-input mt-2 w-full rounded-lg border border-slate-800 px-3 py-2 text-xs text-slate-200">' +
+                        '<div data-filename-preview-result class="mt-2 rounded-lg border border-slate-700/70 bg-slate-950/50 p-3 text-[11px] text-slate-300">预览会调用服务端实际解析器；可测试尚未保存的规则。限定来源的规则需要填写对应来源 ID。</div>' +
                         '</section>' +
                         '<details class="mt-4 rounded-xl border border-slate-700/80 bg-slate-950/30 p-3">' +
                         '<summary class="cursor-pointer select-none text-[11px] font-semibold text-slate-300">高级设置：自定义识别规则（大多数人不需要修改）</summary>' +
@@ -1505,8 +1506,57 @@
                         event.target.closest("[data-card-channel-chip]")?.remove();
                     } else if (event.target.closest("[data-filename-preview-run]")) {
                         const input = wrapper.querySelector("[data-filename-preview-input]");
+                        const sourceInput = wrapper.querySelector("[data-filename-preview-source]");
                         const result = wrapper.querySelector("[data-filename-preview-result]");
-                        if (input && result) result.innerHTML = renderFilenameRecognitionPreview(input.value, wrapper, key);
+                        if (input && result) {
+                            (async () => {
+                                result.textContent = "正在使用服务端实际规则识别…";
+                                const list = wrapper.querySelector('[data-card-rule-list="' + CSS.escape(key) + '"]');
+                                const rules = Array.from(list?.querySelectorAll("[data-card-rule-row]") || []).map(row => {
+                                    const get = name => row.querySelector('[data-card-rule-field="' + name + '"]')?.value || "";
+                                    return {
+                                        pattern: get("pattern"),
+                                        replace: get("replace"),
+                                        source_ids: get("source_ids").split(",").map(value => value.trim()).filter(Boolean)
+                                    };
+                                }).filter(rule => rule.pattern);
+                                try {
+                                    const response = await fetch("/api/filename-recognition/preview", {
+                                        method: "POST",
+                                        credentials: "same-origin",
+                                        headers: {
+                                            "Content-Type": "application/json",
+                                            "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.content || ""
+                                        },
+                                        body: JSON.stringify({
+                                            file_name: input.value,
+                                            source_id: sourceInput?.value?.trim() || "",
+                                            rules
+                                        })
+                                    });
+                                    const payload = await response.json();
+                                    if (!response.ok || !payload.success) throw new Error(payload.message || "识别失败");
+                                    const parsed = payload.result || {};
+                                    const typeNames = {movie: "电影", tv: "剧集", anime: "动画", variety: "综艺", unknown: "暂无法判断"};
+                                    const rows = [
+                                        ["识别类型", typeNames[parsed.media_type] || parsed.media_type || "暂无法判断"],
+                                        ["影视名称", parsed.name || "未识别"],
+                                        ["年份", parsed.year ?? "未识别"],
+                                        ["季数", parsed.season == null ? "未标明 / 不适用" : "第 " + parsed.season + " 季"],
+                                        ["集数 / 期数", parsed.episode == null ? "未识别" : String(parsed.episode) + (parsed.episode_end != null ? "–" + parsed.episode_end : "")],
+                                        ["节目日期", parsed.date || "未识别"],
+                                        ["命中规则", parsed.rule_source || "未识别"]
+                                    ];
+                                    result.innerHTML = rows.map(([label, value]) =>
+                                        '<div class="flex gap-3 py-1"><span class="w-20 shrink-0 text-slate-500">' +
+                                        escapeHtml(label) + '</span><span class="break-all text-slate-200">' +
+                                        escapeHtml(String(value)) + '</span></div>'
+                                    ).join("");
+                                } catch (error) {
+                                    result.textContent = error.message || "识别预览失败，请检查规则配置。";
+                                }
+                            })();
+                        }
                     } else if (event.target.closest("[data-card-add-rule]")) {
                         const list = wrapper.querySelector('[data-card-rule-list="' + CSS.escape(key) + '"]');
                         if (list) {
