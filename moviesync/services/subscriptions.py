@@ -715,9 +715,12 @@ class SubscriptionManager:
         sub["_run_diagnostics"] = {
             "source_candidates": 0, "unique_shares": 0, "resolved_shares": 0,
             "resolution_failures": 0, "files_scanned": 0, "video_files": 0,
+            "non_video_files": 0, "missing_file_id": 0,
+            "invalid_source_entries": 0, "duplicate_source_entries": 0,
+            "source_search_errors": 0, "initial_files_missing": 0,
             "already_saved": 0, "already_tracked": 0, "unrecognized": 0,
             "filtered_old": 0, "duplicate_episodes": 0, "queued_files": 0,
-            "transferred_files": 0, "examples": [],
+            "transferred_files": 0, "shares": [], "examples": [],
         }
         # Channel/source metadata is the durable signal for channel-based Smart Follow.
         # Older or migrated records may still carry tracking_mode="all"; letting those
@@ -974,9 +977,12 @@ class SubscriptionManager:
         diagnostics = {
             "source_candidates": 0, "unique_shares": 0, "resolved_shares": 0,
             "resolution_failures": 0, "files_scanned": 0, "video_files": 0,
+            "non_video_files": 0, "missing_file_id": 0,
+            "invalid_source_entries": 0, "duplicate_source_entries": 0,
+            "source_search_errors": 0, "initial_files_missing": 0,
             "already_saved": 0, "already_tracked": 0, "unrecognized": 0,
             "filtered_old": 0, "duplicate_episodes": 0, "queued_files": 0,
-            "transferred_files": 0, "examples": [],
+            "transferred_files": 0, "shares": [], "examples": [],
         }
         sub["_run_diagnostics"] = diagnostics
         self._set_status(sub, "running", "searching", "正在搜刮频道资源…")
