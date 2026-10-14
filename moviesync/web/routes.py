@@ -861,6 +861,8 @@ def preview_filename_recognition():
                 season, episode = parsed_season, parsed_episode
                 builtin = parse_tv_episode(file_name, {"pattern": "", "replace": ""})
                 rule_source = "内置规则" if builtin[1] is not None else "自定义规则"
+                if result.get("media_type") == "unknown":
+                    result["media_type"] = "tv"
         except Exception:
             current_app.logger.exception("文件名识别预览失败")
             return _json_error("识别预览失败，请检查规则配置", 500)
