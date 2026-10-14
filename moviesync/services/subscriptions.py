@@ -1207,7 +1207,10 @@ class SubscriptionManager:
                 if confirmed_saved:
                     diagnostics["already_saved"] += 1
                     if len(diagnostics["examples"]) < 20:
-                        diagnostics["examples"].append({"file": str(item.get("file_name") or fid), "reason": "已确认保存，跳过重复转存"})
+                        diagnostics["examples"].append({
+                            "file": str(item.get("file_name") or fid),
+                            "reason": "已确认保存，跳过重复转存",
+                        })
                     if is_selected_initial:
                         self.logger.warning(
                             "智能追剧初选诊断：初选文件被已保存记录拦截，FID=%s，key=%s",
@@ -1218,7 +1221,10 @@ class SubscriptionManager:
                 if ((key in tracked or legacy_selected_key) and not is_selected_initial) or queue_key in queued_keys:
                     diagnostics["already_tracked"] += 1
                     if len(diagnostics["examples"]) < 20:
-                        diagnostics["examples"].append({"file": str(item.get("file_name") or fid), "reason": "已追踪或重复文件，跳过"})
+                        diagnostics["examples"].append({
+                            "file": str(item.get("file_name") or fid),
+                            "reason": "已追踪或重复文件，跳过",
+                        })
                     continue
                 file_name = str(item.get("file_name") or "")
                 if not file_name.lower().endswith(VIDEO_EXTENSIONS):
@@ -1238,7 +1244,10 @@ class SubscriptionManager:
                 if episode is None:
                     diagnostics["unrecognized"] += 1
                     if len(diagnostics["examples"]) < 20:
-                        diagnostics["examples"].append({"file": file_name[:240], "reason": "无法识别季集，未自动转存"})
+                        diagnostics["examples"].append({
+                            "file": file_name[:240],
+                            "reason": "无法识别季集，未自动转存",
+                        })
                     # Keep the channel watermark unchanged while a video file
                     # remains unclassified. Otherwise the incremental scan could
                     # permanently skip a share before recognition rules improve.
@@ -1262,13 +1271,19 @@ class SubscriptionManager:
                         if (season, episode) <= (baseline_season, baseline_episode):
                             diagnostics["filtered_old"] += 1
                             if len(diagnostics["examples"]) < 20:
-                                diagnostics["examples"].append({"file": file_name[:240], "reason": "早于追剧起始集，已过滤"})
+                                diagnostics["examples"].append({
+                                    "file": file_name[:240],
+                                    "reason": "早于追剧起始集，已过滤",
+                                })
                             continue
                     elif episode <= baseline_episode:
                         # 只过滤未选中的基准集及更早集数；选中集需首次转存。
                         diagnostics["filtered_old"] += 1
                         if len(diagnostics["examples"]) < 20:
-                            diagnostics["examples"].append({"file": file_name[:240], "reason": "早于追剧起始集，已过滤"})
+                            diagnostics["examples"].append({
+                                "file": file_name[:240],
+                                "reason": "早于追剧起始集，已过滤",
+                            })
                         continue
                 group_key = (resource_type, resource_id, target_id)
                 episode_key = (target_id, season, episode)
@@ -1288,7 +1303,10 @@ class SubscriptionManager:
                             )
                         diagnostics["duplicate_episodes"] += 1
                         if len(diagnostics["examples"]) < 20:
-                            diagnostics["examples"].append({"file": file_name[:240], "reason": "与优先分享中的同集重复，已去重"})
+                            diagnostics["examples"].append({
+                                "file": file_name[:240],
+                                "reason": "与优先分享中的同集重复，已去重",
+                            })
                         continue
                 grouped.setdefault(group_key, {
                     "resource": resource,
