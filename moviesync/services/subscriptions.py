@@ -715,7 +715,7 @@ class SubscriptionManager:
         sub["_run_diagnostics"] = {
             "source_candidates": 0, "unique_shares": 0, "resolved_shares": 0,
             "resolution_failures": 0, "files_scanned": 0, "video_files": 0,
-            "non_video_files": 0, "missing_file_id": 0,
+            "non_video_files": 0, "missing_file_id": 0, "invalid_file_entries": 0,
             "invalid_source_entries": 0, "duplicate_source_entries": 0,
             "source_search_errors": 0, "initial_files_missing": 0,
             "already_saved": 0, "already_tracked": 0, "unrecognized": 0,
@@ -977,7 +977,7 @@ class SubscriptionManager:
         diagnostics = {
             "source_candidates": 0, "unique_shares": 0, "resolved_shares": 0,
             "resolution_failures": 0, "files_scanned": 0, "video_files": 0,
-            "non_video_files": 0, "missing_file_id": 0,
+            "non_video_files": 0, "missing_file_id": 0, "invalid_file_entries": 0,
             "invalid_source_entries": 0, "duplicate_source_entries": 0,
             "source_search_errors": 0, "initial_files_missing": 0,
             "already_saved": 0, "already_tracked": 0, "unrecognized": 0,
