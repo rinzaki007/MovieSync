@@ -1261,9 +1261,9 @@ class SubscriptionManager:
                     if season is not None and baseline_season > 0:
                         if (season, episode) <= (baseline_season, baseline_episode):
                             diagnostics["filtered_old"] += 1
-                        if len(diagnostics["examples"]) < 20:
-                            diagnostics["examples"].append({"file": file_name[:240], "reason": "早于追剧起始集，已过滤"})
-                        continue
+                            if len(diagnostics["examples"]) < 20:
+                                diagnostics["examples"].append({"file": file_name[:240], "reason": "早于追剧起始集，已过滤"})
+                            continue
                     elif episode <= baseline_episode:
                         # 只过滤未选中的基准集及更早集数；选中集需首次转存。
                         diagnostics["filtered_old"] += 1
