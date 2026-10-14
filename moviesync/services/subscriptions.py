@@ -1003,12 +1003,18 @@ class SubscriptionManager:
                         scan_complete = bool(scan_state.get("complete"))
                     else:
                         diagnostics["source_search_errors"] += 1
-                        diagnostics["examples"].append({"file": "频道增量搜索", "reason": "资源卡片返回了非预期的数据结构"})
+                        diagnostics["examples"].append({
+                            "file": "频道增量搜索",
+                            "reason": "资源卡片返回了非预期的数据结构",
+                        })
                 else:
                     sources = self.resource_sources.search_channel(source_id, channel, title)
         except Exception as exc:
             diagnostics["source_search_errors"] += 1
-            diagnostics["examples"].append({"file": "频道资源搜索", "reason": f"{type(exc).__name__}: {str(exc)[:160]}"})
+            diagnostics["examples"].append({
+                "file": "频道资源搜索",
+                "reason": f"{type(exc).__name__}: {str(exc)[:160]}",
+            })
             self.logger.exception("智能追剧频道搜索失败，source_id=%s channel=%s", source_id, channel)
             scan_complete = False
 
@@ -1028,19 +1034,31 @@ class SubscriptionManager:
                             sources = [*(sources if isinstance(sources, list) else []), *history_items]
                         else:
                             diagnostics["source_search_errors"] += 1
-                            diagnostics["examples"].append({"file": "频道历史搜索", "reason": "资源卡片返回了非列表 items"})
+                            diagnostics["examples"].append({
+                                "file": "频道历史搜索",
+                                "reason": "资源卡片返回了非列表 items",
+                            })
                     else:
                         diagnostics["source_search_errors"] += 1
-                        diagnostics["examples"].append({"file": "频道历史搜索", "reason": "资源卡片返回了非预期的数据结构"})
+                        diagnostics["examples"].append({
+                            "file": "频道历史搜索",
+                            "reason": "资源卡片返回了非预期的数据结构",
+                        })
                 except Exception as exc:
                     diagnostics["source_search_errors"] += 1
-                    diagnostics["examples"].append({"file": "频道历史搜索", "reason": f"{type(exc).__name__}: {str(exc)[:160]}"})
+                    diagnostics["examples"].append({
+                        "file": "频道历史搜索",
+                        "reason": f"{type(exc).__name__}: {str(exc)[:160]}",
+                    })
                     self.logger.exception("智能追剧频道历史搜索失败，source_id=%s channel=%s", source_id, channel)
                     history_complete = False
 
         if not isinstance(sources, list):
             diagnostics["source_search_errors"] += 1
-            diagnostics["examples"].append({"file": "频道资源搜索", "reason": f"资源卡片返回 {type(sources).__name__}，预期为列表"})
+            diagnostics["examples"].append({
+                "file": "频道资源搜索",
+                "reason": f"资源卡片返回 {type(sources).__name__}，预期为列表",
+            })
             sources = []
             scan_complete = False
         diagnostics["source_candidates"] = len(sources)
@@ -1069,7 +1087,10 @@ class SubscriptionManager:
                 },
                 *sources,
             ]
-            diagnostics["examples"].append({"file": selected_pwd_id, "reason": "频道搜索结果未包含初选分享，已补入初选分享进行检查"})
+            diagnostics["examples"].append({
+                "file": selected_pwd_id,
+                "reason": "频道搜索结果未包含初选分享，已补入初选分享进行检查",
+            })
 
         # A share ID can exist under multiple storage-target cards. Deduplicate
         # repeated scan results only when both the share and target identity match.
@@ -1078,7 +1099,10 @@ class SubscriptionManager:
         for item in sources:
             if not isinstance(item, dict):
                 diagnostics["invalid_source_entries"] += 1
-                diagnostics["examples"].append({"file": "频道搜索结果", "reason": f"忽略非字典资源条目：{type(item).__name__}"})
+                diagnostics["examples"].append({
+                    "file": "频道搜索结果",
+                    "reason": f"忽略非字典资源条目：{type(item).__name__}",
+                })
                 continue
             item_resource_id = str(item.get("resource_id") or item.get("share_id") or item.get("pwd_id") or "").strip()
             item_resource_type = str(item.get("resource_type") or "").strip().lower()
@@ -1297,7 +1321,10 @@ class SubscriptionManager:
                     if len(diagnostics["examples"]) < 50:
                         diagnostics["examples"].append({
                             "file": resource_id,
-                            "reason": "初选文件 ID 未出现在分享解析返回的文件列表中：" + ", ".join(missing_selected[:10]),
+                            "reason": (
+                                "初选文件 ID 未出现在分享解析返回的文件列表中："
+                                + ", ".join(missing_selected[:10])
+                            ),
                         })
                     self.logger.warning(
                         "智能追剧初选诊断：初选分享=%s，以下初选FID未出现在网盘返回的文件列表中：%s",
@@ -1334,13 +1361,19 @@ class SubscriptionManager:
                 else:
                     diagnostics["non_video_files"] += 1
                     if len(diagnostics["examples"]) < 50:
-                        diagnostics["examples"].append({"file": file_name or "(无文件名)", "reason": "非视频文件，未进入追剧识别"})
+                        diagnostics["examples"].append({
+                            "file": file_name or "(无文件名)",
+                            "reason": "非视频文件，未进入追剧识别",
+                        })
                 if not fid:
                     if share_diag is not None:
                         share_diag["skipped_files"] += 1
                     diagnostics["missing_file_id"] += 1
                     if len(diagnostics["examples"]) < 50:
-                        diagnostics["examples"].append({"file": file_name or "(无文件名)", "reason": "文件条目缺少 fid，无法追踪或转存"})
+                        diagnostics["examples"].append({
+                            "file": file_name or "(无文件名)",
+                            "reason": "文件条目缺少 fid，无法追踪或转存",
+                        })
                     continue
                 legacy_key = f"{resource_id}:{fid}"
                 provider_key = (
