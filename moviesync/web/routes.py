@@ -22,6 +22,7 @@ from flask import (
 )
 
 from ..services.media_classification import classify_metadata_item, normalize_media_category
+from ..services.filename_rules import parse_media_filename, parse_tv_episode
 
 pages = Blueprint("pages", __name__)
 api = Blueprint("api", __name__, url_prefix="/api")
@@ -812,6 +813,65 @@ def _card_config_view(card, raw_config):
             public_config[key] = value
         fields.append(field)
     return fields, public_config, has_value
+
+
+@api.post("/filename-recognition/preview")
+@require_csrf
+def preview_filename_recognition():
+    """用业务侧共享解析器预览文件名，避免后台前端重复实现识别规则。"""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return _json_error("提交的数据格式不正确")
+
+    file_name = str(data.get("file_name") or "").strip()
+    if not file_name or len(file_name) > 1024:
+        return _json_error("请输入文件名（最多 1024 个字符）")
+
+    source_id = str(data.get("source_id") or "").strip()
+    if len(source_id) > 64:
+        return _json_error("资源来源 ID 不能超过 64 个字符")
+
+    services = _services()
+    card = services["card_registry"].get("filename_recognition")
+    config = {}
+    saved_cards = services["config"].load().get("cards", {})
+    saved_card = saved_cards.get("filename_recognition", {}) if isinstance(saved_cards, dict) else {}
+    if isinstance(saved_card, dict) and isinstance(saved_card.get("config"), dict):
+        config = dict(saved_card["config"])
+
+    # Use the unsaved rules currently shown in the editor, so users can test
+    # edits before saving them. Server-side validation is the same as on save.
+    if "rules" in data:
+        if card is None:
+            return _json_error("文件名识别卡片尚未加载，无法预览", 404)
+        try:
+            config = card.validate_config({**config, "rules": data.get("rules")})
+        except Exception as exc:
+            return _json_error(str(exc) or "识别规则无效")
+
+    result = parse_media_filename(file_name)
+    season, episode = result.get("season"), result.get("episode")
+    rule_source = "内置规则" if episode is not None else "未识别"
+    if card is not None and isinstance(config, dict):
+        try:
+            parsed_season, parsed_episode = card.parse_episode_for_source(
+                file_name, source_id, config
+            )
+            if parsed_episode is not None:
+                season, episode = parsed_season, parsed_episode
+                builtin = parse_tv_episode(file_name, {"pattern": "", "replace": ""})
+                rule_source = "内置规则" if builtin[1] is not None else "自定义规则"
+        except Exception:
+            current_app.logger.exception("文件名识别预览失败")
+            return _json_error("识别预览失败，请检查规则配置", 500)
+
+    result["season"] = season
+    result["episode"] = episode
+    result["rule_source"] = rule_source
+    result["recognized"] = bool(result.get("name")) and (
+        result.get("media_type") != "unknown" or episode is not None
+    )
+    return jsonify({"success": True, "result": result})
 
 
 @api.route("/cards/<card_id>/config", methods=["GET", "POST"])
