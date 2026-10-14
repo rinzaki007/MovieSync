@@ -1117,7 +1117,6 @@ class SubscriptionManager:
             if resource is None:
                 diagnostics["resolution_failures"] += 1
                 continue
-            diagnostics["resolved_shares"] += 1
             resource_id = resource["resource_id"]
             resource_type = resource["resource_type"]
             if not isinstance(resolved, dict):
@@ -1138,6 +1137,7 @@ class SubscriptionManager:
                     diagnostics["examples"].append({"file": resource_id, "reason": "资源解析失败"})
                 continue
 
+            diagnostics["resolved_shares"] += 1
             file_fids = {
                 str(file_item.get("fid") or "").strip()
                 for file_item in files
