@@ -69,6 +69,15 @@ def test_subscription_uses_storage_target_card(tmp_path):
     saved = manager.get_subscriptions()[0]
     assert saved["storage_target_id"] == "demo-storage"
     assert saved["saved_episodes"] == [1, 2]
+    diagnostics = saved["last_diagnostics"]
+    assert diagnostics["source_candidates"] == 1
+    assert diagnostics["unique_shares"] == 1
+    assert diagnostics["resolved_shares"] == 1
+    assert diagnostics["files_scanned"] == 2
+    assert diagnostics["video_files"] == 2
+    assert diagnostics["queued_files"] == 2
+    assert diagnostics["transferred_files"] == 2
+    assert diagnostics["success"] is True
 
 
 class DynamicStorageTargets(FakeStorageTargets):
