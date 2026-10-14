@@ -860,7 +860,9 @@ def preview_filename_recognition():
             if parsed_episode is not None:
                 season, episode = parsed_season, parsed_episode
                 builtin = parse_tv_episode(file_name, {"pattern": "", "replace": ""})
-                rule_source = "内置规则" if builtin[1] is not None else "自定义规则"
+                # A custom rule may add a season or otherwise refine a partial
+                # built-in match; compare the full result, not episode alone.
+                rule_source = "内置规则" if builtin == (parsed_season, parsed_episode) else "自定义规则"
                 if result.get("media_type") == "unknown":
                     result["media_type"] = "tv"
         except Exception:
