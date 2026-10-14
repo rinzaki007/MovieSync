@@ -1,7 +1,4 @@
-"""MovieSync Python 包入口。
-
-用途：提供 create_app 兼容导出，让旧启动方式仍可从 moviesync 包创建 Flask 应用。
-"""
+"""MovieSync 包入口，兼容导出 create_app。"""
 def create_app(*args, **kwargs):
     from .app import create_app as factory
     return factory(*args, **kwargs)
