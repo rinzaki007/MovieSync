@@ -1102,7 +1102,6 @@ class SubscriptionManager:
                 != selected_pwd_id,
             ),
         )
-        diagnostics["source_candidates"] = len(sources)
         diagnostics["unique_shares"] = len(sources)
 
         if not sources:
@@ -1269,19 +1268,37 @@ class SubscriptionManager:
             }
             if len(diagnostics["shares"]) < 50:
                 diagnostics["shares"].append(share_diag)
+            if not isinstance(files, list):
+                diagnostics["resolution_failures"] += 1
+                reason = "资源解析返回的文件列表不是列表"
+                share_diag = {
+                    "resource_id": resource_id[:120],
+                    "resource_type": resource_type[:60],
+                    "status": "文件列表格式异常",
+                    "files_scanned": 0,
+                    "video_files": 0,
+                    "queued_files": 0,
+                    "skipped_files": 0,
+                    "error": reason,
+                }
+                if len(diagnostics["shares"]) < 50:
+                    diagnostics["shares"].append(share_diag)
+                diagnostics["examples"].append({"file": resource_id, "reason": reason})
+                continue
             file_fids = {
                 str(file_item.get("fid") or "").strip()
                 for file_item in files
-                if str(file_item.get("fid") or "").strip()
+                if isinstance(file_item, dict) and str(file_item.get("fid") or "").strip()
             }
             if resource_id == selected_pwd_id and initial_file_keys:
                 missing_selected = sorted(initial_file_keys - file_fids)
                 if missing_selected:
                     diagnostics["initial_files_missing"] += len(missing_selected)
-                    diagnostics["examples"].append({
-                        "file": resource_id,
-                        "reason": "初选文件 ID 未出现在分享解析返回的文件列表中：" + ", ".join(missing_selected[:10]),
-                    })
+                    if len(diagnostics["examples"]) < 50:
+                        diagnostics["examples"].append({
+                            "file": resource_id,
+                            "reason": "初选文件 ID 未出现在分享解析返回的文件列表中：" + ", ".join(missing_selected[:10]),
+                        })
                     self.logger.warning(
                         "智能追剧初选诊断：初选分享=%s，以下初选FID未出现在网盘返回的文件列表中：%s",
                         resource_id,
@@ -1297,6 +1314,16 @@ class SubscriptionManager:
                 diagnostics["files_scanned"] += 1
                 if share_diag is not None:
                     share_diag["files_scanned"] += 1
+                if not isinstance(item, dict):
+                    diagnostics["invalid_file_entries"] += 1
+                    if share_diag is not None:
+                        share_diag["skipped_files"] += 1
+                    if len(diagnostics["examples"]) < 50:
+                        diagnostics["examples"].append({
+                            "file": resource_id,
+                            "reason": f"忽略非字典文件条目：{type(item).__name__}",
+                        })
+                    continue
                 fid = str(item.get("fid") or "").strip()
                 file_name = str(item.get("file_name") or item.get("name") or "").strip()
                 is_video = bool(file_name.lower().endswith(VIDEO_EXTENSIONS))
@@ -1306,12 +1333,14 @@ class SubscriptionManager:
                         share_diag["video_files"] += 1
                 else:
                     diagnostics["non_video_files"] += 1
-                    diagnostics["examples"].append({"file": file_name or "(无文件名)", "reason": "非视频文件，未进入追剧识别"})
+                    if len(diagnostics["examples"]) < 50:
+                        diagnostics["examples"].append({"file": file_name or "(无文件名)", "reason": "非视频文件，未进入追剧识别"})
                 if not fid:
                     if share_diag is not None:
                         share_diag["skipped_files"] += 1
                     diagnostics["missing_file_id"] += 1
-                    diagnostics["examples"].append({"file": file_name or "(无文件名)", "reason": "文件条目缺少 fid，无法追踪或转存"})
+                    if len(diagnostics["examples"]) < 50:
+                        diagnostics["examples"].append({"file": file_name or "(无文件名)", "reason": "文件条目缺少 fid，无法追踪或转存"})
                     continue
                 legacy_key = f"{resource_id}:{fid}"
                 provider_key = (
