@@ -186,6 +186,16 @@ class SubscriptionManager:
             item.setdefault("cover", "")
             item.setdefault("source_id", "")
             item.setdefault("initial_file_keys", [])
+            item.setdefault("saved_episode_sources", {})
+            if not isinstance(item.get("saved_episode_sources"), dict):
+                item["saved_episode_sources"] = {}
+                changed = True
+            else:
+                item["saved_episode_sources"] = {
+                    str(key): str(value)
+                    for key, value in item["saved_episode_sources"].items()
+                    if str(key).strip() and str(value).strip()
+                }
             item.setdefault("tracking_mode", "legacy")
             item.setdefault("status", "waiting")
             item.setdefault("phase", "waiting")
@@ -463,6 +473,7 @@ class SubscriptionManager:
             "initial_file_keys": target_fids,
             "files": [],
             "saved_episodes": [],
+            "saved_episode_sources": {},
             "last_check": "从未检测",
             "last_check_at": None,
             "next_run_at": time.time(),
@@ -478,6 +489,29 @@ class SubscriptionManager:
 
             subscription["schema_version"] = SUBSCRIPTION_SCHEMA_VERSION
             subscription["pending_save_keys"] = []
+
+            # Repeated clicks on the same channel/show/destination should reuse
+            # the existing long-running subscription instead of creating a fresh
+            # history that can transfer the same episodes again.
+            if subscription["source_id"] and subscription["channel"]:
+                existing = next(
+                    (
+                        item for item in subscriptions
+                        if str(item.get("source_id") or "").strip()
+                        == subscription["source_id"]
+                        and str(item.get("channel") or "").strip().casefold()
+                        == subscription["channel"].casefold()
+                        and str(item.get("title") or "").strip().casefold()
+                        == subscription["title"].casefold()
+                        and str(item.get("storage_target_id") or "").strip()
+                        == subscription["storage_target_id"]
+                        and str(item.get("target_fid") or "0").strip()
+                        == subscription["target_fid"]
+                    ),
+                    None,
+                )
+                if existing is not None:
+                    return dict(existing)
 
             subscriptions.append(
                 subscription
@@ -1062,6 +1096,9 @@ class SubscriptionManager:
             if str(key).strip()
         }
         tracked.update(saved_episode_keys)
+        saved_episode_sources = sub.get("saved_episode_sources", {})
+        if not isinstance(saved_episode_sources, dict):
+            saved_episode_sources = {}
         # The user-selected files are the initial transfer request, not just a
         # tracking watermark. Transfer them once even when they equal the baseline.
         # Older versions incorrectly pre-marked selected files whose names could
@@ -1285,6 +1322,27 @@ class SubscriptionManager:
                     # identify the episode. Unselected unclassified files are skipped.
                     if not is_selected_initial:
                         continue
+                if episode is not None:
+                    completion_key = (
+                        f"{target_id}|{season if season is not None else ''}|{episode}"
+                    )
+                    current_source_identity = (
+                        f"{resource_type}:{resource_id}" if resource_type else resource_id
+                    )
+                    previously_saved_source = str(
+                        saved_episode_sources.get(completion_key) or ""
+                    ).strip()
+                    if (
+                        previously_saved_source
+                        and previously_saved_source != current_source_identity
+                    ):
+                        diagnostics["already_saved"] += 1
+                        if len(diagnostics["examples"]) < 20:
+                            diagnostics["examples"].append({
+                                "file": file_name[:240],
+                                "reason": "该季集已从其他分享转存，跳过重复集",
+                            })
+                        continue
                 if is_selected_initial:
                     self.logger.info(
                         "智能追剧初选诊断：初选文件已进入转存队列，FID=%s，解析集数=%s，季=%s",
@@ -1342,12 +1400,22 @@ class SubscriptionManager:
                     "target_id": target_id,
                     "files": [],
                     "keys": [],
+                    "episode_sources": {},
                 })["files"].append({"fid": fid})
                 grouped[group_key]["keys"].append(key)
                 diagnostics["queued_files"] += 1
                 queued_keys.add(queue_key)
                 if episode is not None:
                     queued_episode_sources.setdefault(episode_key, group_key)
+                    completion_key = (
+                        f"{target_id}|{season if season is not None else ''}|{episode}"
+                    )
+                    source_identity = (
+                        f"{resource_type}:{resource_id}" if resource_type else resource_id
+                    )
+                    grouped[group_key]["episode_sources"].setdefault(
+                        completion_key, source_identity
+                    )
 
         if not grouped:
             if resolution_errors:
@@ -1420,7 +1488,11 @@ class SubscriptionManager:
             all_keys.extend(group["keys"])
             diagnostics["transferred_files"] += len(group["files"])
             # Commit confirmed success and clear pending state in one write.
-            self._record_success_keys(sub, group["keys"])
+            self._record_success_keys(
+                sub,
+                group["keys"],
+                episode_sources=group.get("episode_sources"),
+            )
             total += len(group["files"])
 
         if resolution_errors:
@@ -1527,8 +1599,8 @@ class SubscriptionManager:
             self.store.write(subscriptions)
         return self.check_subscription_now(str(sub_id))
 
-    def _record_success_keys(self, sub: dict, success_keys) -> None:
-        """逐组持久化已确认转存的文件，避免后续组失败或进程中断后重复转存。"""
+    def _record_success_keys(self, sub: dict, success_keys, episode_sources=None) -> None:
+        """逐组持久化已确认转存的文件及季集身份，避免跨分享重复转存。"""
         keys = list(dict.fromkeys(str(key).strip() for key in (success_keys or []) if str(key).strip()))
         if not keys:
             return
@@ -1545,6 +1617,17 @@ class SubscriptionManager:
             seen_saved = {str(key) for key in saved}
             saved.extend(key for key in keys if key not in seen_saved)
             current["saved_episodes"] = sorted(saved, key=lambda value: (isinstance(value, str), str(value)))
+            saved_sources = current.get("saved_episode_sources", {})
+            if not isinstance(saved_sources, dict):
+                saved_sources = {}
+            for episode_key, source_identity in (episode_sources or {}).items():
+                episode_key = str(episode_key).strip()
+                source_identity = str(source_identity).strip()
+                if episode_key and source_identity:
+                    saved_sources.setdefault(episode_key, source_identity)
+            # Bound this auxiliary index for very long-running subscriptions while
+            # keeping the durable file-ID history as the primary fallback.
+            current["saved_episode_sources"] = dict(list(saved_sources.items())[-5000:])
             # The remote transfer is confirmed: persist its success checkpoint
             # and clear its pending marker atomically to avoid false uncertainty
             # if the process exits between two separate writes.
