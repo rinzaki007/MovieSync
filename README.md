@@ -2,150 +2,26 @@
 
 > 自托管影视信息、开放资源源与存储任务管理平台
 
-MovieSync 面向 Docker、NAS 和家庭服务器，支持影视浏览、可扩展资源检索、兼容的网盘转存、任务管理与自动追剧。用户可按需安装资源和存储卡片，不必依赖某个固定资源来源。
+面向 Docker、NAS 和家庭服务器，支持影视浏览、资源检索、网盘转存、任务管理与自动追剧。资源来源和存储目标采用卡片扩展，新装后可按需安装，不依赖固定来源。
 
-**基本流程：** 搜索影视 → 查找并选择资源 → 选择兼容的存储目标 → 查看转存任务；也可创建自动追剧任务。
+**基本流程：** 搜索影视 → 选择资源 → 选择兼容的存储目标 → 查看转存任务；也可创建自动追剧任务。
 
-MovieSync 不提供、托管或分发影视资源。资源来源、第三方服务及其使用均由用户自行配置并负责合法合规。
+## ✨ 主要功能
 
-## ✨ 当前能力
+- 影视浏览与搜索：支持豆瓣，可选启用 TMDB
+- 资源检索：支持 PanSou、Telegram，并可扩展其他来源
+- 存储卡片：按兼容的资源类型选择网盘和保存目录
+- 自动追剧：定期检查并跟进后续内容
+- 任务中心：查看进度、日志、结果并按需重试
+- 基础安全：管理员登录、CSRF 防护、登录保护和敏感配置脱敏
 
-- 🎬 浏览和搜索豆瓣影视；可选配置 TMDB 卡片作为独立元数据来源
-- 🔌 资源来源抽象层：内置 PanSou 搜索 API 与 Telegram，可扩展其他来源
-- ❤️ 资源源健康检查与最近状态记录
-- 🔎 从已配置的资源来源检索候选资源
-- ☁️ 搜索方向跟随用户选择的存储卡片：自动按卡片声明的分享类型筛选 PanSou 网盘结果，并只把匹配的资源交给对应存储卡片
-- 📁 从兼容的存储卡片中选择保存目标与目录
-- 🤖 自动追剧：周期性检查并跟进后续内容
-- 📋 独立任务中心：进度、阶段、成功/跳过/失败、日志、重试
-- 🔐 管理员认证、CSRF、防暴力登录、敏感配置脱敏
-- 💾 JSON 持久化，适合家庭服务器 / NAS / iStoreOS / Docker
-- 🐳 提供 GitHub Actions 自动测试与 Docker 镜像构建
-
-## 🛡️ 可靠性与异常恢复
-
-MovieSync 的后台任务不仅关注“执行成功”，也会尽量避免异常情况下重复转存或丢失进度：
-
-- **同一订阅单次执行**：手动检查与定时调度共享运行标记，避免同一订阅同时进入两次检查。
-- **转存进度持久化**：追剧记录保存在 `/app/data/subscriptions.json`；成功记录与待处理状态在同一次存储提交中更新。
-- **不确定结果保护**：如果远程转存请求可能已到达网盘、但客户端无法确认结果，会保留待核实信息，不直接盲目重试。
-- **重启恢复**：服务启动时检查上次中断的任务；存在待确认转存记录时要求先核实网盘结果。
-- **任务状态可追踪**：任务中心记录状态、阶段、运行历史与错误摘要，便于定位问题。
-
-这些机制用于降低重复操作和状态丢失的风险，并不替代定期备份 `/app/data`。更新容器前仍建议备份重要配置与任务记录。
-
-智能追剧的起追集数、跨季比较、规则卡片职责和回归测试约定见 [SMART_FOLLOW_RULES.md](SMART_FOLLOW_RULES.md)。
-
-## 🧩 开放资源源架构
-
-MovieSync 不把任何单一资源来源写死在核心业务里。
-
-当前结构：
-
-```text
-MovieSync
-├── 影视信息
-│   └── Douban
-│
-├── ResourceSource
-│   ├── PanSou（内置搜索 API）
-│   ├── Telegram（内置）
-│   └── 其他来源（可扩展）
-│
-├── 资源候选
-│
-├── Storage / Transfer
-│   ├── Quark（当前内置存储卡片）
-│   └── 其他网盘（可按接口扩展）
-│
-└── Task Center
-```
-
-资源源统一位于：
-
-```text
-moviesync/services/resource_sources.py
-```
-
-核心接口为 `ResourceSource`。
-
-以后增加新的资源来源时，原则上只需要实现：
-
-- 资源搜索
-- 资源源健康检查
-- 统一的候选资源字段
-
-而不需要重新修改首页、资源选择页、任务中心和转存流程。
-
-这意味着 Telegram 即使未来不可用，也不会影响 MovieSync 的整体架构；只需要增加或替换一个资源源实现即可。
-
-### 存储卡片扩展约定
-
-- 资源来源优先输出通用的 `resource_id` 与 `resource_type`；旧的 `pwd_id` 仍会兼容，但新卡片不需要伪造这个夸克字段。
-- 存储卡片在 `CardManifest.capabilities` 中声明支持的分享类型，例如 `storage.accepts.quark_share`。只有声明兼容的卡片才会被用于解析与转存。
-- 同一个资源 ID 在不同网盘之间可能相同，因此缓存、任务去重和追剧记录会区分资源类型。
-- 增加新网盘时，应实现对应的资源解析、文件列表、目录与转存接口，并为该卡片声明能力；不需要在核心任务流程中添加该网盘的专用分支。
-- 资源类型不兼容时会阻止提交。只有网盘卡片确实实现了跨平台搬运能力并明确声明支持时，才可以接收其他平台的分享。
-
-
-> PanSou API 已随 MovieSync Docker 镜像一起启动；默认地址为容器内的 `http://127.0.0.1:8888`。无需单独部署 PanSou。若已有自己的 PanSou 服务，仍可在 PanSou 卡片里改用外部地址。搜索时会根据当前已安装存储卡片声明的 `storage.accepts.<resource_type>` 能力映射到 PanSou 的 `cloud_types`；切换存储卡片后会重新搜索，不会继续沿用上一个网盘的结果。未安装对应存储卡片时，不会把该网盘分享当成可转存资源。
-
-## 🩺 资源源健康状态
-
-后台的“资源来源”区域可以手动检查来源状态。
-
-状态包括：
-
-- 🟢 正常：来源可用
-- 🟡 部分可用：例如部分 Telegram 频道不可用
-- 🔴 不可用：来源整体不可用
-- ⚪ 未检查：尚未执行健康检查
-
-健康信息会持久化保存，包括最近检查时间、最近成功时间和失败次数。
-
-健康检查用于帮助判断“是 MovieSync 出问题，还是外部资源来源出了问题”，不会把某个来源视为系统永久依赖。
-
-## 🏗️ 项目结构
-
-```text
-MovieSync/
-├── moviesync/
-│   ├── clients/
-│   │   ├── douban.py
-│   │   ├── http.py
-│   │   ├── quark.py
-│   │   └── telegram.py
-│   │
-│   ├── services/
-│   │   ├── resource_sources.py  # 开放资源源抽象与健康检查
-│   │   ├── search.py            # 候选资源处理与转存
-│   │   ├── subscriptions.py     # 自动追剧
-│   │   └── tasks.py             # 任务中心
-│   │
-│   ├── web/
-│   │   └── routes.py
-│   ├── app.py
-│   ├── auth.py
-│   ├── config_store.py
-│   ├── logging_setup.py
-│   ├── settings.py
-│   └── storage.py
-│
-├── static/
-├── templates/
-├── tests/
-├── Dockerfile
-├── main.py
-└── README.md
-```
+新安装默认不自动安装卡片。PanSou 搜索 API 已随镜像提供，无需另建容器。
 
 ## 🐳 Docker 部署
 
-### Docker Compose
+创建 \`docker-compose.yml\`：
 
-新建 `docker-compose.yml`：
-
-```yaml
+\`\`\`yaml
 services:
   moviesync:
     image: ghcr.io/rinzaki007/moviesync:latest
@@ -158,164 +34,108 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - MOVIESYNC_COOKIE_SECURE=0
-      # 可选：首次启动时安装镜像内置的全部卡片；默认不自动安装任何卡片
+      # 可选：首次启动时安装镜像内置的全部卡片
       # - MOVIESYNC_AUTO_INSTALL_BUNDLED_CARDS=1
-```
+\`\`\`
 
 启动：
 
-```bash
+\`\`\`bash
 docker compose up -d
-```
+\`\`\`
 
-访问：
-
-```text
-http://你的服务器IP:8099
-```
-
-第一次启动会进入管理员初始化页面。MovieSync 容器会同时启动内置 PanSou 搜索 API；PanSou 缓存写入 `/app/data/pansou/cache`，随现有 `/app/data` 挂载持久化。
+浏览器访问 \`http://服务器IP:8099\`，首次启动按页面提示创建管理员账号。
 
 ### iStoreOS / NAS
 
-例如：
+将持久化目录挂载到容器的 \`/app/data\`，例如：
 
-```text
+\`\`\`text
 /mnt/sata1-1/moviesync -> /app/data
-```
+\`\`\`
 
-只要 `/app/data` 挂载目录保持不变，更新容器不会丢失账号、配置和追剧任务。
+更新容器时保持该挂载不变，账号、配置和任务记录即可保留。也可以直接使用 Docker：
 
-### 直接 Docker
-
-```bash
-docker run -d \
-  --name MovieSync \
-  --restart unless-stopped \
-  -p 8099:5000 \
-  -v /你的目录/moviesync:/app/data \
-  -e TZ=Asia/Shanghai \
-  -e MOVIESYNC_COOKIE_SECURE=0 \
+\`\`\`bash
+docker run -d \\
+  --name MovieSync \\
+  --restart unless-stopped \\
+  -p 8099:5000 \\
+  -v /你的目录/moviesync:/app/data \\
+  -e TZ=Asia/Shanghai \\
+  -e MOVIESYNC_COOKIE_SECURE=0 \\
   ghcr.io/rinzaki007/moviesync:latest
-```
+\`\`\`
 
 ## ⚙️ 初次配置
 
-1. 创建管理员账号并登录后台
-2. 新装默认不自动安装任何卡片；在「卡片管理」上传你需要的卡片文件，或将单个 `.py` 卡片文件挂载到 `/app/data/cards/` 后重启
-3. 如需一次性安装镜像内置的全部卡片，可设置环境变量 `MOVIESYNC_AUTO_INSTALL_BUNDLED_CARDS=1`。已有安装中的卡片文件会继续保留并按原规则升级
-4. 安装夸克存储卡片后，在该卡片的配置中填写 Cookie 和保存目录
-5. 安装 PanSou 资源卡片即可使用内置搜索 API，默认地址已配置，无需单独部署或填写地址
-6. 如需使用 TMDB，安装 TMDB 卡片并填写 API Read Access Token；豆瓣与 TMDB 可分别启用或停用
-7. 首页搜索框左侧可以选择影视数据源；自动来源模式不会拼接多个来源的结果
-8. 如需额外搜索 Telegram，安装 Telegram 卡片后再配置对应频道
-9. 使用首页搜索影视，选择候选资源及文件并提交转存任务
-10. 需要时创建自动追剧任务
+1. 创建管理员账号并登录。
+2. 在「卡片管理」安装需要的卡片；也可将单个 \`.py\` 卡片文件放入 \`/app/data/cards/\` 后重启。
+3. 安装夸克存储卡片，并填写 Cookie 和保存目录。
+4. 安装 PanSou 卡片即可使用内置搜索服务；默认地址已配置。
+5. 如需 TMDB，安装对应卡片并填写 API Read Access Token；豆瓣与 TMDB 可分别启用或停用。
+6. 如需 Telegram 资源，安装 Telegram 卡片并配置频道。
+7. 搜索影视、选择资源和文件后提交转存；需要时创建自动追剧任务。
 
-## 💾 数据目录
+如需首次自动安装镜像内置的全部卡片，可设置 \`MOVIESYNC_AUTO_INSTALL_BUNDLED_CARDS=1\`。
 
-运行数据保存在：
+## 💾 数据与备份
 
-```text
-/app/data/
-├── auth.json
-├── config.json
-├── subscriptions.json
-├── tasks.json
-├── .secret_key
-└── logs/
-```
+运行数据保存在 \`/app/data/\`，包括账号、配置、已安装卡片、任务和追剧记录。不要将这些数据提交到公开仓库。
 
-这些内容属于运行数据，不应提交到 GitHub。
+**更新前建议备份整个宿主机挂载目录。** 以下以 iStoreOS 的 \`/mnt/sata1-1/moviesync\` 为例，请按实际路径调整。备份文件包含 Cookie 等敏感信息，请妥善保管。
 
-配置文件会自动维护 schema version，并兼容旧版本配置。
-
-### 备份与恢复（建议更新前执行）
-
-MovieSync 的账号、Cookie、卡片配置、已安装卡片、任务和追剧记录都可能位于挂载的数据目录中。**更新容器前建议备份整个数据目录，而不是只备份某一个 JSON 文件。** 备份文件包含敏感信息，请妥善保管，不要上传到公开仓库。
-
-以下以 iStoreOS 上的 `/mnt/sata1-1/moviesync` 为例；如果你的宿主机挂载路径不同，请替换为实际路径。
-
-备份时先停止容器，避免任务运行期间只复制到一部分状态：
-
-```bash
+\`\`\`bash
 docker stop MovieSync
 mkdir -p /mnt/sata1-1/moviesync-backups
 tar -czf "/mnt/sata1-1/moviesync-backups/moviesync-$(date +%Y%m%d-%H%M%S).tar.gz" -C /mnt/sata1-1 moviesync
 docker start MovieSync
-```
+\`\`\`
 
-确认压缩包已生成后，再执行镜像更新。备份文件建议保存到与数据目录不同的位置；有条件时可再复制一份到另一块磁盘。
+### 恢复备份
 
-恢复时先确认备份文件存在且可读取，并先解压到临时目录；确认其中包含 `moviesync/` 目录后，再替换当前数据目录。这样即使备份包有问题，也不会一开始就移走现有数据：
+先确认备份文件存在且可读取，再解压到临时目录检查；确认无误后才替换现有目录。请将示例文件名改为实际备份文件名。
 
-```bash
+\`\`\`bash
 docker stop MovieSync
 mkdir -p /mnt/sata1-1/moviesync-restore
-tar -tzf "/mnt/sata1-1/moviesync-backups/替换为实际备份文件名.tar.gz" | head
-tar -xzf "/mnt/sata1-1/moviesync-backups/替换为实际备份文件名.tar.gz" -C /mnt/sata1-1/moviesync-restore
-# 确认 /mnt/sata1-1/moviesync-restore/moviesync 存在后，再执行下面两行
+tar -tzf "/mnt/sata1-1/moviesync-backups/实际备份文件名.tar.gz" | head
+tar -xzf "/mnt/sata1-1/moviesync-backups/实际备份文件名.tar.gz" -C /mnt/sata1-1/moviesync-restore
+# 确认临时目录中存在 moviesync/ 后，再替换现有目录
 mv /mnt/sata1-1/moviesync "/mnt/sata1-1/moviesync-before-restore-$(date +%Y%m%d-%H%M%S)"
 mv /mnt/sata1-1/moviesync-restore/moviesync /mnt/sata1-1/moviesync
 docker start MovieSync
-```
+\`\`\`
 
-请将示例中的备份文件名替换为实际文件名。如果解压或检查失败，不要执行替换目录的两行；可以先执行 `docker start MovieSync` 恢复原服务。恢复后检查容器日志、登录状态、卡片配置和任务记录；不要在容器运行时覆盖正在使用的数据目录。
+如果解压或检查失败，不要执行两条 \`mv\` 命令；可先运行 \`docker start MovieSync\` 恢复原服务。恢复后检查登录状态、卡片配置和任务记录。
 
 ## 🔧 常用命令
 
-查看容器：
+\`\`\`bash
+docker ps | grep MovieSync        # 查看容器
+docker logs -f MovieSync          # 查看日志
+docker restart MovieSync          # 重启容器
+docker compose pull && docker compose up -d  # 更新镜像
+\`\`\`
 
-```bash
-docker ps | grep MovieSync
-```
+## 🧩 扩展与可靠性
 
-查看日志：
+- 资源来源和存储目标相互独立，可按卡片接口扩展。
+- 存储卡片声明支持的资源类型；不兼容的分享不会直接提交转存。
+- 任务和追剧状态会持久化；遇到无法确认的转存结果时会保留待核实状态，避免盲目重试。
+- 健康检查帮助区分外部来源故障与平台问题，但不代表第三方服务始终可用。
 
-```bash
-docker logs -f MovieSync
-```
+智能追剧的识别规则与测试约定见 [SMART_FOLLOW_RULES.md](SMART_FOLLOW_RULES.md)。
 
-重启：
+## 📚 第三方数据来源
 
-```bash
-docker restart MovieSync
-```
-
-更新：
-
-```bash
-docker compose pull
-docker compose up -d
-```
-
-## 🛡️ 设计原则
-
-MovieSync 的核心设计目标不是绑定某一个资源网站，而是：
-
-1. **来源可替换**：ResourceSource 与核心业务解耦
-2. **存储可替换**：资源发现与存储目标解耦
-3. **失败可解释**：区分来源、解析、转存和任务执行错误
-4. **状态可追踪**：统一任务中心记录后台任务
-5. **数据可持久化**：容器更新不依赖容器内部文件
-6. **最小信任**：浏览器提交的资源参数在服务端重新验证
-7. **易于维护**：尽量保持单一职责和明确的 Provider 边界
-
-## 📚 第三方数据来源与署名
-
-TMDB 是可选的独立元数据卡片。启用后，请在「关于」页面查看 TMDB 标志及官方署名声明。该页面包含 TMDB 要求的声明：
+TMDB 为可选卡片。启用后请保留项目「关于」页面中的官方署名，并遵守 [TMDB API 使用条款](https://www.themoviedb.org/api-terms-of-use) 和[官方署名要求](https://www.themoviedb.org/about/logos-attribution)。
 
 > This product uses the TMDB API but is not endorsed or certified by TMDB.
 
-TMDB 数据和图片的使用应遵守 [TMDB API 使用条款](https://www.themoviedb.org/api-terms-of-use) 及 [官方标志与署名要求](https://www.themoviedb.org/about/logos-attribution)。非商业开发者 API 使用也必须正确署名；商业用途应先向 TMDB 确认所需许可。
-
 ## ⚠️ 免责声明
 
-MovieSync 是一个通用的软件平台，不提供、托管或分发影视资源内容。
-
-资源来源、账号、链接、文件以及具体使用方式均由使用者自行配置和决定。使用者应自行确认相关内容的合法性，并遵守所在地法律法规、版权要求以及相关服务的平台规则和服务条款。
-
-项目作者不对使用者配置的第三方服务、外部资源来源、账号状态、数据损失或具体使用行为承担责任。
+MovieSync 不提供、托管或分发影视资源。资源来源、账号、链接及具体使用方式均由使用者自行配置；使用者应确认内容合法，并遵守所在地法律法规、版权要求及第三方平台规则。
 
 ## 📄 License
 
