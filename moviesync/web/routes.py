@@ -21,8 +21,8 @@ from flask import (
     session,
 )
 
-from ..services.media_classification import classify_metadata_item, normalize_media_category
 from ..services.filename_rules import parse_media_filename, parse_tv_episode
+from ..services.media_classification import classify_metadata_item, normalize_media_category
 
 pages = Blueprint("pages", __name__)
 api = Blueprint("api", __name__, url_prefix="/api")
