@@ -69,6 +69,15 @@ def test_subscription_uses_storage_target_card(tmp_path):
     saved = manager.get_subscriptions()[0]
     assert saved["storage_target_id"] == "demo-storage"
     assert saved["saved_episodes"] == [1, 2]
+    diagnostics = saved["last_diagnostics"]
+    assert diagnostics["source_candidates"] == 1
+    assert diagnostics["unique_shares"] == 1
+    assert diagnostics["resolved_shares"] == 1
+    assert diagnostics["files_scanned"] == 2
+    assert diagnostics["video_files"] == 2
+    assert diagnostics["queued_files"] == 2
+    assert diagnostics["transferred_files"] == 2
+    assert diagnostics["success"] is True
 
 
 class DynamicStorageTargets(FakeStorageTargets):
@@ -1681,6 +1690,134 @@ def test_channel_subscription_deduplicates_overlapping_episode_ranges_across_sha
         ("share-range-a", ["ep102-a"]),
         ("share-range-b", ["ep202", "ep103"]),
     ]
+
+
+def test_channel_subscription_reuses_existing_task_when_followed_again(tmp_path):
+    storage = ChannelStorageTargets()
+    storage.shares = {
+        "share-selected": [
+            {"fid": "ep108", "file_name": "Show.S01E08.mkv"},
+        ],
+        "share-next": [
+            {"fid": "ep109", "file_name": "Show.S01E09.mkv"},
+            {"fid": "ep110", "file_name": "Show.S01E10.mkv"},
+        ],
+    }
+    sources = FakeResourceSources()
+    sources.shares = [
+        {"channel": "demo", "pwd_id": "share-selected"},
+        {"channel": "demo", "pwd_id": "share-next"},
+    ]
+    manager = SubscriptionManager(
+        tmp_path / "repeat-follow-click.json",
+        storage,
+        sources,
+        FakeLogger(),
+    )
+
+    try:
+        first = manager.add_subscription(
+            title="Show",
+            pwd_id="share-selected",
+            target_fid="0",
+            storage_target_id="demo-storage",
+            source_id="telegram",
+            channel="demo",
+            files=[{"fid": "ep108", "file_name": "Show.S01E08.mkv"}],
+        )
+        ok, message = manager.check_subscription_now(first["id"])
+        assert ok is True
+        assert "成功追更 3 项" in message
+        assert storage.transfers == [
+            ("share-selected", ["ep108"]),
+            ("share-next", ["ep109", "ep110"]),
+        ]
+
+        second = manager.add_subscription(
+            title="show",
+            pwd_id="share-selected",
+            target_fid="0",
+            storage_target_id="demo-storage",
+            source_id="telegram",
+            channel="demo",
+            files=[{"fid": "ep108", "file_name": "Show.S01E08.mkv"}],
+        )
+        assert second["id"] == first["id"]
+        assert len(manager.get_subscriptions()) == 1
+
+        ok, message = manager.check_subscription_now(second["id"])
+        assert ok is True
+        assert "暂无新更新" in message
+        assert storage.transfers == [
+            ("share-selected", ["ep108"]),
+            ("share-next", ["ep109", "ep110"]),
+        ]
+    finally:
+        manager.stop_scheduler()
+
+
+def test_channel_subscription_persists_episode_deduplication_across_new_shares(tmp_path):
+    storage = ChannelStorageTargets()
+    storage.shares = {
+        "share-selected": [
+            {"fid": "ep108", "file_name": "Show.S01E08.mkv"},
+        ],
+        "share-next": [
+            {"fid": "ep109", "file_name": "Show.S01E09.mkv"},
+            {"fid": "ep110", "file_name": "Show.S01E10.mkv"},
+        ],
+    }
+    sources = FakeResourceSources()
+    sources.shares = [
+        {"channel": "demo", "pwd_id": "share-selected"},
+        {"channel": "demo", "pwd_id": "share-next"},
+    ]
+    manager = SubscriptionManager(
+        tmp_path / "persistent-episode-dedup.json",
+        storage,
+        sources,
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-selected",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        source_id="telegram",
+        channel="demo",
+        files=[{"fid": "ep108", "file_name": "Show.S01E08.mkv"}],
+    )
+
+    try:
+        ok, message = manager.check_subscription_now(sub["id"])
+        assert ok is True
+        assert "成功追更 3 项" in message
+        assert storage.transfers == [
+            ("share-selected", ["ep108"]),
+            ("share-next", ["ep109", "ep110"]),
+        ]
+
+        # The channel search now exposes another share with different file IDs
+        # for episodes already transferred from the original shares.
+        storage.shares["share-reposted"] = [
+            {"fid": "copy108", "file_name": "Show.S01E08.mkv"},
+            {"fid": "copy109", "file_name": "Show.S01E09.mkv"},
+            {"fid": "copy110", "file_name": "Show.S01E10.mkv"},
+        ]
+        sources.shares.append({"channel": "demo", "pwd_id": "share-reposted"})
+
+        ok, message = manager.check_subscription_now(sub["id"])
+        assert ok is True
+        assert "暂无新更新" in message
+        assert storage.transfers == [
+            ("share-selected", ["ep108"]),
+            ("share-next", ["ep109", "ep110"]),
+        ]
+        saved = manager.get_subscriptions()[0]
+        assert saved["saved_episode_sources"]["demo-storage|1|9"] == "share-next"
+        assert saved["saved_episode_sources"]["demo-storage|1|10"] == "share-next"
+    finally:
+        manager.stop_scheduler()
 
 
 def test_channel_subscription_resolves_multiple_shares_concurrently(tmp_path):
