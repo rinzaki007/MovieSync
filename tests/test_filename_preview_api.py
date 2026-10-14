@@ -23,8 +23,8 @@ def test_filename_preview_uses_shared_parser_and_unsaved_rules(tmp_path):
                 "file_name": "Raw_S02_E07.mkv",
                 "source_id": "pansou",
                 "rules": [{
-                    "pattern": r"^Raw_S(\\d+)_E(\\d+)[.]mkv$",
-                    "replace": r"Show.S\\1E\\2.mkv",
+                    "pattern": r"^Raw_S(\d+)_E(\d+)[.]mkv$",
+                    "replace": r"Show.S\1E\2.mkv",
                     "source_ids": ["pansou"],
                 }],
             },
@@ -59,7 +59,7 @@ def test_filename_preview_rejects_unsafe_unsaved_rules(tmp_path):
             headers={"X-CSRF-Token": csrf_token},
             json={
                 "file_name": "OddName.mkv",
-                "rules": [{"pattern": r"(.+)+$", "replace": r"Show.S01E\\1.mkv"}],
+                "rules": [{"pattern": r"(.+)+$", "replace": r"Show.S01E\1.mkv"}],
             },
         )
 
