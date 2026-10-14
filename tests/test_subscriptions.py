@@ -243,6 +243,7 @@ def test_channel_subscription_diagnostics_record_non_video_missing_ids_and_unrec
             {"fid": "poster", "file_name": "poster.jpg"},
             {"file_name": "Show.S01E02.mkv"},
             {"fid": "unknown", "file_name": "unclassified-video.mkv"},
+            "malformed-file-entry",
         ],
     }
     sources = FakeResourceSources()
@@ -271,22 +272,24 @@ def test_channel_subscription_diagnostics_record_non_video_missing_ids_and_unrec
     assert diagnostics["source_candidates"] == 1
     assert diagnostics["unique_shares"] == 1
     assert diagnostics["resolved_shares"] == 1
-    assert diagnostics["files_scanned"] == 4
+    assert diagnostics["files_scanned"] == 5
     assert diagnostics["video_files"] == 3
     assert diagnostics["non_video_files"] == 1
     assert diagnostics["missing_file_id"] == 1
+    assert diagnostics["invalid_file_entries"] == 1
     assert diagnostics["unrecognized"] == 1
     assert diagnostics["queued_files"] == 1
     assert diagnostics["transferred_files"] == 1
     assert len(diagnostics["shares"]) == 1
     assert diagnostics["shares"][0]["resource_id"] == "share-diagnostics"
-    assert diagnostics["shares"][0]["files_scanned"] == 4
+    assert diagnostics["shares"][0]["files_scanned"] == 5
     assert diagnostics["shares"][0]["video_files"] == 3
     assert diagnostics["shares"][0]["queued_files"] == 1
     reasons = {item["reason"] for item in diagnostics["examples"]}
     assert "非视频文件，未进入追剧识别" in reasons
     assert "文件条目缺少 fid，无法追踪或转存" in reasons
     assert "无法识别季集，未自动转存" in reasons
+    assert any("忽略非字典文件条目" in item["reason"] for item in diagnostics["examples"])
     manager.stop_scheduler()
 
 
