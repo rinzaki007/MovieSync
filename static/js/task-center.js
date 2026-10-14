@@ -426,6 +426,36 @@ function renderTaskProgressBar(task) {
         '</div></div>';
 }
 
+function renderSubscriptionDiagnostics(task) {
+    if (task.type !== 'subscription') return '';
+    const d = task.last_diagnostics;
+    if (!d || typeof d !== 'object' || !Number.isFinite(Number(d.files_scanned))) {
+        return '<div class="rounded-xl border border-slate-800 bg-slate-950 p-4"><div class="text-xs font-semibold text-slate-200">最近一次追剧诊断</div><div class="mt-2 text-[11px] text-slate-500">还没有可展示的结构化诊断。下次检查完成后会在这里显示资源解析、文件识别和过滤结果。</div></div>';
+    }
+    const metrics = [
+        ['发现资源', d.source_candidates], ['去重后分享', d.unique_shares],
+        ['成功解析分享', d.resolved_shares], ['解析失败', d.resolution_failures],
+        ['扫描文件', d.files_scanned], ['视频文件', d.video_files],
+        ['已保存跳过', d.already_saved], ['已追踪跳过', d.already_tracked],
+        ['无法识别', d.unrecognized], ['起始集前过滤', d.filtered_old],
+        ['跨分享同集去重', d.duplicate_episodes], ['进入转存队列', d.queued_files],
+        ['已确认转存', d.transferred_files]
+    ];
+    const examples = Array.isArray(d.examples) ? d.examples.slice(0, 12) : [];
+    const finished = d.finished_at ? new Date(Number(d.finished_at) * 1000).toLocaleString() : '未知时间';
+    return '<section class="rounded-xl border border-slate-700/70 bg-slate-950 p-4">' +
+        '<div class="flex flex-wrap items-center justify-between gap-2"><div class="text-xs font-semibold text-slate-200">最近一次追剧诊断</div><div class="text-[10px] text-slate-500">' + escapeTask(finished) + '</div></div>' +
+        '<div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">' + metrics.map(([label, value]) =>
+            '<div class="rounded-lg border border-slate-800 bg-slate-900/70 p-2.5"><div class="text-[10px] text-slate-500">' + label + '</div><div class="mt-1 text-lg font-semibold text-slate-100">' + Number(value || 0) + '</div></div>'
+        ).join('') + '</div>' +
+        '<div class="mt-3 text-[11px] ' + (d.success ? 'text-emerald-300' : 'text-amber-300') + '">' + escapeTask(d.message || '') + '</div>' +
+        (examples.length ? '<details class="mt-3"><summary class="cursor-pointer text-[11px] text-slate-400">查看跳过与异常样例（最多 12 条）</summary><div class="mt-2 space-y-2">' + examples.slice(0,12).map(item =>
+            '<div class="rounded-lg border border-slate-800 px-3 py-2"><div class="break-all text-[11px] text-slate-300">' + escapeTask(item.file || '—') + '</div><div class="mt-1 text-[10px] text-slate-500">' + escapeTask(item.reason || '') + '</div></div>'
+        ).join('') + '</div></details>' : '') +
+        '<div class="mt-2 text-[10px] text-slate-600">“已确认转存”仅统计接口确认成功的文件；无法识别的文件不会直接算作缺集。</div>' +
+        '</section>';
+}
+
 function renderTaskDetail(task) {
     const title = document.getElementById('detail-title');
     const body = document.getElementById('detail-body');
@@ -469,6 +499,7 @@ function renderTaskDetail(task) {
         '<div class="rounded-xl border border-slate-800 bg-slate-950 p-4"><div class="text-[10px] text-slate-500">执行统计</div><div class="mt-2 space-y-1 text-[11px] text-slate-300"><div>成功：' + Number(task.success_count || 0) + '</div><div>跳过：' + Number(task.skipped_count || 0) + '</div><div>失败：' + Number(task.failed_count || 0) + '</div></div></div>' +
         '</div>' +
         '<div class="rounded-xl border border-slate-800 bg-slate-950 p-4"><div class="text-xs font-semibold text-slate-200">当前状态</div><div class="mt-2 text-[11px] leading-5 ' + (task.status === 'failed' ? 'text-rose-400' : 'text-slate-400') + '">' + escapeTask(task.message || '') + '</div></div>' +
+        renderSubscriptionDiagnostics(task) +
         (task.type === 'transfer' && task.storage_target_id && (task.status === 'success' || task.recovery_uncertain) ? '<section id="task-destination-files" class="rounded-xl border border-emerald-900/60 bg-slate-950 p-4"><div class="flex flex-wrap items-center justify-between gap-2"><div><div class="text-xs font-semibold text-slate-200"><i class="fa-solid fa-folder-open mr-1 text-emerald-400"></i>目标网盘目录核对</div><div class="mt-1 text-[10px] text-slate-500">' + (task.recovery_uncertain ? '转存结果尚不确定；请先核对目标网盘，确认文件未转入前不要重复提交。' : '以下列表来自目标网盘，可用于核对转存结果。') + '</div></div><div class="flex gap-2"><button type="button" onclick="loadTaskDestinationFiles()" class="rounded-lg border border-slate-700 px-3 py-2 text-[10px] text-slate-300 hover:bg-slate-800"><i class="fa-solid fa-rotate mr-1"></i>刷新</button></div></div><div id="task-destination-files-body" class="mt-3 text-[11px] text-slate-500">正在读取网盘目录…</div></section>' : '') +
         '<details class="rounded-xl border border-slate-800 bg-slate-950 p-4"><summary class="cursor-pointer text-xs font-semibold text-slate-300">执行日志</summary><div class="mt-3 space-y-2">' +
         (task.events || []).map(e => '<div class="flex gap-3 text-[11px]"><span class="shrink-0 font-mono text-slate-600">' + new Date(Number(e.at || 0)*1000).toLocaleTimeString() + '</span><span class="' + (e.level === 'error' ? 'text-rose-400' : e.level === 'success' ? 'text-emerald-400' : 'text-slate-400') + '">' + escapeTask(e.message) + '</span></div>').join('') +
