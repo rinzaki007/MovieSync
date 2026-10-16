@@ -103,6 +103,54 @@ def test_duplicate_transfer_submission_reuses_active_task(tmp_path):
         manager.executor.shutdown(wait=True)
 
 
+def test_stale_queued_task_is_resubmitted_after_state_write_failures(tmp_path, monkeypatch):
+    from threading import Event
+
+    manager = TaskManager(tmp_path / "stale-queued.json", logging.getLogger("test"))
+    payload = {
+        "movie": {"title": "磁盘短暂故障恢复"},
+        "candidate": {"pwd_id": "share-stale", "files": [{"fid": "file-stale"}]},
+        "target_fid": "target-stale",
+    }
+    original_update = manager._update
+    failed_writes = 0
+    runner_started = Event()
+
+    def fail_start_and_fallback_once(task_id, **changes):
+        nonlocal failed_writes
+        if changes.get("status") in {"running", "failed"} and failed_writes < 2:
+            failed_writes += 1
+            raise OSError("simulated transient state persistence failure")
+        return original_update(task_id, **changes)
+
+    monkeypatch.setattr(manager, "_update", fail_start_and_fallback_once)
+    try:
+        first = manager.create_transfer_task(payload, lambda progress: (True, "不应在首次运行", {"success": 1}))
+        # The first worker cannot persist either running or fallback failed state.
+        # It exits without remote transfer and releases its in-process submission claim.
+        for _ in range(100):
+            if first["id"] not in manager.submitted_task_ids:
+                break
+            import time
+            time.sleep(0.01)
+        stale = manager.get_task(first["id"])
+        assert stale["status"] == "queued"
+
+        def successful_runner(progress):
+            runner_started.set()
+            return True, "恢复后成功", {"success": 1, "skipped": 0, "failed": 0}
+
+        second = manager.create_transfer_task(payload, successful_runner)
+        assert second["id"] == first["id"]
+        assert runner_started.wait(2)
+        manager.executor.shutdown(wait=True)
+        recovered = manager.get_task(first["id"])
+        assert recovered["status"] == "success"
+        assert failed_writes == 2
+    finally:
+        manager.shutdown()
+
+
 def test_duplicate_retry_reuses_existing_active_retry(tmp_path):
     from threading import Event
 
