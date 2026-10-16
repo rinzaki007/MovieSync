@@ -739,11 +739,36 @@ class SubscriptionManager:
         diagnostics = sub["_run_diagnostics"]
         diagnostics["source_candidates"] = 1
         diagnostics["unique_shares"] = 1
-        resolved = self.storage_targets.resolve_resource(
-            resource,
-            resource.get("storage_target_id") or None,
-        )
-        files = resolved.get("files") or []
+        try:
+            resolved = self.storage_targets.resolve_resource(
+                resource,
+                resource.get("storage_target_id") or None,
+            )
+        except Exception as exc:
+            diagnostics["resolution_failures"] = 1
+            diagnostics["examples"].append({
+                "file": resource.get("resource_id") or resource.get("pwd_id") or "当前分享",
+                "reason": f"资源解析异常：{type(exc).__name__}: {str(exc)[:160]}",
+            })
+            self.logger.exception("自动追剧资源解析异常")
+            return self._finish(sub, False, "解析链接失败：资源卡片执行异常，请查看服务日志")
+
+        if not isinstance(resolved, dict):
+            diagnostics["resolution_failures"] = 1
+            diagnostics["examples"].append({
+                "file": resource.get("resource_id") or resource.get("pwd_id") or "当前分享",
+                "reason": f"资源卡片返回 {type(resolved).__name__}，预期为对象",
+            })
+            return self._finish(sub, False, "解析链接失败：资源卡片返回格式异常")
+
+        files = resolved.get("files")
+        if not isinstance(files, list):
+            diagnostics["resolution_failures"] = 1
+            diagnostics["examples"].append({
+                "file": resource.get("resource_id") or resource.get("pwd_id") or "当前分享",
+                "reason": f"文件列表返回 {type(files).__name__}，预期为列表",
+            })
+            return self._finish(sub, False, "解析链接失败：文件列表格式异常")
         fetched_stoken = resolved.get("token")
         target_id = str(
             resolved.get("target_id")
@@ -763,10 +788,33 @@ class SubscriptionManager:
 
         diagnostics["resolved_shares"] = 1
         diagnostics["files_scanned"] = len(files)
-        diagnostics["video_files"] = sum(
-            1 for item in files
-            if str(item.get("file_name") or item.get("name") or "").lower().endswith(VIDEO_EXTENSIONS)
-        )
+        for item in files:
+            if not isinstance(item, dict):
+                diagnostics["invalid_file_entries"] += 1
+                if len(diagnostics["examples"]) < 20:
+                    diagnostics["examples"].append({
+                        "file": resource.get("resource_id") or "当前分享",
+                        "reason": f"忽略非字典文件条目：{type(item).__name__}",
+                    })
+                continue
+            file_name = str(item.get("file_name") or item.get("name") or "").strip()
+            fid = str(item.get("fid") or "").strip()
+            if file_name.lower().endswith(VIDEO_EXTENSIONS):
+                diagnostics["video_files"] += 1
+            else:
+                diagnostics["non_video_files"] += 1
+                if len(diagnostics["examples"]) < 20:
+                    diagnostics["examples"].append({
+                        "file": file_name or "(无文件名)",
+                        "reason": "非视频文件，未进入追剧识别",
+                    })
+            if not fid:
+                diagnostics["missing_file_id"] += 1
+                if len(diagnostics["examples"]) < 20:
+                    diagnostics["examples"].append({
+                        "file": file_name or "(无文件名)",
+                        "reason": "文件条目缺少 fid，无法追踪或转存",
+                    })
 
         tracked_keys = {
             str(key).strip()
@@ -793,9 +841,52 @@ class SubscriptionManager:
             baseline_episode = max(0, int(sub.get("start_ep") or 0))
             baseline_season = max(0, int(sub.get("start_season") or 0))
             source_id = str(sub.get("source_id") or "").strip()
+
+            # Older callers may submit selected FIDs without filenames. Resolve
+            # the selected files from the current listing before deciding which
+            # later episodes are eligible; otherwise a missing baseline would
+            # either dump the share or suppress every later episode.
+            selected_baselines = []
+            for initial_item in files:
+                if not isinstance(initial_item, dict):
+                    continue
+                initial_fid = str(initial_item.get("fid") or "").strip()
+                if initial_fid not in initial_file_keys:
+                    continue
+                initial_name = str(
+                    initial_item.get("file_name") or initial_item.get("name") or ""
+                ).strip()
+                initial_season, initial_episode = _parse_source_episode(
+                    self.resource_sources,
+                    source_id,
+                    initial_name,
+                )
+                if initial_episode is not None:
+                    selected_baselines.append((
+                        initial_season if initial_season is not None else 0,
+                        initial_episode,
+                    ))
+            known_season_baselines = [
+                item for item in selected_baselines if item[0] > 0
+            ]
+            if known_season_baselines:
+                baseline_season, baseline_episode = max(known_season_baselines)
+            elif selected_baselines and baseline_episode <= 0:
+                baseline_episode = max(item[1] for item in selected_baselines)
+
             for item in files:
+                if not isinstance(item, dict):
+                    continue
                 fid = str(item.get("fid") or "").strip()
+                file_name = str(item.get("file_name") or item.get("name") or "").strip()
                 is_initial = fid in initial_file_keys
+                # Auto-follow only queues identifiable video files. An explicitly
+                # selected FID may omit its filename, but known non-video files are
+                # never transferred by the automatic scan.
+                if not fid or (file_name and not file_name.lower().endswith(VIDEO_EXTENSIONS)):
+                    continue
+                if not file_name and not is_initial:
+                    continue
                 already_saved = fid in saved_keys
                 if not fid or already_saved or fid in selected_fids:
                     continue
@@ -803,19 +894,29 @@ class SubscriptionManager:
                 # The selected initial file is the inclusive baseline: transfer
                 # it once, then only episodes after it. Generic/all-mode tasks
                 # must not turn a single selected episode into a whole-share dump.
-                if not is_initial and baseline_episode > 0:
-                    file_name = str(item.get("file_name") or item.get("name") or "")
+                if not is_initial:
                     season, episode = _parse_source_episode(
                         self.resource_sources,
                         source_id,
                         file_name,
                     )
-                    if episode is not None:
-                        if season is not None and baseline_season > 0:
-                            if (season, episode) <= (baseline_season, baseline_episode):
-                                continue
-                        elif episode <= baseline_episode:
+                    if (
+                        episode is None
+                        or baseline_episode <= 0
+                        or (baseline_season > 0 and season is None)
+                    ):
+                        diagnostics["unrecognized"] += 1
+                        if len(diagnostics["examples"]) < 20:
+                            diagnostics["examples"].append({
+                                "file": file_name or fid,
+                                "reason": "无法可靠识别季集或追剧起点，未自动转存",
+                            })
+                        continue
+                    if baseline_season > 0:
+                        if (season, episode) <= (baseline_season, baseline_episode):
                             continue
+                    elif episode <= baseline_episode:
+                        continue
 
                 if fid not in tracked_keys or is_initial:
                     selected.append({"fid": fid})
@@ -832,7 +933,12 @@ class SubscriptionManager:
                 if isinstance(item, dict) and item.get("fid")
             }
             for item in files:
+                if not isinstance(item, dict):
+                    continue
                 fid = str(item.get("fid") or "").strip()
+                file_name = str(item.get("file_name") or item.get("name") or "").strip()
+                if file_name and not file_name.lower().endswith(VIDEO_EXTENSIONS):
+                    continue
                 if fid and fid in target_fids and fid not in saved and fid not in selected_fids:
                     selected.append({"fid": fid})
                     found_keys.append(fid)
@@ -843,17 +949,39 @@ class SubscriptionManager:
                 if isinstance(item, (str, int))
             }
             start_ep = int(sub.get("start_ep", 0) or 0)
+            start_season = max(0, int(sub.get("start_season", 0) or 0))
+            source_id = str(sub.get("source_id") or "").strip()
             for item in files:
+                if not isinstance(item, dict):
+                    continue
                 fid = str(item.get("fid") or "").strip()
-                ep_num = self._parse_episode_for_subscription(
-                    sub,
-                    str(item.get("file_name", "")),
+                file_name = str(item.get("file_name") or item.get("name") or "").strip()
+                if not fid or not file_name.lower().endswith(VIDEO_EXTENSIONS):
+                    continue
+                season, ep_num = _parse_source_episode(
+                    self.resource_sources,
+                    source_id,
+                    file_name,
                 )
+                if start_season > 0:
+                    is_after_baseline = (
+                        season is not None
+                        and ep_num is not None
+                        and (season, ep_num) > (start_season, start_ep)
+                    )
+                    if ep_num is not None and season is None:
+                        diagnostics["unrecognized"] += 1
+                        if len(diagnostics["examples"]) < 20:
+                            diagnostics["examples"].append({
+                                "file": file_name,
+                                "reason": "文件名缺少可确认的季数，无法安全判断追剧起点，未自动转存",
+                            })
+                else:
+                    is_after_baseline = ep_num is not None and ep_num > start_ep
                 if (
-                    fid
-                    and fid not in selected_fids
+                    fid not in selected_fids
                     and ep_num is not None
-                    and ep_num > start_ep
+                    and is_after_baseline
                     and ep_num not in saved
                 ):
                     selected.append({"fid": fid})
@@ -862,6 +990,13 @@ class SubscriptionManager:
 
         diagnostics["queued_files"] = len(selected)
         if not selected:
+            if diagnostics["invalid_file_entries"] or diagnostics["missing_file_id"]:
+                return self._finish(
+                    sub,
+                    False,
+                    "文件列表存在格式异常或缺少文件 ID，未能完整检查；请检查存储卡片后重试",
+                    success_keys=[],
+                )
             return self._finish(sub, True, f"《{sub.get('title', '')}》暂无新更新", success_keys=[])
 
         target_fid = _normalize_fid(sub.get("target_fid"))
@@ -1509,6 +1644,17 @@ class SubscriptionManager:
                 if not is_selected_initial:
                     if episode is None:
                         continue
+                    if baseline_season > 0 and season is None:
+                        if share_diag is not None:
+                            share_diag["skipped_files"] += 1
+                        diagnostics["unrecognized"] += 1
+                        scan_complete = False
+                        if len(diagnostics["examples"]) < 50:
+                            diagnostics["examples"].append({
+                                "file": file_name[:240],
+                                "reason": "文件名缺少可确认的季数，无法安全判断追剧起点，未自动转存",
+                            })
+                        continue
                     if season is not None and baseline_season > 0:
                         if (season, episode) <= (baseline_season, baseline_episode):
                             if share_diag is not None:
@@ -1589,10 +1735,19 @@ class SubscriptionManager:
                     "频道资源解析失败，未能确认是否有新集；请检查资源来源状态或查看服务日志",
                     success_keys=[],
                 )
+            if diagnostics["source_search_errors"]:
+                return self._finish(
+                    sub,
+                    False,
+                    (
+                        f"频道搜索存在 {diagnostics['source_search_errors']} 项异常，"
+                        "未能完整确认是否有新集；请检查资源来源状态后重试"
+                    ),
+                    success_keys=[],
+                )
             if scan_complete:
                 self._save_channel_scan_cursor(sub, scan_cursor)
-            if not resolution_errors:
-                self._save_channel_history_cursor(sub, history_cursor, history_complete)
+            self._save_channel_history_cursor(sub, history_cursor, history_complete)
             return self._finish(sub, True, f"《{title}》暂无新更新", success_keys=[])
 
         target_fid = _normalize_fid(sub.get("target_fid"))
@@ -1664,6 +1819,18 @@ class SubscriptionManager:
                 sub,
                 False,
                 f"已转存 {total} 项，但部分频道资源解析失败，后续将继续检查",
+                success_keys=all_keys,
+            )
+
+        if diagnostics["source_search_errors"]:
+            return self._finish(
+                sub,
+                False,
+                (
+                    f"已转存 {total} 项，但频道搜索存在 "
+                    f"{diagnostics['source_search_errors']} 项异常，未能完整确认新集；"
+                    "后续将重试"
+                ),
                 success_keys=all_keys,
             )
 
