@@ -649,7 +649,18 @@ class SubscriptionManager:
                 {},
             )
             has_pending_transfer = bool(current.get("pending_save_keys"))
-            uncertain = has_pending_transfer or is_uncertain_transfer_message(exc)
+            # The normalized key list can be empty when its persisted form is
+            # corrupt. Preserve either uncertainty marker so _finish cannot
+            # accidentally clear the retry guard after an unrelated exception.
+            pending_state_uncertain = bool(
+                current.get("pending_save_uncertain")
+                or current.get("pending_save_keys_invalid")
+            )
+            uncertain = (
+                has_pending_transfer
+                or pending_state_uncertain
+                or is_uncertain_transfer_message(exc)
+            )
             safe_message = (
                 "转存结果不确定，请检查目标网盘后再决定是否重试"
                 if uncertain
