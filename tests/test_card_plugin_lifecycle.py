@@ -87,7 +87,6 @@ def test_load_all_isolates_broken_card_from_valid_card(tmp_path):
     assert "broken card" in status["broken.py"]["error"]
 
 
-
 def test_concurrent_load_all_keeps_one_consistent_context(tmp_path, monkeypatch):
     manager, registry = _manager(tmp_path)
     plugin_dir = tmp_path / "cards"
