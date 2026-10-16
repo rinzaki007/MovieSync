@@ -93,7 +93,6 @@ class TaskManager:
     def _payload_key(payload):
         """基于实际转存目标与文件生成指纹，忽略封面等展示字段和文件顺序。"""
         if isinstance(payload, dict):
-            movie = payload.get("movie") if isinstance(payload.get("movie"), dict) else {}
             candidate = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
             files = candidate.get("files") if isinstance(candidate.get("files"), list) else []
             file_ids = sorted({
@@ -107,9 +106,8 @@ class TaskManager:
             if resource_id and file_ids:
                 fingerprint = {
                     "type": "transfer",
-                    "title": " ".join(
-                        str(movie.get("title") or movie.get("name") or payload.get("title") or "").split()
-                    ).casefold(),
+                    # Display titles can differ for the same underlying share/file.
+                    # Keep deduplication anchored to resource identity and destination.
                     "resource_id": resource_id,
                     "resource_type": str(candidate.get("resource_type") or "").strip().lower(),
                     "source_id": str(candidate.get("source_id") or "").strip(),

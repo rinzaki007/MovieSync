@@ -506,6 +506,24 @@ def test_transfer_task_fingerprint_is_namespaced_by_resource_provider():
         "target_fid": "0",
     }
     assert TaskManager._payload_key(base) != TaskManager._payload_key(other_provider)
+
+    # Different display metadata must not permit a duplicate transfer of the
+    # same provider resource, file set, and destination.
+    renamed = {
+        **base,
+        "movie": {"title": "A completely different display title", "cover": "other-cover"},
+        "title": "Another alias",
+    }
+    assert TaskManager._payload_key(base) == TaskManager._payload_key(renamed)
+
+    other_destination = {**base, "target_fid": "another-folder"}
+    assert TaskManager._payload_key(base) != TaskManager._payload_key(other_destination)
+
+    other_resource = {
+        **base,
+        "candidate": {**base["candidate"], "resource_id": "different-share-id"},
+    }
+    assert TaskManager._payload_key(base) != TaskManager._payload_key(other_resource)
     assert TaskManager._phase_for_progress(70)[1] == "提交转存"
 
 
