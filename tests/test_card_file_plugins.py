@@ -614,8 +614,8 @@ def test_uninstall_closes_the_loaded_card(tmp_path):
         "from moviesync.cards import Card, CardManifest\n"
         "class CloseableCard(Card):\n"
         "    manifest = CardManifest(id='closeable', name='Closeable', type='custom')\n"
-        "    def __init__(self): self.closed = False\n"
-        "    def close(self): self.closed = True\n"
+        "    def __init__(self): self.close_calls = 0\n"
+        "    def close(self): self.close_calls += 1\n"
         "def create_card(context): return CloseableCard()\n",
         encoding="utf-8",
     )
@@ -625,7 +625,7 @@ def test_uninstall_closes_the_loaded_card(tmp_path):
 
     manager.uninstall("closeable.py")
 
-    assert card.closed is True
+    assert card.close_calls == 1
     assert registry.get("closeable") is None
 
 
