@@ -611,12 +611,12 @@ def test_uninstall_closes_the_loaded_card(tmp_path):
     plugin_dir = tmp_path / "cards"
     plugin_dir.mkdir()
     (plugin_dir / "closeable.py").write_text(
-        "from moviesync.cards import Card, CardManifest\\n"
-        "class CloseableCard(Card):\\n"
-        "    manifest = CardManifest(id='closeable', name='Closeable', type='custom')\\n"
-        "    def __init__(self): self.closed = False\\n"
-        "    def close(self): self.closed = True\\n"
-        "def create_card(context): return CloseableCard()\\n",
+        "from moviesync.cards import Card, CardManifest\n"
+        "class CloseableCard(Card):\n"
+        "    manifest = CardManifest(id='closeable', name='Closeable', type='custom')\n"
+        "    def __init__(self): self.closed = False\n"
+        "    def close(self): self.closed = True\n"
+        "def create_card(context): return CloseableCard()\n",
         encoding="utf-8",
     )
     registry = CardRegistry()
@@ -636,12 +636,12 @@ def test_failed_registration_closes_factory_created_card(tmp_path):
     plugin_dir = tmp_path / "cards"
     plugin_dir.mkdir()
     (plugin_dir / "duplicate.py").write_text(
-        "from pathlib import Path\\n"
-        "from moviesync.cards import Card, CardManifest\\n"
-        "class DuplicateCard(Card):\\n"
-        "    manifest = CardManifest(id='duplicate', name='Duplicate', type='custom')\\n"
-        "    def close(self): Path(" + repr(str(marker)) + ").write_text('closed')\\n"
-        "def create_card(context): return DuplicateCard()\\n",
+        "from pathlib import Path\n"
+        "from moviesync.cards import Card, CardManifest\n"
+        "class DuplicateCard(Card):\n"
+        "    manifest = CardManifest(id='duplicate', name='Duplicate', type='custom')\n"
+        "    def close(self): Path(" + repr(str(marker)) + ").write_text('closed')\n"
+        "def create_card(context): return DuplicateCard()\n",
         encoding="utf-8",
     )
     registry = CardRegistry()
