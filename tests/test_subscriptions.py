@@ -1530,6 +1530,43 @@ def test_invalid_only_pending_keys_without_marker_fail_closed(tmp_path, monkeypa
         manager.stop_scheduler()
 
 
+def test_exception_preserves_invalid_pending_transfer_guard(tmp_path, monkeypatch):
+    manager = SubscriptionManager(
+        tmp_path / "exception-invalid-pending.json",
+        FakeStorageTargets(),
+        FakeResourceSources(),
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(title="执行中待确认记录异常", pwd_id="share-exception-invalid")
+
+    def corrupt_pending_state_then_raise(subscription):
+        items = manager.get_subscriptions()
+        current = next(item for item in items if item["id"] == subscription["id"])
+        current["pending_save_keys"] = []
+        current["pending_save_keys_invalid"] = True
+        current["pending_save_uncertain"] = True
+        manager.store.write(items)
+        raise RuntimeError("unrelated processing error")
+
+    monkeypatch.setattr(manager, "_check", corrupt_pending_state_then_raise)
+    try:
+        ok, message = manager.check_subscription_now(sub["id"])
+        assert ok is False
+        assert "转存结果不确定" in message
+
+        recovered = next(item for item in manager.get_subscriptions() if item["id"] == sub["id"])
+        assert recovered["pending_save_uncertain"] is True
+        assert recovered["pending_save_keys_invalid"] is True
+        assert recovered["pending_save_keys"] == []
+
+        # A later run must remain blocked until an operator repairs the record.
+        ok, message = manager.check_subscription_now(sub["id"])
+        assert ok is False
+        assert "格式异常" in message
+    finally:
+        manager.stop_scheduler()
+
+
 def test_recovery_keeps_invalid_pending_transfer_fail_closed(tmp_path, monkeypatch):
     manager = SubscriptionManager(
         tmp_path / "recovery-invalid-pending.json",
