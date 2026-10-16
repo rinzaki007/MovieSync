@@ -34,3 +34,14 @@ def test_douban_search_accepts_subject_suggest_array_payload():
     assert results[0]["url"] == "https://movie.douban.com/subject/1292052/"
     assert results[0]["rate"] == "9.7"
     assert client.http.calls[0][2]["allow_non_dict"] is True
+
+
+
+def test_douban_client_close_releases_http_client():
+    client = DoubanClient()
+    calls = []
+    client.http.close = lambda: calls.append("closed")
+
+    client.close()
+
+    assert calls == ["closed"]

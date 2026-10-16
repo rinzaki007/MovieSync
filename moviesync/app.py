@@ -192,6 +192,11 @@ def create_app(
             logger.exception("关闭卡片注册表失败")
 
         try:
+            http.close()
+        except Exception:
+            logger.exception("关闭应用 HTTP 客户端失败")
+
+        try:
             telegram.close()
         except Exception:
             logger.exception("关闭旧版 Telegram 兼容客户端失败")

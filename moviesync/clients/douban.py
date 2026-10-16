@@ -22,6 +22,9 @@ class DoubanClient:
     def __init__(self):
         self.http = HttpClient(DOUBAN_HEADERS)
 
+    def close(self) -> None:
+        self.http.close()
+
     def get_movies(self, tag: str, sort_type: str) -> list[dict]:
         tag = tag if tag in {"电影", "电视剧", "综艺", "动漫"} else "电影"
         sort_type = sort_type if sort_type in {"U", "T", "R"} else "U"

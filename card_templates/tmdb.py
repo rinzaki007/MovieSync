@@ -65,6 +65,9 @@ class TMDBMetadataCard(MetadataProviderCard):
         self._cache_lock = threading.RLock()
         self._last_error = ""
 
+    def close(self) -> None:
+        self.http.close()
+
     def _config(self) -> dict[str, Any]:
         try:
             value = self.config_store.get_card_config("tmdb")

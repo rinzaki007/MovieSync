@@ -40,6 +40,10 @@ class FakeHttpClient:
             "plugin_count": 3,
         }
         self.calls = []
+        self.closed = False
+
+    def close(self):
+        self.closed = True
 
     def request_json(self, method, url, *, timeout, retries=0, **kwargs):
         self.calls.append((method, url, timeout, kwargs))
@@ -240,3 +244,13 @@ def test_pansou_does_not_fall_back_to_quark_for_unknown_selected_storage_type():
 
     assert results == []
     assert http.calls == []
+
+
+
+def test_pansou_card_close_releases_http_client():
+    http = FakeHttpClient()
+    source = PanSouResourceSource(http)
+
+    source.close()
+
+    assert getattr(http, "closed", False) is True

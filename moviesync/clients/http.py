@@ -20,15 +20,42 @@ class HttpClient:
     def __init__(self, headers: dict[str, str] | None = None):
         self._local = threading.local()
         self.headers = headers or {}
+        self._sessions: set[requests.Session] = set()
+        self._sessions_lock = threading.RLock()
+        self._closed = False
 
     @property
     def session(self) -> requests.Session:
-        session = getattr(self._local, "session", None)
-        if session is None:
-            session = requests.Session()
-            session.headers.update(self.headers)
-            self._local.session = session
-        return session
+        with self._sessions_lock:
+            if self._closed:
+                raise ApiError("HTTP 客户端已关闭")
+            session = getattr(self._local, "session", None)
+            if session is None:
+                session = requests.Session()
+                session.headers.update(self.headers)
+                self._sessions.add(session)
+                self._local.session = session
+            return session
+
+    def close(self) -> None:
+        """Close every thread-local session owned by this client exactly once."""
+        with self._sessions_lock:
+            self._closed = True
+            sessions = set(self._sessions)
+            self._sessions.clear()
+            # Tests and legacy adapters may inject a session directly into the
+            # current thread-local slot instead of creating it via this client.
+            current_session = getattr(self._local, "session", None)
+            if current_session is not None:
+                sessions.add(current_session)
+            self._local.session = None
+
+        for session in sessions:
+            try:
+                session.close()
+            except Exception:
+                # One broken adapter must not prevent closing the remaining sessions.
+                continue
 
     def request_json(
         self,

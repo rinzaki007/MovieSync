@@ -30,6 +30,11 @@ class DoubanMetadataCard(MetadataProviderCard):
             if isinstance(item, dict)
         ]
 
+    def close(self) -> None:
+        close = getattr(self.client, "close", None)
+        if callable(close):
+            close()
+
     def list_movies(self, tag: str, sort_type: str) -> list[dict[str, Any]]:
         return self._annotate(self.client.get_movies(tag, sort_type))
 
