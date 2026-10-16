@@ -8,8 +8,8 @@ from __future__ import annotations
 import re
 from copy import deepcopy
 from functools import wraps
-from threading import RLock
 from pathlib import Path
+from threading import RLock
 from urllib.parse import urlparse
 
 from .errors import ConfigValidationError
