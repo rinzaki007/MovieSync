@@ -930,11 +930,21 @@ class SubscriptionManager:
                     source_id,
                     file_name,
                 )
-                is_after_baseline = (
-                    (season, ep_num) > (start_season, start_ep)
-                    if season is not None and start_season > 0 and ep_num is not None
-                    else ep_num is not None and ep_num > start_ep
-                )
+                if start_season > 0:
+                    is_after_baseline = (
+                        season is not None
+                        and ep_num is not None
+                        and (season, ep_num) > (start_season, start_ep)
+                    )
+                    if ep_num is not None and season is None:
+                        diagnostics["unrecognized"] += 1
+                        if len(diagnostics["examples"]) < 20:
+                            diagnostics["examples"].append({
+                                "file": file_name,
+                                "reason": "文件名缺少可确认的季数，无法安全判断追剧起点，未自动转存",
+                            })
+                else:
+                    is_after_baseline = ep_num is not None and ep_num > start_ep
                 if (
                     fid not in selected_fids
                     and ep_num is not None
@@ -1600,6 +1610,17 @@ class SubscriptionManager:
                     )
                 if not is_selected_initial:
                     if episode is None:
+                        continue
+                    if baseline_season > 0 and season is None:
+                        if share_diag is not None:
+                            share_diag["skipped_files"] += 1
+                        diagnostics["unrecognized"] += 1
+                        scan_complete = False
+                        if len(diagnostics["examples"]) < 50:
+                            diagnostics["examples"].append({
+                                "file": file_name[:240],
+                                "reason": "文件名缺少可确认的季数，无法安全判断追剧起点，未自动转存",
+                            })
                         continue
                     if season is not None and baseline_season > 0:
                         if (season, episode) <= (baseline_season, baseline_episode):
