@@ -604,3 +604,59 @@ def create_card(context):
     # The legacy card source remains untouched; only its exposed form is migrated.
     assert '"key": "magic_regex"' in legacy_path.read_text(encoding="utf-8")
 
+
+
+
+def test_uninstall_closes_the_loaded_card(tmp_path):
+    plugin_dir = tmp_path / "cards"
+    plugin_dir.mkdir()
+    (plugin_dir / "closeable.py").write_text(
+        "from moviesync.cards import Card, CardManifest\n"
+        "class CloseableCard(Card):\n"
+        "    manifest = CardManifest(id='closeable', name='Closeable', type='custom')\n"
+        "    def __init__(self): self.close_calls = 0\n"
+        "    def close(self): self.close_calls += 1\n"
+        "def create_card(context): return CloseableCard()\n",
+        encoding="utf-8",
+    )
+    registry = CardRegistry()
+    manager = CardFilePluginManager(plugin_dir, registry, logging.getLogger("test-card-close"))
+    card = manager.load_file("closeable.py")
+
+    manager.uninstall("closeable.py")
+
+    assert card.close_calls == 1
+    # Registry ownership must ensure the card is closed exactly once.
+    assert registry.get("closeable") is None
+
+
+def test_failed_registration_closes_factory_created_card(tmp_path):
+    from moviesync.cards import Card, CardManifest
+
+    marker = tmp_path / "closed.txt"
+    plugin_dir = tmp_path / "cards"
+    plugin_dir.mkdir()
+    (plugin_dir / "duplicate.py").write_text(
+        "from pathlib import Path\n"
+        "from moviesync.cards import Card, CardManifest\n"
+        "class DuplicateCard(Card):\n"
+        "    manifest = CardManifest(id='duplicate', name='Duplicate', type='custom')\n"
+        "    def close(self): Path(" + repr(str(marker)) + ").write_text('closed')\n"
+        "def create_card(context): return DuplicateCard()\n",
+        encoding="utf-8",
+    )
+    registry = CardRegistry()
+
+    class ExistingCard(Card):
+        manifest = CardManifest(id="duplicate", name="Existing", type="custom")
+
+    existing = ExistingCard()
+    registry.register(existing)
+    manager = CardFilePluginManager(plugin_dir, registry, logging.getLogger("test-card-failed-close"))
+
+    with pytest.raises(ValueError):
+        manager.load_file("duplicate.py")
+
+    assert marker.read_text(encoding="utf-8") == "closed"
+    assert registry.get("duplicate") is existing
+    assert manager.list_plugins()[0]["loaded"] is False

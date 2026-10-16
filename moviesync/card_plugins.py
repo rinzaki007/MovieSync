@@ -388,6 +388,7 @@ class CardFilePluginManager:
                 raise ValueError("无法读取卡片 Python 文件")
             module = importlib.util.module_from_spec(spec)
             sys.modules[module_name] = module
+            card = None
             try:
                 spec.loader.exec_module(module)
                 factory = getattr(module, "create_card", None)
@@ -403,6 +404,14 @@ class CardFilePluginManager:
                 self._overlay_bundled_config_ui(card, name)
                 self.registry.register(card)
             except Exception as exc:
+                # Factories may allocate sessions or background resources before
+                # validation/registration fails. Close only cards not owned by the
+                # registry; a registered card remains live if later bookkeeping fails.
+                if isinstance(card, Card) and self.registry.get(card.card_id) is not card:
+                    try:
+                        card.close()
+                    except Exception:
+                        self.logger.exception("清理加载失败的卡片 %s 失败", name)
                 self._errors[name] = str(exc)[:300]
                 sys.modules.pop(module_name, None)
                 raise
@@ -471,11 +480,21 @@ class CardFilePluginManager:
             card_id = loaded[0] if loaded else ""
             module_name = loaded[1] if loaded else ""
             loaded_card = loaded[2] if loaded else None
-            if card_id and loaded_card is not None:
-                # A stale plugin entry must not uninstall a different card that
-                # happens to reuse this ID after the original was unloaded.
-                if self.registry.get(card_id) is loaded_card:
-                    self.registry.unregister(card_id)
+            registry_owns_card = bool(
+                card_id
+                and loaded_card is not None
+                and self.registry.get(card_id) is loaded_card
+            )
+            if registry_owns_card:
+                # CardRegistry.unregister() already closes the removed instance.
+                self.registry.unregister(card_id)
+            elif loaded_card is not None:
+                # A stale plugin entry may no longer be registered. Close that
+                # detached instance ourselves, without closing a replacement card.
+                try:
+                    loaded_card.close()
+                except Exception:
+                    self.logger.exception("关闭已卸载卡片 %s 失败", card_id or name)
             if module_name:
                 sys.modules.pop(module_name, None)
             path.unlink()
