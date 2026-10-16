@@ -141,3 +141,4 @@ def create_card(context):
 
     assert registry.get("alpha").marker == "first"
     assert registry.get("beta").marker == "first"
+    assert all(not item["error"] for item in manager.list_plugins())
