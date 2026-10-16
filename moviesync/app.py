@@ -173,7 +173,11 @@ def create_app(
         shutdown_state["closed"] = True
 
         try:
-            subscriptions.stop_scheduler()
+            stop_subscriptions = getattr(subscriptions, "shutdown", None)
+            if callable(stop_subscriptions):
+                stop_subscriptions()
+            else:
+                subscriptions.stop_scheduler()
         except Exception:
             logger.exception("停止自动追剧调度器失败")
 

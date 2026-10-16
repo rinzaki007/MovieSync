@@ -451,4 +451,4 @@ class TaskManager:
         return removed
 
     def shutdown(self):
-        self.executor.shutdown(wait=False, cancel_futures=True)
+        self.executor.shutdown(wait=True, cancel_futures=True)

@@ -593,3 +593,41 @@ def test_subscription_accepts_provider_neutral_resource_identity(tmp_path):
         assert sub["pwd_id"] == ""
     finally:
         manager.stop_scheduler()
+
+
+
+def test_shutdown_waits_for_running_transfer_before_returning(tmp_path):
+    from threading import Event, Thread
+
+    manager = TaskManager(tmp_path / "shutdown-waits.json", logging.getLogger("test"))
+    started = Event()
+    release = Event()
+    shutdown_finished = Event()
+
+    def runner(progress):
+        started.set()
+        assert release.wait(3)
+        return True, "转存完成", {"success": 1, "skipped": 0, "failed": 0}
+
+    manager.create_transfer_task(
+        {
+            "movie": {"title": "优雅关闭"},
+            "candidate": {"pwd_id": "shutdown-share", "files": [{"fid": "ep1"}]},
+            "target_fid": "target-1",
+        },
+        runner,
+    )
+    shutdown_thread = Thread(target=lambda: (manager.shutdown(), shutdown_finished.set()))
+
+    try:
+        assert started.wait(2)
+        shutdown_thread.start()
+        assert not shutdown_finished.wait(0.1)
+        release.set()
+        shutdown_thread.join(timeout=2)
+        assert shutdown_finished.is_set()
+    finally:
+        release.set()
+        if shutdown_thread.ident is not None:
+            shutdown_thread.join(timeout=2)
+        manager.shutdown()
