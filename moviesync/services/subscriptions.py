@@ -861,18 +861,22 @@ class SubscriptionManager:
                 # The selected initial file is the inclusive baseline: transfer
                 # it once, then only episodes after it. Generic/all-mode tasks
                 # must not turn a single selected episode into a whole-share dump.
-                if not is_initial and baseline_episode > 0:
+                if not is_initial:
                     season, episode = _parse_source_episode(
                         self.resource_sources,
                         source_id,
                         file_name,
                     )
-                    if episode is None or (baseline_season > 0 and season is None):
+                    if (
+                        episode is None
+                        or baseline_episode <= 0
+                        or (baseline_season > 0 and season is None)
+                    ):
                         diagnostics["unrecognized"] += 1
                         if len(diagnostics["examples"]) < 20:
                             diagnostics["examples"].append({
                                 "file": file_name or fid,
-                                "reason": "无法可靠识别季集，未自动转存",
+                                "reason": "无法可靠识别季集或追剧起点，未自动转存",
                             })
                         continue
                     if baseline_season > 0:
