@@ -2538,3 +2538,40 @@ def test_direct_subscription_fails_when_every_file_entry_is_unusable(tmp_path):
         assert diagnostics["success"] is False
     finally:
         manager.stop_scheduler()
+
+
+
+def test_generic_all_mode_with_unrecognized_selected_baseline_does_not_dump_share(tmp_path):
+    storage = DynamicStorageTargets()
+    storage.files = [
+        {"fid": "special", "file_name": "Show.special-cut.mkv"},
+        {"fid": "ep1", "file_name": "Show.S01E01.mkv"},
+        {"fid": "ep2", "file_name": "Show.S01E02.mkv"},
+    ]
+    manager = SubscriptionManager(
+        tmp_path / "generic-all-unrecognized-baseline.json",
+        storage,
+        FakeResourceSources(),
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-unrecognized-baseline",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        files=[{"fid": "special", "file_name": "Show.special-cut.mkv"}],
+    )
+
+    try:
+        assert sub["tracking_mode"] == "all"
+        assert sub["start_ep"] == 0
+        ok, message = manager.check_subscription_now(sub["id"])
+
+        assert ok is True
+        assert "成功追更 1 项" in message
+        assert storage.transfers == [["special"]]
+        diagnostics = manager.get_subscriptions()[0]["last_diagnostics"]
+        assert diagnostics["queued_files"] == 1
+        assert diagnostics["unrecognized"] == 2
+    finally:
+        manager.stop_scheduler()
