@@ -131,6 +131,18 @@ class ResourceSourceManager:
             for card in self.registry.find_by_type("resource_source")
             if isinstance(card, ResourceSourceCard)
         ]
+    def _load_config(self) -> tuple[dict[str, Any], bool]:
+        """读取资源卡片配置；失败时禁止按默认启用状态执行外部调用。"""
+        try:
+            config = self.config_store.load()
+        except Exception:
+            self.logger.exception("读取资源卡片配置失败")
+            return {}, False
+        if not isinstance(config, dict):
+            self.logger.warning("资源卡片配置根结构无效")
+            return {}, False
+        return config, True
+
     def _card_config(self, config: dict, source_id: str) -> dict[str, Any]:
         cards = config.get("cards") if isinstance(config, dict) else {}
         card = cards.get(source_id) if isinstance(cards, dict) else {}
@@ -174,8 +186,10 @@ class ResourceSourceManager:
 
     def parse_tv_episode(self, source_id: str, file_name: str) -> tuple[int | None, int | None]:
         """优先使用全局文件名识别规则，兼容旧资源卡片的专属规则。"""
-        config = self.config_store.load()
-        cards = config.get("cards") if isinstance(config, dict) else {}
+        config, available = self._load_config()
+        if not available:
+            return parse_tv_episode(file_name)
+        cards = config.get("cards", {})
         # 通过卡片类型发现识别能力，不绑定固定卡片 ID。高优先级规则先尝试；
         # 同优先级按卡片 ID 排序，避免依赖注册顺序造成结果不稳定。
         processors = sorted(
@@ -232,11 +246,13 @@ class ResourceSourceManager:
         return parse_tv_episode(file_name)
 
     def search_channel(self, source_id: str, channel: object, title: str) -> list[dict[str, Any]]:
-        config = self.config_store.load()
         source = self.sources.get(str(source_id))
         if not source:
             return []
-        cards = config.get("cards") if isinstance(config, dict) else {}
+        config, available = self._load_config()
+        if not available:
+            return []
+        cards = config.get("cards", {})
         card = cards.get(source.card_id) if isinstance(cards, dict) else {}
         if isinstance(card, dict) and not card.get("enabled", True):
             return []
@@ -271,11 +287,13 @@ class ResourceSourceManager:
         after_post_id: object = None,
     ) -> dict[str, Any]:
         """Discover recent channel shares and return a safe persistent scan cursor."""
-        config = self.config_store.load()
         source = self.sources.get(str(source_id))
         if not source:
             return {"items": [], "cursor": None, "complete": False}
-        cards = config.get("cards") if isinstance(config, dict) else {}
+        config, available = self._load_config()
+        if not available:
+            return {"items": [], "cursor": None, "complete": False}
+        cards = config.get("cards", {})
         card = cards.get(source.card_id) if isinstance(cards, dict) else {}
         if isinstance(card, dict) and not card.get("enabled", True):
             return {"items": [], "cursor": None, "complete": False}
@@ -320,11 +338,13 @@ class ResourceSourceManager:
         before_post_id: object = None,
     ) -> dict[str, Any]:
         """Scan one bounded older-history batch through the configured source card."""
-        config = self.config_store.load()
         source = self.sources.get(str(source_id))
         if not source:
             return {"items": [], "cursor": None, "complete": False}
-        cards = config.get("cards") if isinstance(config, dict) else {}
+        config, available = self._load_config()
+        if not available:
+            return {"items": [], "cursor": None, "complete": False}
+        cards = config.get("cards", {})
         card = cards.get(source.card_id) if isinstance(cards, dict) else {}
         if isinstance(card, dict) and not card.get("enabled", True):
             return {"items": [], "cursor": None, "complete": False}
@@ -358,8 +378,24 @@ class ResourceSourceManager:
             return {"items": [], "cursor": None, "complete": False}
 
     def check_all(self) -> list[dict[str, Any]]:
-        config = self.config_store.load()
-        cards = config.get("cards") if isinstance(config, dict) else {}
+        config, available = self._load_config()
+        if not available:
+            # Do not call upstream providers when their enabled state cannot be
+            # verified. Return a per-card health result instead of failing the
+            # whole endpoint with HTTP 500.
+            return [
+                {
+                    "id": source_id,
+                    "name": self._source_name(source),
+                    "type": self._source_type(source),
+                    "status": "unavailable",
+                    "message": "无法读取资源卡片配置，未执行连接检查，请检查配置文件后重试",
+                    "total": 0,
+                    "valid_count": 0,
+                }
+                for source_id, source in self.sources.items()
+            ]
+        cards = config.get("cards", {})
         results = []
 
         for source_id, source in self.sources.items():
