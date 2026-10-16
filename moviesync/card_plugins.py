@@ -261,16 +261,20 @@ class CardFilePluginManager:
             return items
 
     def load_all(self, context: dict[str, Any] | None = None) -> list[str]:
-        self._context = dict(context or {})
-        loaded = []
-        for item in self.list_plugins():
-            try:
-                card = self.load_file(item["filename"], self._context)
-                loaded.append(card.card_id)
-            except Exception as exc:
-                self.logger.exception("单文件卡片 %s 加载失败", item["filename"])
-                self._errors[item["filename"]] = str(exc)[:300]
-        return loaded
+        # Keep the context and the full load pass consistent. Without this lock,
+        # overlapping startup/reload calls can replace self._context between files,
+        # producing a mixed set of cards initialized with different service objects.
+        with self._lock:
+            self._context = dict(context or {})
+            loaded = []
+            for item in self.list_plugins():
+                try:
+                    card = self.load_file(item["filename"], self._context)
+                    loaded.append(card.card_id)
+                except Exception as exc:
+                    self.logger.exception("单文件卡片 %s 加载失败", item["filename"])
+                    self._errors[item["filename"]] = str(exc)[:300]
+            return loaded
 
     def _overlay_bundled_config_ui(self, card: Card, filename: str) -> None:
         """Reuse bundled form metadata for older customized copies of a built-in card.
