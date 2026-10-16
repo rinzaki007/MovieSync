@@ -862,18 +862,24 @@ class SubscriptionManager:
                 # it once, then only episodes after it. Generic/all-mode tasks
                 # must not turn a single selected episode into a whole-share dump.
                 if not is_initial and baseline_episode > 0:
-                    file_name = str(item.get("file_name") or item.get("name") or "")
                     season, episode = _parse_source_episode(
                         self.resource_sources,
                         source_id,
                         file_name,
                     )
-                    if episode is not None:
-                        if season is not None and baseline_season > 0:
-                            if (season, episode) <= (baseline_season, baseline_episode):
-                                continue
-                        elif episode <= baseline_episode:
+                    if episode is None or (baseline_season > 0 and season is None):
+                        diagnostics["unrecognized"] += 1
+                        if len(diagnostics["examples"]) < 20:
+                            diagnostics["examples"].append({
+                                "file": file_name or fid,
+                                "reason": "无法可靠识别季集，未自动转存",
+                            })
+                        continue
+                    if baseline_season > 0:
+                        if (season, episode) <= (baseline_season, baseline_episode):
                             continue
+                    elif episode <= baseline_episode:
+                        continue
 
                 if fid not in tracked_keys or is_initial:
                     selected.append({"fid": fid})
@@ -937,6 +943,13 @@ class SubscriptionManager:
 
         diagnostics["queued_files"] = len(selected)
         if not selected:
+            if diagnostics["invalid_file_entries"] or diagnostics["missing_file_id"]:
+                return self._finish(
+                    sub,
+                    False,
+                    "文件列表存在格式异常或缺少文件 ID，未能完整检查；请检查存储卡片后重试",
+                    success_keys=[],
+                )
             return self._finish(sub, True, f"《{sub.get('title', '')}》暂无新更新", success_keys=[])
 
         target_fid = _normalize_fid(sub.get("target_fid"))
