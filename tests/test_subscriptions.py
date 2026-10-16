@@ -2703,3 +2703,43 @@ def test_legacy_direct_season_baseline_skips_files_without_a_confirmed_season(tm
         assert diagnostics["unrecognized"] == 1
     finally:
         manager.stop_scheduler()
+
+
+
+def test_shutdown_waits_for_inflight_scheduler_check_and_prevents_restart(tmp_path, monkeypatch):
+    from threading import Event, Thread
+
+    manager = SubscriptionManager(
+        tmp_path / "subscriptions-shutdown.json",
+        FakeStorageTargets(),
+        FakeResourceSources(),
+        FakeLogger(),
+    )
+    started = Event()
+    release = Event()
+    shutdown_finished = Event()
+
+    def blocked_scheduler_loop():
+        started.set()
+        release.wait(3)
+
+    monkeypatch.setattr(manager, "_scheduler_loop", blocked_scheduler_loop)
+    manager.start_scheduler()
+    shutdown_thread = Thread(target=lambda: (manager.shutdown(), shutdown_finished.set()))
+
+    try:
+        assert started.wait(2)
+        shutdown_thread.start()
+        assert not shutdown_finished.wait(0.1)
+        release.set()
+        shutdown_thread.join(timeout=3)
+        assert shutdown_finished.is_set()
+        assert manager.worker is None
+
+        manager.start_scheduler()
+        assert manager.worker is None
+    finally:
+        release.set()
+        if shutdown_thread.ident is not None:
+            shutdown_thread.join(timeout=3)
+        manager.shutdown()
