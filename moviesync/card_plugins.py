@@ -388,6 +388,7 @@ class CardFilePluginManager:
                 raise ValueError("无法读取卡片 Python 文件")
             module = importlib.util.module_from_spec(spec)
             sys.modules[module_name] = module
+            card = None
             try:
                 spec.loader.exec_module(module)
                 factory = getattr(module, "create_card", None)
@@ -403,6 +404,14 @@ class CardFilePluginManager:
                 self._overlay_bundled_config_ui(card, name)
                 self.registry.register(card)
             except Exception as exc:
+                # Factories may allocate sessions or background resources before
+                # validation/registration fails. Close only cards not owned by the
+                # registry; a registered card remains live if later bookkeeping fails.
+                if isinstance(card, Card) and self.registry.get(card.card_id) is not card:
+                    try:
+                        card.close()
+                    except Exception:
+                        self.logger.exception("清理加载失败的卡片 %s 失败", name)
                 self._errors[name] = str(exc)[:300]
                 sys.modules.pop(module_name, None)
                 raise
@@ -476,6 +485,13 @@ class CardFilePluginManager:
                 # happens to reuse this ID after the original was unloaded.
                 if self.registry.get(card_id) is loaded_card:
                     self.registry.unregister(card_id)
+            if loaded_card is not None:
+                # Cleanup failures must not prevent removing the plugin file or
+                # clearing its module bookkeeping.
+                try:
+                    loaded_card.close()
+                except Exception:
+                    self.logger.exception("关闭已卸载卡片 %s 失败", card_id or name)
             if module_name:
                 sys.modules.pop(module_name, None)
             path.unlink()
