@@ -104,6 +104,7 @@ class QuarkClient:
             return False
 
     def _list_children(self, parent_fid: str) -> list[dict[str, Any]]:
+        """Read a complete child listing or fail; partial results must not trigger duplicate folder creation."""
         items: list[dict[str, Any]] = []
         page = 1
         while page <= 20:
@@ -113,14 +114,20 @@ class QuarkClient:
             )
             try:
                 response, data = self._request_json("GET", url, timeout=6, retries=1)
-            except ApiError:
-                break
-            if response.status_code != 200 or data.get("code") != 0:
-                break
-            batch = data.get("data", {}).get("list", []) or []
-            items.extend(batch)
+            except ApiError as exc:
+                raise RuntimeError(f"读取夸克网盘目录失败：{exc}") from exc
+            if response.status_code != 200 or not isinstance(data, dict) or data.get("code") != 0:
+                message = data.get("message") if isinstance(data, dict) else None
+                raise RuntimeError(str(message or f"读取夸克网盘目录失败（HTTP {response.status_code}）"))
+            payload = data.get("data")
+            batch = payload.get("list") if isinstance(payload, dict) else None
+            if not isinstance(batch, list):
+                raise RuntimeError("夸克网盘返回的目录格式无效")
+            items.extend(item for item in batch if isinstance(item, dict))
             if len(batch) < 200:
                 break
+            if page >= 20:
+                raise RuntimeError("目录超过分页扫描上限，无法确认完整列表；为避免重复创建目录，请稍后重试")
             page += 1
         return items
 
@@ -171,12 +178,14 @@ class QuarkClient:
             if response.status_code != 200 or data.get("code") != 0:
                 raise RuntimeError("夸克网盘目录读取失败，请检查 Cookie 是否有效")
             payload = data.get("data")
-            batch = payload.get("list", []) if isinstance(payload, dict) else []
+            batch = payload.get("list") if isinstance(payload, dict) else None
             if not isinstance(batch, list):
                 raise RuntimeError("夸克网盘返回的目录格式无效")
             items.extend(item for item in batch if isinstance(item, dict))
             if len(batch) < 200:
                 break
+            if page >= 20:
+                raise RuntimeError("夸克网盘目录超过分页扫描上限，列表可能不完整；请缩小目录范围后重试")
             page += 1
 
         normalized = []
