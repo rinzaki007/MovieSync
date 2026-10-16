@@ -2575,3 +2575,94 @@ def test_generic_all_mode_with_unrecognized_selected_baseline_does_not_dump_shar
         assert diagnostics["unrecognized"] == 2
     finally:
         manager.stop_scheduler()
+
+
+
+def test_channel_season_baseline_skips_files_without_a_confirmed_season(tmp_path):
+    class SeasonlessEpisodeSources(FakeResourceSources):
+        def parse_tv_episode(self, source_id, file_name):
+            if file_name == "Show.E99.mkv":
+                return None, 99
+            return None, None
+
+    storage = ChannelStorageTargets()
+    storage.shares = {
+        "share-seasonless": [
+            {"fid": "selected", "file_name": "Show.S02E01.mkv"},
+            {"fid": "seasonless", "file_name": "Show.E99.mkv"},
+            {"fid": "s2e2", "file_name": "Show.S02E02.mkv"},
+        ],
+    }
+    sources = SeasonlessEpisodeSources()
+    sources.shares = [{"channel": "demo", "pwd_id": "share-seasonless"}]
+    manager = SubscriptionManager(
+        tmp_path / "channel-seasonless-baseline.json",
+        storage,
+        sources,
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-seasonless",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        source_id="telegram",
+        channel="demo",
+        files=[{"fid": "selected", "file_name": "Show.S02E01.mkv"}],
+    )
+
+    try:
+        ok, message = manager.check_subscription_now(sub["id"])
+
+        assert ok is True
+        assert "成功追更 2 项" in message
+        assert storage.transfers == [("share-seasonless", ["selected", "s2e2"])]
+        diagnostics = manager.get_subscriptions()[0]["last_diagnostics"]
+        assert diagnostics["unrecognized"] == 1
+        assert any("缺少可确认的季数" in item["reason"] for item in diagnostics["examples"])
+    finally:
+        manager.stop_scheduler()
+
+
+def test_legacy_direct_season_baseline_skips_files_without_a_confirmed_season(tmp_path):
+    class SeasonlessEpisodeSources(FakeResourceSources):
+        def parse_tv_episode(self, source_id, file_name):
+            if file_name == "Show.E99.mkv":
+                return None, 99
+            return None, None
+
+    storage = DynamicStorageTargets()
+    storage.files = [
+        {"fid": "seasonless", "file_name": "Show.E99.mkv"},
+        {"fid": "s2e2", "file_name": "Show.S02E02.mkv"},
+    ]
+    manager = SubscriptionManager(
+        tmp_path / "legacy-direct-seasonless-baseline.json",
+        storage,
+        SeasonlessEpisodeSources(),
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-seasonless-direct",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        start_ep=1,
+    )
+    persisted = manager.get_subscriptions()
+    current = next(item for item in persisted if item["id"] == sub["id"])
+    current["tracking_mode"] = "legacy"
+    current["start_season"] = 2
+    current["start_ep"] = 1
+    manager.store.write(persisted)
+
+    try:
+        ok, message = manager.check_subscription_now(sub["id"])
+
+        assert ok is True
+        assert "成功追更 1 项" in message
+        assert storage.transfers == [["s2e2"]]
+        diagnostics = manager.get_subscriptions()[0]["last_diagnostics"]
+        assert diagnostics["unrecognized"] == 1
+    finally:
+        manager.stop_scheduler()
