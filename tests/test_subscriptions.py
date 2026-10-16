@@ -2340,3 +2340,51 @@ def test_smart_follow_uses_global_filename_rules_for_channel_scan_and_season_bas
     assert ok is True
     assert "成功追更 3 项" in message
     assert storage.transfers == [("share-seasons", ["ep207", "ep208", "ep301"])]
+
+
+
+def test_channel_search_failure_is_persisted_and_not_reported_as_full_success(tmp_path):
+    class FailingResourceSources(FakeResourceSources):
+        def search_channel(self, source_id, channel, title):
+            raise RuntimeError("temporary search outage")
+
+    storage = ChannelStorageTargets()
+    storage.shares = {
+        "share-selected": [
+            {"fid": "ep1", "file_name": "Show.S01E01.mkv"},
+            {"fid": "ep2", "file_name": "Show.S01E02.mkv"},
+        ],
+    }
+    sources = FailingResourceSources()
+    manager = SubscriptionManager(
+        tmp_path / "channel-search-failure-diagnostics.json",
+        storage,
+        sources,
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-selected",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        source_id="telegram",
+        channel="demo",
+        files=[{"fid": "ep1", "file_name": "Show.S01E01.mkv"}],
+    )
+
+    try:
+        ok, message = manager.check_subscription_now(sub["id"])
+
+        # The selected share remains usable as a fallback, but the channel scan
+        # is incomplete and must not be presented as a fully successful check.
+        assert ok is False
+        assert "频道搜索存在 1 项异常" in message
+        assert storage.transfers == [("share-selected", ["ep1", "ep2"])]
+        saved = manager.get_subscriptions()[0]
+        diagnostics = saved["last_diagnostics"]
+        assert diagnostics["source_search_errors"] == 1
+        assert diagnostics["transferred_files"] == 2
+        assert diagnostics["success"] is False
+        assert any("temporary search outage" in item["reason"] for item in diagnostics["examples"])
+    finally:
+        manager.stop_scheduler()
