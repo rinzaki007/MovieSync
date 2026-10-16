@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import re
 from copy import deepcopy
+from functools import wraps
 from pathlib import Path
+from threading import RLock
 from urllib.parse import urlparse
 
 from .errors import ConfigValidationError
@@ -27,8 +29,18 @@ MAX_CHANNELS = 100
 CONFIG_SCHEMA_VERSION = 5
 
 
+def _serialized_config_method(method):
+    """Serialize complete config operations, not just individual JSON reads/writes."""
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):
+        with self._lock:
+            return method(self, *args, **kwargs)
+    return wrapped
+
+
 class ConfigStore:
     def __init__(self, config_file: Path, legacy_root: Path):
+        self._lock = RLock()
         self.store = JsonStore(config_file, self._defaults)
         self.legacy_root = legacy_root
         self.legacy_cards = LegacyCardConfigAdapter(self, CONFIG_SCHEMA_VERSION)
@@ -141,6 +153,7 @@ class ConfigStore:
 
         return url
 
+    @_serialized_config_method
     def load(self) -> dict:
         data = self.store.read()
         original_data = deepcopy(data)
@@ -161,6 +174,7 @@ class ConfigStore:
 
         return normalized
 
+    @_serialized_config_method
     def save_card_config(
         self,
         card_id: str,
@@ -205,6 +219,7 @@ class ConfigStore:
         self.store.write(current)
         return deepcopy(saved)
 
+    @_serialized_config_method
     def get_card_config(self, card_id: str) -> dict:
         """Return a card's saved config by ID without knowing its implementation."""
         card_id = str(card_id or "").strip()
@@ -216,19 +231,24 @@ class ConfigStore:
         card_config = saved.get("config", {}) if isinstance(saved, dict) else {}
         return deepcopy(card_config) if isinstance(card_config, dict) else {}
 
+    @_serialized_config_method
     def get_quark_config(self) -> dict:
         """Legacy compatibility wrapper; new card code should use get_card_config()."""
         return self.legacy_cards.get_quark_config()
 
+    @_serialized_config_method
     def save_quark_config(self, incoming: dict) -> dict:
         return self.legacy_cards.save_quark_config(incoming)
 
+    @_serialized_config_method
     def get_cookie(self) -> str:
         return self.legacy_cards.get_cookie()
 
+    @_serialized_config_method
     def get_default_storage_target_id(self) -> str:
         return str(self.load().get("default_storage_target_id") or "").strip()
 
+    @_serialized_config_method
     def set_default_storage_target_id(self, target_id: object) -> str:
         target_id = str(target_id or "").strip()
         if len(target_id) > 64 or (target_id and not re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,63}", target_id)):
@@ -239,13 +259,16 @@ class ConfigStore:
         self.store.write(current)
         return target_id
 
+    @_serialized_config_method
     def get_channels(self) -> list[dict[str, str]]:
         return self.legacy_cards.get_channels()
 
+    @_serialized_config_method
     def get_telegram_config(self) -> dict:
         """Legacy compatibility wrapper for the Telegram card."""
         return self.legacy_cards.get_telegram_config()
 
+    @_serialized_config_method
     def save_telegram_config(self, incoming: dict) -> dict:
         return self.legacy_cards.save_telegram_config(incoming)
 
@@ -283,6 +306,7 @@ class ConfigStore:
 
         return deepcopy(value)
 
+    @_serialized_config_method
     def public(self) -> dict:
         """返回脱敏后的配置，不要求任何特定卡片已安装。"""
         return self._sanitize_public_value(self.load())
@@ -347,6 +371,7 @@ class ConfigStore:
             return self.load()
         return current
 
+    @_serialized_config_method
     def save(self, incoming: dict) -> dict:
         if not isinstance(incoming, dict):
             raise ConfigValidationError(

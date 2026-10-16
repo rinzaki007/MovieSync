@@ -2,6 +2,8 @@
 
 覆盖：敏感 Cookie 保留、公共配置脱敏、频道规范化/去重以及非法频道拒绝。
 """
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 
 from moviesync.config_store import ConfigStore, ConfigValidationError
@@ -345,3 +347,26 @@ def test_public_config_does_not_require_legacy_cards(monkeypatch, tmp_path):
     assert public["cards"]["custom.storage"]["config"]["cookie"] == ""
     assert public["cards"]["custom.storage"]["config"]["has_cookie"] is True
     assert public["cards"]["custom.storage"]["config"]["endpoint"] == "https://storage.example"
+
+
+def test_concurrent_config_updates_do_not_overwrite_each_other(tmp_path):
+    store = ConfigStore(tmp_path / "config.json", tmp_path / "legacy")
+    card_ids = [f"test-storage-{index:02d}" for index in range(24)]
+
+    def save_card(index):
+        store.save_card_config(
+            card_ids[index],
+            {"endpoint": f"https://storage-{index}.example"},
+        )
+
+    with ThreadPoolExecutor(max_workers=12) as executor:
+        list(executor.map(save_card, range(len(card_ids))))
+        store.set_default_storage_target_id("test-storage-00")
+
+    config = store.load()
+    saved_cards = config["cards"]
+    for index, card_id in enumerate(card_ids):
+        assert saved_cards[card_id]["config"]["endpoint"] == (
+            f"https://storage-{index}.example"
+        )
+    assert config["default_storage_target_id"] == "test-storage-00"
