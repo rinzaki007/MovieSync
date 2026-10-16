@@ -626,6 +626,7 @@ def test_uninstall_closes_the_loaded_card(tmp_path):
     manager.uninstall("closeable.py")
 
     assert card.close_calls == 1
+    # Registry ownership must ensure the card is closed exactly once.
     assert registry.get("closeable") is None
 
 
