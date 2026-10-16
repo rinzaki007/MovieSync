@@ -1589,10 +1589,16 @@ class SubscriptionManager:
                     "频道资源解析失败，未能确认是否有新集；请检查资源来源状态或查看服务日志",
                     success_keys=[],
                 )
+            if diagnostics["source_search_errors"]:
+                return self._finish(
+                    sub,
+                    False,
+                    f"频道搜索存在 {diagnostics['source_search_errors']} 项异常，未能完整确认是否有新集；请检查资源来源状态后重试",
+                    success_keys=[],
+                )
             if scan_complete:
                 self._save_channel_scan_cursor(sub, scan_cursor)
-            if not resolution_errors:
-                self._save_channel_history_cursor(sub, history_cursor, history_complete)
+            self._save_channel_history_cursor(sub, history_cursor, history_complete)
             return self._finish(sub, True, f"《{title}》暂无新更新", success_keys=[])
 
         target_fid = _normalize_fid(sub.get("target_fid"))
@@ -1664,6 +1670,14 @@ class SubscriptionManager:
                 sub,
                 False,
                 f"已转存 {total} 项，但部分频道资源解析失败，后续将继续检查",
+                success_keys=all_keys,
+            )
+
+        if diagnostics["source_search_errors"]:
+            return self._finish(
+                sub,
+                False,
+                f"已转存 {total} 项，但频道搜索存在 {diagnostics['source_search_errors']} 项异常，未能完整确认新集；后续将重试",
                 success_keys=all_keys,
             )
 
