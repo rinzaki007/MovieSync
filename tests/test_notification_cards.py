@@ -186,3 +186,38 @@ def test_notification_plugin_factory_closes_card_when_registration_fails(monkeyp
     assert manager.load_plugins() == []
     assert candidate.closed is True
     assert registry.get("demo.notification") is not candidate
+
+
+
+def test_notification_manager_fails_closed_when_config_cannot_be_read():
+    class BrokenConfigStore:
+        def load(self):
+            raise OSError("simulated config read failure")
+
+    card = DemoNotification()
+    registry = CardRegistry()
+    registry.register(card)
+    manager = NotificationManager(
+        registry,
+        logging.getLogger("test.notifications.config-failure"),
+        BrokenConfigStore(),
+    )
+
+    assert manager.send("task.completed", {"task_id": "123"}) == {
+        "demo.notification": False
+    }
+    assert card.calls == []
+
+
+def test_notification_manager_fails_closed_on_invalid_config_shape():
+    card = DemoNotification()
+    registry = CardRegistry()
+    registry.register(card)
+    manager = NotificationManager(
+        registry,
+        logging.getLogger("test.notifications.invalid-config"),
+        FakeConfigStore(["not", "a", "config"]),
+    )
+
+    assert manager.send("task.completed", {}) == {"demo.notification": False}
+    assert card.calls == []
