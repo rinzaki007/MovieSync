@@ -44,10 +44,30 @@ def test_install_load_and_uninstall_card_lifecycle(tmp_path):
         }
     ]
 
+    closed = []
+    card.close = lambda: closed.append(True)
+
+    result = manager.uninstall("demo.py")
+
+    assert result == {"filename": "demo.py", "card_id": "demo"}
+    assert closed == [True]
+    assert registry.get("demo") is None
+    assert manager.list_plugins() == []
+
+
+def test_uninstall_removes_card_even_when_close_raises(tmp_path):
+    manager, registry = _manager(tmp_path)
+    card = manager.install("demo.py", CARD_SOURCE)
+
+    def fail_close():
+        raise RuntimeError("simulated cleanup failure")
+
+    card.close = fail_close
     result = manager.uninstall("demo.py")
 
     assert result == {"filename": "demo.py", "card_id": "demo"}
     assert registry.get("demo") is None
+    assert not (tmp_path / "cards" / "demo.py").exists()
     assert manager.list_plugins() == []
 
 
