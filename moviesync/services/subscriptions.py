@@ -132,6 +132,7 @@ class SubscriptionManager:
         # Serialize start/stop callers without holding the data lock while
         # joining the worker, since the worker may need that lock to finish.
         self._scheduler_lifecycle_lock = RLock()
+        self._shutdown_requested = False
         self.running_ids: set[str] = set()
         self.stop_event = Event()
         self.worker: Thread | None = None
@@ -2203,6 +2204,8 @@ class SubscriptionManager:
         # it has fully terminated, avoiding both a lost start and overlap.
         with self._scheduler_lifecycle_lock:
             with self.lock:
+                if self._shutdown_requested:
+                    return
                 if self.worker and self.worker.is_alive():
                     if self.stop_event.is_set():
                         self._scheduler_restart_requested = True
@@ -2243,6 +2246,26 @@ class SubscriptionManager:
                     self.logger.warning(
                         "自动追剧调度器尚未退出；保留线程引用以阻止重复启动"
                     )
+
+    def shutdown(self) -> None:
+        """停止调度器并等待正在执行的检查结束后再释放卡片资源。"""
+        with self._scheduler_lifecycle_lock:
+            with self.lock:
+                self._shutdown_requested = True
+                self._scheduler_restart_requested = False
+
+        self.stop_scheduler()
+
+        # stop_scheduler intentionally has a short timeout for normal lifecycle
+        # operations. Process shutdown is different: wait for any in-flight check
+        # to finish before the app closes the cards it may still be using.
+        with self.lock:
+            worker = self.worker
+        if worker is not None and worker is not current_thread():
+            worker.join()
+        with self.lock:
+            if self.worker is worker and (worker is None or not worker.is_alive()):
+                self.worker = None
 
     def _scheduler_loop(
         self,
