@@ -107,9 +107,8 @@ class TaskManager:
             if resource_id and file_ids:
                 fingerprint = {
                     "type": "transfer",
-                    "title": " ".join(
-                        str(movie.get("title") or movie.get("name") or payload.get("title") or "").split()
-                    ).casefold(),
+                    # Display titles can differ for the same underlying share/file.
+                    # Keep deduplication anchored to resource identity and destination.
                     "resource_id": resource_id,
                     "resource_type": str(candidate.get("resource_type") or "").strip().lower(),
                     "source_id": str(candidate.get("source_id") or "").strip(),
