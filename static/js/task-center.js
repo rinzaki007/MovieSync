@@ -433,15 +433,20 @@ function renderSubscriptionDiagnostics(task) {
         return '<div class="rounded-xl border border-slate-800 bg-slate-950 p-4"><div class="text-xs font-semibold text-slate-200">最近一次追剧诊断</div><div class="mt-2 text-[11px] text-slate-500">还没有可展示的结构化诊断。下次检查完成后会在这里显示资源解析、文件识别和过滤结果。</div></div>';
     }
     const metrics = [
-        ['发现资源', d.source_candidates], ['去重后分享', d.unique_shares],
+        ['发现资源条目', d.source_candidates], ['去重后分享', d.unique_shares],
         ['成功解析分享', d.resolved_shares], ['解析失败', d.resolution_failures],
-        ['扫描文件', d.files_scanned], ['视频文件', d.video_files],
+        ['频道搜索异常', d.source_search_errors], ['无效资源条目', d.invalid_source_entries],
+        ['重复资源条目', d.duplicate_source_entries], ['扫描文件条目', d.files_scanned],
+        ['视频文件', d.video_files], ['非视频文件', d.non_video_files],
+        ['缺少文件 ID', d.missing_file_id], ['格式异常文件条目', d.invalid_file_entries],
+        ['初选文件未找到', d.initial_files_missing],
         ['已保存跳过', d.already_saved], ['已追踪跳过', d.already_tracked],
-        ['无法识别', d.unrecognized], ['起始集前过滤', d.filtered_old],
+        ['无法识别集数', d.unrecognized], ['起始集前过滤', d.filtered_old],
         ['跨分享同集去重', d.duplicate_episodes], ['进入转存队列', d.queued_files],
         ['已确认转存', d.transferred_files]
     ];
-    const examples = Array.isArray(d.examples) ? d.examples.slice(0, 12) : [];
+    const examples = Array.isArray(d.examples) ? d.examples.slice(0, 30) : [];
+    const shares = Array.isArray(d.shares) ? d.shares.slice(0, 50) : [];
     const finished = d.finished_at ? new Date(Number(d.finished_at) * 1000).toLocaleString() : '未知时间';
     return '<section class="rounded-xl border border-slate-700/70 bg-slate-950 p-4">' +
         '<div class="flex flex-wrap items-center justify-between gap-2"><div class="text-xs font-semibold text-slate-200">最近一次追剧诊断</div><div class="text-[10px] text-slate-500">' + escapeTask(finished) + '</div></div>' +
@@ -449,7 +454,10 @@ function renderSubscriptionDiagnostics(task) {
             '<div class="rounded-lg border border-slate-800 bg-slate-900/70 p-2.5"><div class="text-[10px] text-slate-500">' + label + '</div><div class="mt-1 text-lg font-semibold text-slate-100">' + Number(value || 0) + '</div></div>'
         ).join('') + '</div>' +
         '<div class="mt-3 text-[11px] ' + (d.success ? 'text-emerald-300' : 'text-amber-300') + '">' + escapeTask(d.message || '') + '</div>' +
-        (examples.length ? '<details class="mt-3"><summary class="cursor-pointer text-[11px] text-slate-400">查看跳过与异常样例（最多 12 条）</summary><div class="mt-2 space-y-2">' + examples.slice(0,12).map(item =>
+        (shares.length ? '<details class="mt-3"><summary class="cursor-pointer text-[11px] text-slate-400">逐个分享的解析与扫描结果（最多 50 个）</summary><div class="mt-2 space-y-2">' + shares.map(item =>
+            '<div class="rounded-lg border border-slate-800 px-3 py-2"><div class="flex flex-wrap items-center justify-between gap-2"><span class="break-all text-[11px] text-slate-300">' + escapeTask(item.resource_id || '未知分享') + '</span><span class="text-[10px] ' + (item.status === '已解析' ? 'text-emerald-300' : 'text-amber-300') + '">' + escapeTask(item.status || '未知状态') + '</span></div><div class="mt-1 text-[10px] text-slate-500">扫描 ' + Number(item.files_scanned || 0) + ' · 视频 ' + Number(item.video_files || 0) + ' · 入队 ' + Number(item.queued_files || 0) + ' · 跳过 ' + Number(item.skipped_files || 0) + '</div>' + (item.error ? '<div class="mt-1 break-words text-[10px] text-rose-300">' + escapeTask(item.error) + '</div>' : '') + '</div>'
+        ).join('') + '</div></details>' : '') +
+        (examples.length ? '<details class="mt-3"><summary class="cursor-pointer text-[11px] text-slate-400">查看跳过与异常样例（最多 30 条）</summary><div class="mt-2 space-y-2">' + examples.map(item =>
             '<div class="rounded-lg border border-slate-800 px-3 py-2"><div class="break-all text-[11px] text-slate-300">' + escapeTask(item.file || '—') + '</div><div class="mt-1 text-[10px] text-slate-500">' + escapeTask(item.reason || '') + '</div></div>'
         ).join('') + '</div></details>' : '') +
         '<div class="mt-2 text-[10px] text-slate-600">“已确认转存”仅统计接口确认成功的文件；无法识别的文件不会直接算作缺集。</div>' +

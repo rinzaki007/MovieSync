@@ -715,9 +715,12 @@ class SubscriptionManager:
         sub["_run_diagnostics"] = {
             "source_candidates": 0, "unique_shares": 0, "resolved_shares": 0,
             "resolution_failures": 0, "files_scanned": 0, "video_files": 0,
+            "non_video_files": 0, "missing_file_id": 0, "invalid_file_entries": 0,
+            "invalid_source_entries": 0, "duplicate_source_entries": 0,
+            "source_search_errors": 0, "initial_files_missing": 0,
             "already_saved": 0, "already_tracked": 0, "unrecognized": 0,
             "filtered_old": 0, "duplicate_episodes": 0, "queued_files": 0,
-            "transferred_files": 0, "examples": [],
+            "transferred_files": 0, "shares": [], "examples": [],
         }
         # Channel/source metadata is the durable signal for channel-based Smart Follow.
         # Older or migrated records may still carry tracking_mode="all"; letting those
@@ -974,9 +977,12 @@ class SubscriptionManager:
         diagnostics = {
             "source_candidates": 0, "unique_shares": 0, "resolved_shares": 0,
             "resolution_failures": 0, "files_scanned": 0, "video_files": 0,
+            "non_video_files": 0, "missing_file_id": 0, "invalid_file_entries": 0,
+            "invalid_source_entries": 0, "duplicate_source_entries": 0,
+            "source_search_errors": 0, "initial_files_missing": 0,
             "already_saved": 0, "already_tracked": 0, "unrecognized": 0,
             "filtered_old": 0, "duplicate_episodes": 0, "queued_files": 0,
-            "transferred_files": 0, "examples": [],
+            "transferred_files": 0, "shares": [], "examples": [],
         }
         sub["_run_diagnostics"] = diagnostics
         self._set_status(sub, "running", "searching", "正在搜刮频道资源…")
@@ -985,41 +991,74 @@ class SubscriptionManager:
         history_cursor = None
         history_complete = False
         history_state = {"items": [], "cursor": None, "complete": False}
-        if self.resource_sources:
-            incremental_search = getattr(
-                self.resource_sources, "search_channel_updates", None
-            )
-            if callable(incremental_search):
-                scan_state = incremental_search(
-                    source_id,
-                    channel,
-                    title,
-                    sub.get("channel_scan_cursor"),
-                )
-                if isinstance(scan_state, dict):
-                    sources = scan_state.get("items", [])
-                    scan_cursor = scan_state.get("cursor")
-                    scan_complete = bool(scan_state.get("complete"))
+        sources = []
+        try:
+            if self.resource_sources:
+                incremental_search = getattr(self.resource_sources, "search_channel_updates", None)
+                if callable(incremental_search):
+                    scan_state = incremental_search(source_id, channel, title, sub.get("channel_scan_cursor"))
+                    if isinstance(scan_state, dict):
+                        sources = scan_state.get("items", [])
+                        scan_cursor = scan_state.get("cursor")
+                        scan_complete = bool(scan_state.get("complete"))
+                    else:
+                        diagnostics["source_search_errors"] += 1
+                        diagnostics["examples"].append({
+                            "file": "频道增量搜索",
+                            "reason": "资源卡片返回了非预期的数据结构",
+                        })
                 else:
-                    sources = []
-            else:
-                sources = self.resource_sources.search_channel(source_id, channel, title)
-        else:
-            sources = []
+                    sources = self.resource_sources.search_channel(source_id, channel, title)
+        except Exception as exc:
+            diagnostics["source_search_errors"] += 1
+            diagnostics["examples"].append({
+                "file": "频道资源搜索",
+                "reason": f"{type(exc).__name__}: {str(exc)[:160]}",
+            })
+            self.logger.exception("智能追剧频道搜索失败，source_id=%s channel=%s", source_id, channel)
+            scan_complete = False
+
         if self.resource_sources and not sub.get("channel_history_complete"):
             history_search = getattr(self.resource_sources, "search_channel_history", None)
             if callable(history_search):
-                history_before = sub.get("channel_history_before")
-                if history_before is None:
-                    history_before = scan_cursor or sub.get("channel_scan_cursor")
-                history_state = history_search(source_id, channel, title, history_before)
-                if isinstance(history_state, dict):
-                    history_cursor = history_state.get("cursor")
-                    history_complete = bool(history_state.get("complete"))
-                    history_items = history_state.get("items", [])
-                    if isinstance(history_items, list):
-                        sources = [*(sources if isinstance(sources, list) else []), *history_items]
+                try:
+                    history_before = sub.get("channel_history_before")
+                    if history_before is None:
+                        history_before = scan_cursor or sub.get("channel_scan_cursor")
+                    history_state = history_search(source_id, channel, title, history_before)
+                    if isinstance(history_state, dict):
+                        history_cursor = history_state.get("cursor")
+                        history_complete = bool(history_state.get("complete"))
+                        history_items = history_state.get("items", [])
+                        if isinstance(history_items, list):
+                            sources = [*(sources if isinstance(sources, list) else []), *history_items]
+                        else:
+                            diagnostics["source_search_errors"] += 1
+                            diagnostics["examples"].append({
+                                "file": "频道历史搜索",
+                                "reason": "资源卡片返回了非列表 items",
+                            })
+                    else:
+                        diagnostics["source_search_errors"] += 1
+                        diagnostics["examples"].append({
+                            "file": "频道历史搜索",
+                            "reason": "资源卡片返回了非预期的数据结构",
+                        })
+                except Exception as exc:
+                    diagnostics["source_search_errors"] += 1
+                    diagnostics["examples"].append({
+                        "file": "频道历史搜索",
+                        "reason": f"{type(exc).__name__}: {str(exc)[:160]}",
+                    })
+                    self.logger.exception("智能追剧频道历史搜索失败，source_id=%s channel=%s", source_id, channel)
+                    history_complete = False
+
         if not isinstance(sources, list):
+            diagnostics["source_search_errors"] += 1
+            diagnostics["examples"].append({
+                "file": "频道资源搜索",
+                "reason": f"资源卡片返回 {type(sources).__name__}，预期为列表",
+            })
             sources = []
             scan_complete = False
         diagnostics["source_candidates"] = len(sources)
@@ -1048,6 +1087,10 @@ class SubscriptionManager:
                 },
                 *sources,
             ]
+            diagnostics["examples"].append({
+                "file": selected_pwd_id,
+                "reason": "频道搜索结果未包含初选分享，已补入初选分享进行检查",
+            })
 
         # A share ID can exist under multiple storage-target cards. Deduplicate
         # repeated scan results only when both the share and target identity match.
@@ -1055,12 +1098,22 @@ class SubscriptionManager:
         seen_source_keys = set()
         for item in sources:
             if not isinstance(item, dict):
+                diagnostics["invalid_source_entries"] += 1
+                diagnostics["examples"].append({
+                    "file": "频道搜索结果",
+                    "reason": f"忽略非字典资源条目：{type(item).__name__}",
+                })
                 continue
             item_resource_id = str(item.get("resource_id") or item.get("share_id") or item.get("pwd_id") or "").strip()
             item_resource_type = str(item.get("resource_type") or "").strip().lower()
             item_target_id = str(item.get("storage_target_id") or selected_target_id).strip()
             source_key = (item_resource_type, item_resource_id, item_target_id)
-            if not item_resource_id or source_key in seen_source_keys:
+            if not item_resource_id:
+                diagnostics["invalid_source_entries"] += 1
+                diagnostics["examples"].append({"file": "频道搜索结果", "reason": "资源条目缺少分享 ID"})
+                continue
+            if source_key in seen_source_keys:
+                diagnostics["duplicate_source_entries"] += 1
                 continue
             seen_source_keys.add(source_key)
             unique_sources.append(item)
@@ -1179,8 +1232,23 @@ class SubscriptionManager:
             resolved_sources = list(executor.map(resolve_source, sources))
 
         for _source, resource, resolved in resolved_sources:
+            share_diag = None
             if resource is None:
                 diagnostics["resolution_failures"] += 1
+                diagnostics["examples"].append({
+                    "file": "频道搜索结果",
+                    "reason": "资源条目缺少分享 ID，无法解析",
+                })
+                diagnostics["shares"].append({
+                    "resource_id": "",
+                    "resource_type": "",
+                    "status": "无效资源",
+                    "files_scanned": 0,
+                    "video_files": 0,
+                    "queued_files": 0,
+                    "skipped_files": 0,
+                    "error": "资源条目缺少分享 ID",
+                })
                 continue
             resource_id = resource["resource_id"]
             resource_type = resource["resource_type"]
@@ -1198,19 +1266,66 @@ class SubscriptionManager:
                 self.logger.warning("自动追剧资源解析失败，资源 ID=%s，原因=%s", resource_id, reason)
                 resolution_errors.append(f"{resource_id}: 解析失败")
                 diagnostics["resolution_failures"] += 1
-                if len(diagnostics["examples"]) < 20:
-                    diagnostics["examples"].append({"file": resource_id, "reason": "资源解析失败"})
+                diagnostics["examples"].append({"file": resource_id, "reason": reason[:200]})
+                diagnostics["shares"].append({
+                    "resource_id": resource_id[:120],
+                    "resource_type": resource_type[:60],
+                    "status": "解析失败",
+                    "files_scanned": 0,
+                    "video_files": 0,
+                    "queued_files": 0,
+                    "skipped_files": 0,
+                    "error": reason[:200],
+                })
                 continue
 
             diagnostics["resolved_shares"] += 1
+            share_diag = {
+                "resource_id": resource_id[:120],
+                "resource_type": resource_type[:60],
+                "status": "已解析",
+                "files_scanned": 0,
+                "video_files": 0,
+                "queued_files": 0,
+                "skipped_files": 0,
+                "error": "",
+            }
+            if len(diagnostics["shares"]) < 50:
+                diagnostics["shares"].append(share_diag)
+            if not isinstance(files, list):
+                diagnostics["resolution_failures"] += 1
+                reason = "资源解析返回的文件列表不是列表"
+                share_diag = {
+                    "resource_id": resource_id[:120],
+                    "resource_type": resource_type[:60],
+                    "status": "文件列表格式异常",
+                    "files_scanned": 0,
+                    "video_files": 0,
+                    "queued_files": 0,
+                    "skipped_files": 0,
+                    "error": reason,
+                }
+                if len(diagnostics["shares"]) < 50:
+                    diagnostics["shares"].append(share_diag)
+                diagnostics["examples"].append({"file": resource_id, "reason": reason})
+                continue
             file_fids = {
                 str(file_item.get("fid") or "").strip()
                 for file_item in files
-                if str(file_item.get("fid") or "").strip()
+                if isinstance(file_item, dict) and str(file_item.get("fid") or "").strip()
             }
             if resource_id == selected_pwd_id and initial_file_keys:
                 missing_selected = sorted(initial_file_keys - file_fids)
                 if missing_selected:
+                    diagnostics["initial_files_missing"] += len(missing_selected)
+                    if len(diagnostics["examples"]) < 50:
+                        diagnostics["examples"].append({
+                            "file": resource_id,
+                            "reason": (
+                                "初选文件 ID 未出现在分享解析返回的文件列表中："
+                                + ", ".join(missing_selected[:10])
+                            ),
+                        })
                     self.logger.warning(
                         "智能追剧初选诊断：初选分享=%s，以下初选FID未出现在网盘返回的文件列表中：%s",
                         resource_id,
@@ -1223,10 +1338,43 @@ class SubscriptionManager:
                         len(initial_file_keys),
                     )
             for item in files:
-                fid = str(item.get("fid") or "").strip()
-                if not fid:
-                    continue
                 diagnostics["files_scanned"] += 1
+                if share_diag is not None:
+                    share_diag["files_scanned"] += 1
+                if not isinstance(item, dict):
+                    diagnostics["invalid_file_entries"] += 1
+                    if share_diag is not None:
+                        share_diag["skipped_files"] += 1
+                    if len(diagnostics["examples"]) < 50:
+                        diagnostics["examples"].append({
+                            "file": resource_id,
+                            "reason": f"忽略非字典文件条目：{type(item).__name__}",
+                        })
+                    continue
+                fid = str(item.get("fid") or "").strip()
+                file_name = str(item.get("file_name") or item.get("name") or "").strip()
+                is_video = bool(file_name.lower().endswith(VIDEO_EXTENSIONS))
+                if is_video:
+                    diagnostics["video_files"] += 1
+                    if share_diag is not None:
+                        share_diag["video_files"] += 1
+                else:
+                    diagnostics["non_video_files"] += 1
+                    if len(diagnostics["examples"]) < 50:
+                        diagnostics["examples"].append({
+                            "file": file_name or "(无文件名)",
+                            "reason": "非视频文件，未进入追剧识别",
+                        })
+                if not fid:
+                    if share_diag is not None:
+                        share_diag["skipped_files"] += 1
+                    diagnostics["missing_file_id"] += 1
+                    if len(diagnostics["examples"]) < 50:
+                        diagnostics["examples"].append({
+                            "file": file_name or "(无文件名)",
+                            "reason": "文件条目缺少 fid，无法追踪或转存",
+                        })
+                    continue
                 legacy_key = f"{resource_id}:{fid}"
                 provider_key = (
                     f"{resource_type}:{legacy_key}"
@@ -1270,8 +1418,10 @@ class SubscriptionManager:
                 # marker on a selected initial file may be the false-positive written
                 # by older versions before filename recognition was available.
                 if confirmed_saved:
+                    if share_diag is not None:
+                        share_diag["skipped_files"] += 1
                     diagnostics["already_saved"] += 1
-                    if len(diagnostics["examples"]) < 20:
+                    if len(diagnostics["examples"]) < 50:
                         diagnostics["examples"].append({
                             "file": str(item.get("file_name") or fid),
                             "reason": "已确认保存，跳过重复转存",
@@ -1284,15 +1434,18 @@ class SubscriptionManager:
                         )
                     continue
                 if ((key in tracked or legacy_selected_key) and not is_selected_initial) or queue_key in queued_keys:
+                    if share_diag is not None:
+                        share_diag["skipped_files"] += 1
                     diagnostics["already_tracked"] += 1
-                    if len(diagnostics["examples"]) < 20:
+                    if len(diagnostics["examples"]) < 50:
                         diagnostics["examples"].append({
                             "file": str(item.get("file_name") or fid),
                             "reason": "已追踪或重复文件，跳过",
                         })
                     continue
-                file_name = str(item.get("file_name") or "")
-                if not file_name.lower().endswith(VIDEO_EXTENSIONS):
+                if not is_video:
+                    if share_diag is not None:
+                        share_diag["skipped_files"] += 1
                     if is_selected_initial:
                         self.logger.warning(
                             "智能追剧初选诊断：初选文件因扩展名被过滤，FID=%s，文件名=%s",
@@ -1300,15 +1453,16 @@ class SubscriptionManager:
                             file_name,
                         )
                     continue
-                diagnostics["video_files"] += 1
                 season, episode = _parse_source_episode(
                     self.resource_sources,
                     source_id,
                     file_name,
                 )
                 if episode is None:
+                    if share_diag is not None:
+                        share_diag["skipped_files"] += 1
                     diagnostics["unrecognized"] += 1
-                    if len(diagnostics["examples"]) < 20:
+                    if len(diagnostics["examples"]) < 50:
                         diagnostics["examples"].append({
                             "file": file_name[:240],
                             "reason": "无法识别季集，未自动转存",
@@ -1336,8 +1490,10 @@ class SubscriptionManager:
                         previously_saved_source
                         and previously_saved_source != current_source_identity
                     ):
+                        if share_diag is not None:
+                            share_diag["skipped_files"] += 1
                         diagnostics["already_saved"] += 1
-                        if len(diagnostics["examples"]) < 20:
+                        if len(diagnostics["examples"]) < 50:
                             diagnostics["examples"].append({
                                 "file": file_name[:240],
                                 "reason": "该季集已从其他分享转存，跳过重复集",
@@ -1355,8 +1511,10 @@ class SubscriptionManager:
                         continue
                     if season is not None and baseline_season > 0:
                         if (season, episode) <= (baseline_season, baseline_episode):
+                            if share_diag is not None:
+                                share_diag["skipped_files"] += 1
                             diagnostics["filtered_old"] += 1
-                            if len(diagnostics["examples"]) < 20:
+                            if len(diagnostics["examples"]) < 50:
                                 diagnostics["examples"].append({
                                     "file": file_name[:240],
                                     "reason": "早于追剧起始集，已过滤",
@@ -1364,8 +1522,10 @@ class SubscriptionManager:
                             continue
                     elif episode <= baseline_episode:
                         # 只过滤未选中的基准集及更早集数；选中集需首次转存。
+                        if share_diag is not None:
+                            share_diag["skipped_files"] += 1
                         diagnostics["filtered_old"] += 1
-                        if len(diagnostics["examples"]) < 20:
+                        if len(diagnostics["examples"]) < 50:
                             diagnostics["examples"].append({
                                 "file": file_name[:240],
                                 "reason": "早于追剧起始集，已过滤",
@@ -1387,8 +1547,10 @@ class SubscriptionManager:
                                 resource_id,
                                 previous_group[1],
                             )
+                        if share_diag is not None:
+                            share_diag["skipped_files"] += 1
                         diagnostics["duplicate_episodes"] += 1
-                        if len(diagnostics["examples"]) < 20:
+                        if len(diagnostics["examples"]) < 50:
                             diagnostics["examples"].append({
                                 "file": file_name[:240],
                                 "reason": "与优先分享中的同集重复，已去重",
@@ -1403,6 +1565,8 @@ class SubscriptionManager:
                     "episode_sources": {},
                 })["files"].append({"fid": fid})
                 grouped[group_key]["keys"].append(key)
+                if share_diag is not None:
+                    share_diag["queued_files"] += 1
                 diagnostics["queued_files"] += 1
                 queued_keys.add(queue_key)
                 if episode is not None:
@@ -1747,7 +1911,8 @@ class SubscriptionManager:
             if isinstance(diagnostics, dict):
                 saved_diagnostics = dict(diagnostics)
                 saved_diagnostics.pop("examples", None)
-                saved_diagnostics["examples"] = list(diagnostics.get("examples") or [])[:20]
+                saved_diagnostics["examples"] = list(diagnostics.get("examples") or [])[:50]
+                saved_diagnostics["shares"] = list(diagnostics.get("shares") or [])[:50]
                 saved_diagnostics["finished_at"] = time.time()
                 saved_diagnostics["success"] = bool(success)
                 saved_diagnostics["message"] = str(message)[:500]
