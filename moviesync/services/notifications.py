@@ -57,15 +57,21 @@ class NotificationManager:
                 self.logger.exception("通知卡片插件 %s 加载失败", entry_point.name)
         return loaded
 
-    def _config(self) -> dict[str, Any]:
+    def _config(self) -> tuple[dict[str, Any], bool]:
+        # No config store is supported for legacy callers and keeps the historical
+        # default-enabled behavior. Once a store exists, read/shape errors must
+        # fail closed so disabled channels are never contacted on a broken config.
         if self.config_store is None:
-            return {}
+            return {}, True
         try:
             config = self.config_store.load()
         except Exception:
-            self.logger.exception("读取通知卡片配置失败")
-            return {}
-        return config if isinstance(config, dict) else {}
+            self.logger.exception("读取通知卡片配置失败，已跳过本次通知投递")
+            return {}, False
+        if not isinstance(config, dict):
+            self.logger.error("通知卡片配置格式无效，已跳过本次通知投递")
+            return {}, False
+        return config, True
 
     @staticmethod
     def _card_config(config: dict[str, Any], card_id: str) -> dict[str, Any]:
@@ -83,12 +89,18 @@ class NotificationManager:
         if not isinstance(payload, dict):
             raise TypeError("通知负载必须是字典")
 
-        config = self._config()
+        config, available = self._config()
+        cards = [
+            card
+            for card in self.registry.find_by_type("notification")
+            if isinstance(card, NotificationCard)
+        ]
+        if not available:
+            return {card.card_id: False for card in cards}
+
         saved_cards = config.get("cards")
         results: dict[str, bool] = {}
-        for card in self.registry.find_by_type("notification"):
-            if not isinstance(card, NotificationCard):
-                continue
+        for card in cards:
             saved = saved_cards.get(card.card_id) if isinstance(saved_cards, dict) else None
             if isinstance(saved, dict) and not saved.get("enabled", True):
                 continue
