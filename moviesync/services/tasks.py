@@ -22,6 +22,9 @@ class TaskManager:
         self.logger = logger
         self.lock = RLock()
         self.executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="moviesync-task")
+        # Track submissions in this process so a queued task whose worker exited
+        # before persisting its running state can be safely resubmitted later.
+        self.submitted_task_ids: set[str] = set()
         self._recover_interrupted_tasks()
 
     def _recover_interrupted_tasks(self):
@@ -222,17 +225,28 @@ class TaskManager:
                 and item.get("dedupe_key") == task["dedupe_key"]
             ), None)
             if active:
+                # A worker may have exited before it could persist the running
+                # state (for example, during a transient disk error). If no
+                # worker currently owns this queued record, reclaim it.
+                if active.get("status") == "queued":
+                    return self._submit_transfer(active, runner)
                 return active
             items.append(task)
             self._save(items)
         return self._submit_transfer(task, runner)
 
     def _submit_transfer(self, task, runner):
-        """Submit a persisted task and record a safe failure if the executor rejects it."""
-        task_id = task["id"]
+        """Submit a persisted task once; allow reclaiming it after a worker exits."""
+        task_id = str(task["id"])
+        with self.lock:
+            if task_id in self.submitted_task_ids:
+                return self._get(task_id) or task
+            self.submitted_task_ids.add(task_id)
         try:
-            self.executor.submit(self._run_transfer, task_id, runner)
+            self.executor.submit(self._run_transfer_guarded, task_id, runner)
         except Exception:
+            with self.lock:
+                self.submitted_task_ids.discard(task_id)
             self.logger.exception("提交转存任务 %s 到后台执行器失败", task_id)
             self._update(
                 task_id,
@@ -249,6 +263,13 @@ class TaskManager:
         # Preserve the queue snapshot returned by the previous implementation;
         # the worker may already have moved the persisted task to running.
         return task
+
+    def _run_transfer_guarded(self, task_id, runner):
+        try:
+            self._run_transfer(task_id, runner)
+        finally:
+            with self.lock:
+                self.submitted_task_ids.discard(str(task_id))
 
     def _update(self, task_id, **changes):
         with self.lock:
@@ -386,6 +407,8 @@ class TaskManager:
                 and item.get("dedupe_key") == dedupe_key
             ), None)
             if active:
+                if active.get("status") == "queued":
+                    return self._submit_transfer(active, runner)
                 return active
             new = dict(old)
             new["dedupe_key"] = dedupe_key
