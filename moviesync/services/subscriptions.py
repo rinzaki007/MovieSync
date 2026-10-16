@@ -739,11 +739,36 @@ class SubscriptionManager:
         diagnostics = sub["_run_diagnostics"]
         diagnostics["source_candidates"] = 1
         diagnostics["unique_shares"] = 1
-        resolved = self.storage_targets.resolve_resource(
-            resource,
-            resource.get("storage_target_id") or None,
-        )
-        files = resolved.get("files") or []
+        try:
+            resolved = self.storage_targets.resolve_resource(
+                resource,
+                resource.get("storage_target_id") or None,
+            )
+        except Exception as exc:
+            diagnostics["resolution_failures"] = 1
+            diagnostics["examples"].append({
+                "file": resource.get("resource_id") or resource.get("pwd_id") or "当前分享",
+                "reason": f"资源解析异常：{type(exc).__name__}: {str(exc)[:160]}",
+            })
+            self.logger.exception("自动追剧资源解析异常")
+            return self._finish(sub, False, "解析链接失败：资源卡片执行异常，请查看服务日志")
+
+        if not isinstance(resolved, dict):
+            diagnostics["resolution_failures"] = 1
+            diagnostics["examples"].append({
+                "file": resource.get("resource_id") or resource.get("pwd_id") or "当前分享",
+                "reason": f"资源卡片返回 {type(resolved).__name__}，预期为对象",
+            })
+            return self._finish(sub, False, "解析链接失败：资源卡片返回格式异常")
+
+        files = resolved.get("files")
+        if not isinstance(files, list):
+            diagnostics["resolution_failures"] = 1
+            diagnostics["examples"].append({
+                "file": resource.get("resource_id") or resource.get("pwd_id") or "当前分享",
+                "reason": f"文件列表返回 {type(files).__name__}，预期为列表",
+            })
+            return self._finish(sub, False, "解析链接失败：文件列表格式异常")
         fetched_stoken = resolved.get("token")
         target_id = str(
             resolved.get("target_id")
@@ -763,10 +788,33 @@ class SubscriptionManager:
 
         diagnostics["resolved_shares"] = 1
         diagnostics["files_scanned"] = len(files)
-        diagnostics["video_files"] = sum(
-            1 for item in files
-            if str(item.get("file_name") or item.get("name") or "").lower().endswith(VIDEO_EXTENSIONS)
-        )
+        for item in files:
+            if not isinstance(item, dict):
+                diagnostics["invalid_file_entries"] += 1
+                if len(diagnostics["examples"]) < 20:
+                    diagnostics["examples"].append({
+                        "file": resource.get("resource_id") or "当前分享",
+                        "reason": f"忽略非字典文件条目：{type(item).__name__}",
+                    })
+                continue
+            file_name = str(item.get("file_name") or item.get("name") or "").strip()
+            fid = str(item.get("fid") or "").strip()
+            if file_name.lower().endswith(VIDEO_EXTENSIONS):
+                diagnostics["video_files"] += 1
+            else:
+                diagnostics["non_video_files"] += 1
+                if len(diagnostics["examples"]) < 20:
+                    diagnostics["examples"].append({
+                        "file": file_name or "(无文件名)",
+                        "reason": "非视频文件，未进入追剧识别",
+                    })
+            if not fid:
+                diagnostics["missing_file_id"] += 1
+                if len(diagnostics["examples"]) < 20:
+                    diagnostics["examples"].append({
+                        "file": file_name or "(无文件名)",
+                        "reason": "文件条目缺少 fid，无法追踪或转存",
+                    })
 
         tracked_keys = {
             str(key).strip()
@@ -794,8 +842,18 @@ class SubscriptionManager:
             baseline_season = max(0, int(sub.get("start_season") or 0))
             source_id = str(sub.get("source_id") or "").strip()
             for item in files:
+                if not isinstance(item, dict):
+                    continue
                 fid = str(item.get("fid") or "").strip()
+                file_name = str(item.get("file_name") or item.get("name") or "").strip()
                 is_initial = fid in initial_file_keys
+                # Auto-follow only queues identifiable video files. An explicitly
+                # selected FID may omit its filename, but known non-video files are
+                # never transferred by the automatic scan.
+                if not fid or (file_name and not file_name.lower().endswith(VIDEO_EXTENSIONS)):
+                    continue
+                if not file_name and not is_initial:
+                    continue
                 already_saved = fid in saved_keys
                 if not fid or already_saved or fid in selected_fids:
                     continue
@@ -832,7 +890,12 @@ class SubscriptionManager:
                 if isinstance(item, dict) and item.get("fid")
             }
             for item in files:
+                if not isinstance(item, dict):
+                    continue
                 fid = str(item.get("fid") or "").strip()
+                file_name = str(item.get("file_name") or item.get("name") or "").strip()
+                if file_name and not file_name.lower().endswith(VIDEO_EXTENSIONS):
+                    continue
                 if fid and fid in target_fids and fid not in saved and fid not in selected_fids:
                     selected.append({"fid": fid})
                     found_keys.append(fid)
@@ -843,17 +906,29 @@ class SubscriptionManager:
                 if isinstance(item, (str, int))
             }
             start_ep = int(sub.get("start_ep", 0) or 0)
+            start_season = max(0, int(sub.get("start_season", 0) or 0))
+            source_id = str(sub.get("source_id") or "").strip()
             for item in files:
+                if not isinstance(item, dict):
+                    continue
                 fid = str(item.get("fid") or "").strip()
-                ep_num = self._parse_episode_for_subscription(
-                    sub,
-                    str(item.get("file_name", "")),
+                file_name = str(item.get("file_name") or item.get("name") or "").strip()
+                if not fid or not file_name.lower().endswith(VIDEO_EXTENSIONS):
+                    continue
+                season, ep_num = _parse_source_episode(
+                    self.resource_sources,
+                    source_id,
+                    file_name,
+                )
+                is_after_baseline = (
+                    (season, ep_num) > (start_season, start_ep)
+                    if season is not None and start_season > 0 and ep_num is not None
+                    else ep_num is not None and ep_num > start_ep
                 )
                 if (
-                    fid
-                    and fid not in selected_fids
+                    fid not in selected_fids
                     and ep_num is not None
-                    and ep_num > start_ep
+                    and is_after_baseline
                     and ep_num not in saved
                 ):
                     selected.append({"fid": fid})
