@@ -476,6 +476,13 @@ class CardFilePluginManager:
                 # happens to reuse this ID after the original was unloaded.
                 if self.registry.get(card_id) is loaded_card:
                     self.registry.unregister(card_id)
+            if loaded_card is not None:
+                # Unregistering a card does not release its clients or other
+                # resources. Cleanup failures must not prevent file removal.
+                try:
+                    loaded_card.close()
+                except Exception:
+                    self.logger.exception("卸载卡片 %s 时释放资源失败", card_id or name)
             if module_name:
                 sys.modules.pop(module_name, None)
             path.unlink()
