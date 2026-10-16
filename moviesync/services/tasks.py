@@ -93,7 +93,6 @@ class TaskManager:
     def _payload_key(payload):
         """基于实际转存目标与文件生成指纹，忽略封面等展示字段和文件顺序。"""
         if isinstance(payload, dict):
-            movie = payload.get("movie") if isinstance(payload.get("movie"), dict) else {}
             candidate = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
             files = candidate.get("files") if isinstance(candidate.get("files"), list) else []
             file_ids = sorted({
