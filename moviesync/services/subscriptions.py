@@ -841,6 +841,39 @@ class SubscriptionManager:
             baseline_episode = max(0, int(sub.get("start_ep") or 0))
             baseline_season = max(0, int(sub.get("start_season") or 0))
             source_id = str(sub.get("source_id") or "").strip()
+
+            # Older callers may submit selected FIDs without filenames. Resolve
+            # the selected files from the current listing before deciding which
+            # later episodes are eligible; otherwise a missing baseline would
+            # either dump the share or suppress every later episode.
+            selected_baselines = []
+            for initial_item in files:
+                if not isinstance(initial_item, dict):
+                    continue
+                initial_fid = str(initial_item.get("fid") or "").strip()
+                if initial_fid not in initial_file_keys:
+                    continue
+                initial_name = str(
+                    initial_item.get("file_name") or initial_item.get("name") or ""
+                ).strip()
+                initial_season, initial_episode = _parse_source_episode(
+                    self.resource_sources,
+                    source_id,
+                    initial_name,
+                )
+                if initial_episode is not None:
+                    selected_baselines.append((
+                        initial_season if initial_season is not None else 0,
+                        initial_episode,
+                    ))
+            known_season_baselines = [
+                item for item in selected_baselines if item[0] > 0
+            ]
+            if known_season_baselines:
+                baseline_season, baseline_episode = max(known_season_baselines)
+            elif selected_baselines and baseline_episode <= 0:
+                baseline_episode = max(item[1] for item in selected_baselines)
+
             for item in files:
                 if not isinstance(item, dict):
                     continue
