@@ -78,6 +78,9 @@ class PanSouResourceSource(ResourceSourceCard):
         self._token_expires_at = 0.0
         self._auth_lock = threading.RLock()
 
+    def close(self) -> None:
+        self.http.close()
+
     def validate_config(self, config: dict[str, Any]) -> dict[str, Any]:
         from urllib.parse import urlparse
 
