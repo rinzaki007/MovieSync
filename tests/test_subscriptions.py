@@ -2388,3 +2388,83 @@ def test_channel_search_failure_is_persisted_and_not_reported_as_full_success(tm
         assert any("temporary search outage" in item["reason"] for item in diagnostics["examples"])
     finally:
         manager.stop_scheduler()
+
+
+
+def test_direct_subscription_diagnostics_skip_malformed_and_non_video_entries(tmp_path):
+    storage = DynamicStorageTargets()
+    storage.files = [
+        {"fid": "ep1", "file_name": "Show.S01E01.mkv"},
+        {"fid": "poster", "file_name": "poster.jpg"},
+        {"file_name": "Show.S01E02.mkv"},
+        "malformed-file-entry",
+        {"fid": "ep2", "file_name": "Show.S01E02.mkv"},
+    ]
+    manager = SubscriptionManager(
+        tmp_path / "direct-diagnostics-malformed-files.json",
+        storage,
+        FakeResourceSources(),
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-direct",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        files=[{"fid": "ep1", "file_name": "Show.S01E01.mkv"}],
+    )
+
+    try:
+        ok, message = manager.check_subscription_now(sub["id"])
+
+        assert ok is True
+        assert "成功追更 2 项" in message
+        assert storage.transfers == [["ep1", "ep2"]]
+        diagnostics = manager.get_subscriptions()[0]["last_diagnostics"]
+        assert diagnostics["files_scanned"] == 5
+        assert diagnostics["video_files"] == 3
+        assert diagnostics["non_video_files"] == 1
+        assert diagnostics["missing_file_id"] == 1
+        assert diagnostics["invalid_file_entries"] == 1
+        assert diagnostics["queued_files"] == 2
+        assert diagnostics["transferred_files"] == 2
+    finally:
+        manager.stop_scheduler()
+
+
+def test_legacy_direct_subscription_respects_season_baseline(tmp_path):
+    storage = DynamicStorageTargets()
+    storage.files = [
+        {"fid": "s1e99", "file_name": "Show.S01E99.mkv"},
+        {"fid": "s2e1", "file_name": "Show.S02E01.mkv"},
+        {"fid": "s2e2", "file_name": "Show.S02E02.mkv"},
+    ]
+    manager = SubscriptionManager(
+        tmp_path / "legacy-direct-season-baseline.json",
+        storage,
+        FakeResourceSources(),
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-direct-season",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        start_ep=1,
+    )
+    # Exercise the legacy path, where no explicit file list or channel is stored.
+    persisted = manager.get_subscriptions()
+    current = next(item for item in persisted if item["id"] == sub["id"])
+    current["tracking_mode"] = "legacy"
+    current["start_season"] = 2
+    current["start_ep"] = 1
+    manager.store.write(persisted)
+
+    try:
+        ok, message = manager.check_subscription_now(sub["id"])
+
+        assert ok is True
+        assert "成功追更 1 项" in message
+        assert storage.transfers == [["s2e2"]]
+    finally:
+        manager.stop_scheduler()
