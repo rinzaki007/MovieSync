@@ -2468,3 +2468,73 @@ def test_legacy_direct_subscription_respects_season_baseline(tmp_path):
         assert storage.transfers == [["s2e2"]]
     finally:
         manager.stop_scheduler()
+
+
+
+def test_generic_all_mode_uses_season_aware_baseline_and_skips_unrecognized_files(tmp_path):
+    storage = DynamicStorageTargets()
+    storage.files = [
+        {"fid": "s1e99", "file_name": "Show.S01E99.mkv"},
+        {"fid": "s2e1", "file_name": "Show.S02E01.mkv"},
+        {"fid": "s2e2", "file_name": "Show.S02E02.mkv"},
+        {"fid": "s3e1", "file_name": "Show.S03E01.mkv"},
+        {"fid": "unknown", "file_name": "Show.special-cut.mkv"},
+    ]
+    manager = SubscriptionManager(
+        tmp_path / "generic-all-season-baseline.json",
+        storage,
+        FakeResourceSources(),
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-seasoned",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        files=[{"fid": "s2e1", "file_name": "Show.S02E01.mkv"}],
+    )
+
+    try:
+        ok, message = manager.check_subscription_now(sub["id"])
+
+        assert ok is True
+        assert "成功追更 3 项" in message
+        assert storage.transfers == [["s2e1", "s2e2", "s3e1"]]
+        diagnostics = manager.get_subscriptions()[0]["last_diagnostics"]
+        assert diagnostics["unrecognized"] == 1
+        assert diagnostics["queued_files"] == 3
+    finally:
+        manager.stop_scheduler()
+
+
+def test_direct_subscription_fails_when_every_file_entry_is_unusable(tmp_path):
+    storage = DynamicStorageTargets()
+    storage.files = [
+        "malformed-file-entry",
+        {"file_name": "Show.S01E02.mkv"},
+    ]
+    manager = SubscriptionManager(
+        tmp_path / "direct-all-files-unusable.json",
+        storage,
+        FakeResourceSources(),
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-unusable",
+        target_fid="0",
+        storage_target_id="demo-storage",
+    )
+
+    try:
+        ok, message = manager.check_subscription_now(sub["id"])
+
+        assert ok is False
+        assert "文件列表存在格式异常或缺少文件 ID" in message
+        assert storage.transfers == []
+        diagnostics = manager.get_subscriptions()[0]["last_diagnostics"]
+        assert diagnostics["invalid_file_entries"] == 1
+        assert diagnostics["missing_file_id"] == 1
+        assert diagnostics["success"] is False
+    finally:
+        manager.stop_scheduler()
