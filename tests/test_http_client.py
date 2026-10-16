@@ -109,11 +109,12 @@ def test_http_client_close_releases_sessions_and_rejects_future_requests(monkeyp
 
     monkeypatch.setattr("moviesync.clients.http.requests.Session", make_session)
     client = HttpClient({"X-Test": "yes"})
-    client.session
+    main_session = client.session
     thread = Thread(target=lambda: client.session)
     thread.start()
     thread.join(timeout=2)
 
+    assert main_session is created[0]
     assert len(created) == 2
     client.close()
 
