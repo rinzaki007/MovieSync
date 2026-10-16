@@ -349,7 +349,6 @@ def test_public_config_does_not_require_legacy_cards(monkeypatch, tmp_path):
     assert public["cards"]["custom.storage"]["config"]["endpoint"] == "https://storage.example"
 
 
-
 def test_concurrent_config_updates_do_not_overwrite_each_other(tmp_path):
     store = ConfigStore(tmp_path / "config.json", tmp_path / "legacy")
     card_ids = [f"test-storage-{index:02d}" for index in range(24)]
