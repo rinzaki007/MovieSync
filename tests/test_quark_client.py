@@ -121,7 +121,11 @@ def test_list_drive_files_reports_api_failure_instead_of_empty_directory(monkeyp
 def test_list_drive_files_rejects_malformed_listing_payload(monkeypatch):
     client = QuarkClient("cookie=test")
     response = SimpleNamespace(status_code=200)
-    monkeypatch.setattr(client, "_request_json", lambda *args, **kwargs: (response, {"code": 0, "data": {"list": None}}))
+    monkeypatch.setattr(
+        client,
+        "_request_json",
+        lambda *args, **kwargs: (response, {"code": 0, "data": {"list": None}}),
+    )
 
     with pytest.raises(RuntimeError, match="目录格式无效"):
         client.list_drive_files("0")
