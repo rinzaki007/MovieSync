@@ -480,14 +480,17 @@ class CardFilePluginManager:
             card_id = loaded[0] if loaded else ""
             module_name = loaded[1] if loaded else ""
             loaded_card = loaded[2] if loaded else None
-            if card_id and loaded_card is not None:
-                # A stale plugin entry must not uninstall a different card that
-                # happens to reuse this ID after the original was unloaded.
-                if self.registry.get(card_id) is loaded_card:
-                    self.registry.unregister(card_id)
-            if loaded_card is not None:
-                # Cleanup failures must not prevent removing the plugin file or
-                # clearing its module bookkeeping.
+            registry_owns_card = bool(
+                card_id
+                and loaded_card is not None
+                and self.registry.get(card_id) is loaded_card
+            )
+            if registry_owns_card:
+                # CardRegistry.unregister() already closes the removed instance.
+                self.registry.unregister(card_id)
+            elif loaded_card is not None:
+                # A stale plugin entry may no longer be registered. Close that
+                # detached instance ourselves, without closing a replacement card.
                 try:
                     loaded_card.close()
                 except Exception:
