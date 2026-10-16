@@ -118,6 +118,50 @@ def test_list_drive_files_reports_api_failure_instead_of_empty_directory(monkeyp
         client.list_drive_files("0")
 
 
+def test_list_drive_files_rejects_malformed_listing_payload(monkeypatch):
+    client = QuarkClient("cookie=test")
+    response = SimpleNamespace(status_code=200)
+    monkeypatch.setattr(client, "_request_json", lambda *args, **kwargs: (response, {"code": 0, "data": {"list": None}}))
+
+    with pytest.raises(RuntimeError, match="目录格式无效"):
+        client.list_drive_files("0")
+
+
+def test_list_drive_files_fails_closed_when_page_limit_is_reached(monkeypatch):
+    client = QuarkClient("cookie=test")
+    response = SimpleNamespace(status_code=200)
+    calls = []
+
+    def full_page(*args, **kwargs):
+        calls.append(args[1])
+        page = len(calls)
+        return response, {"code": 0, "data": {"list": [
+            {"fid": f"file-{page}-{index}", "file_name": f"video-{page}-{index}.mkv"}
+            for index in range(200)
+        ]}}
+
+    monkeypatch.setattr(client, "_request_json", full_page)
+    with pytest.raises(RuntimeError, match="分页扫描上限"):
+        client.list_drive_files("0")
+    assert len(calls) == 20
+
+
+def test_folder_lookup_does_not_create_folder_after_listing_error(monkeypatch):
+    client = QuarkClient("cookie=test")
+    response = SimpleNamespace(status_code=200)
+    calls = []
+
+    def listing(*args, **kwargs):
+        calls.append(args[1])
+        return response, {"code": 14001, "message": "invalid cookie"}
+
+    monkeypatch.setattr(client, "_request_json", listing)
+    with pytest.raises(RuntimeError, match="invalid cookie"):
+        client.get_or_create_subfolder("电影", "0")
+    assert len(calls) == 1
+    assert all("/file?" not in url for url in calls)
+
+
 def test_list_drive_files_normalizes_destination_items(monkeypatch):
     client = QuarkClient("cookie=test")
     response = SimpleNamespace(status_code=200)
