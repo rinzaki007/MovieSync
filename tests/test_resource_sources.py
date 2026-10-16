@@ -723,3 +723,84 @@ def test_filename_processor_invalid_output_does_not_block_next_processor(malform
     manager = ResourceSourceManager(Store(), FakeLogger(), registry=registry)
 
     assert manager.parse_tv_episode("unknown-source", "example-video.mkv") == (2, 7)
+
+
+
+def test_resource_health_config_read_failure_returns_isolated_unavailable_results():
+    class BrokenStore:
+        def load(self):
+            raise OSError("simulated config disk error")
+
+    class MustNotCheck(ResourceSourceCard):
+        manifest = CardManifest(
+            id="config-failure-source",
+            name="Config Failure Source",
+            type="resource_source",
+            capabilities=("resource.search", "resource.health_check"),
+        )
+
+        def __init__(self):
+            self.check_calls = 0
+
+        def search(self, movie, config):
+            return []
+
+        def check(self, config):
+            self.check_calls += 1
+            return {"status": "healthy"}
+
+    card = MustNotCheck()
+    manager = ResourceSourceManager(
+        BrokenStore(),
+        FakeLogger(),
+        resource_cards=[card],
+    )
+
+    results = manager.check_all()
+
+    assert len(results) == 1
+    assert results[0]["id"] == "config-failure-source"
+    assert results[0]["status"] == "unavailable"
+    assert "未执行连接检查" in results[0]["message"]
+    assert card.check_calls == 0
+
+
+def test_channel_search_fails_safely_when_config_cannot_be_read():
+    class BrokenStore:
+        def load(self):
+            raise OSError("simulated config disk error")
+
+    class SearchCard(ResourceSourceCard):
+        manifest = CardManifest(
+            id="config-failure-search",
+            name="Config Failure Search",
+            type="resource_source",
+            capabilities=("resource.search",),
+        )
+
+        def search(self, movie, config):
+            return []
+
+        def check(self, config):
+            return {"status": "healthy"}
+
+        def search_channel(self, channel, title, config):
+            raise AssertionError("upstream search must not run without trusted config")
+
+    manager = ResourceSourceManager(
+        BrokenStore(),
+        FakeLogger(),
+        resource_cards=[SearchCard()],
+    )
+
+    assert manager.search_channel("config-failure-search", {}, "test") == []
+    assert manager.search_channel_updates("config-failure-search", {}, "test") == {
+        "items": [],
+        "cursor": None,
+        "complete": False,
+    }
+    assert manager.search_channel_history("config-failure-search", {}, "test") == {
+        "items": [],
+        "cursor": None,
+        "complete": False,
+    }
