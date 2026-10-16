@@ -1739,7 +1739,10 @@ class SubscriptionManager:
                 return self._finish(
                     sub,
                     False,
-                    f"频道搜索存在 {diagnostics['source_search_errors']} 项异常，未能完整确认是否有新集；请检查资源来源状态后重试",
+                    (
+                        f"频道搜索存在 {diagnostics['source_search_errors']} 项异常，"
+                        "未能完整确认是否有新集；请检查资源来源状态后重试"
+                    ),
                     success_keys=[],
                 )
             if scan_complete:
@@ -1823,7 +1826,11 @@ class SubscriptionManager:
             return self._finish(
                 sub,
                 False,
-                f"已转存 {total} 项，但频道搜索存在 {diagnostics['source_search_errors']} 项异常，未能完整确认新集；后续将重试",
+                (
+                    f"已转存 {total} 项，但频道搜索存在 "
+                    f"{diagnostics['source_search_errors']} 项异常，未能完整确认新集；"
+                    "后续将重试"
+                ),
                 success_keys=all_keys,
             )
 
