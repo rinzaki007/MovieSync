@@ -2,6 +2,8 @@
 
 import importlib
 import logging
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
 
 CARD_SOURCE = b'''from moviesync.cards import Card, CardManifest
 
@@ -83,3 +85,59 @@ def test_load_all_isolates_broken_card_from_valid_card(tmp_path):
     assert status["demo.py"]["loaded"] is True
     assert status["broken.py"]["loaded"] is False
     assert "broken card" in status["broken.py"]["error"]
+
+
+
+def test_concurrent_load_all_keeps_one_consistent_context(tmp_path, monkeypatch):
+    manager, registry = _manager(tmp_path)
+    plugin_dir = tmp_path / "cards"
+    context_card_source = b'''from moviesync.cards import Card, CardManifest
+
+
+class ContextCard(Card):
+    manifest = CardManifest(id="alpha", name="Alpha card")
+
+    def __init__(self, context):
+        self.marker = context.get("marker")
+
+
+def create_card(context):
+    return ContextCard(context)
+'''
+    (plugin_dir / "alpha.py").write_bytes(context_card_source)
+    beta_source = context_card_source.replace(b'id="alpha"', b'id="beta"').replace(
+        b'name="Alpha card"', b'name="Beta card"'
+    )
+    (plugin_dir / "beta.py").write_bytes(beta_source)
+
+    first_card_loaded = Event()
+    release_first_load = Event()
+    second_call_started = Event()
+    original_load_file = manager.load_file
+
+    def pause_after_first_card(filename, context=None):
+        card = original_load_file(filename, context)
+        if filename == "alpha.py" and context.get("marker") == "first":
+            first_card_loaded.set()
+            assert release_first_load.wait(timeout=5)
+        return card
+
+    monkeypatch.setattr(manager, "load_file", pause_after_first_card)
+
+    def load_second_context():
+        second_call_started.set()
+        return manager.load_all({"marker": "second"})
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(manager.load_all, {"marker": "first"})
+        assert first_card_loaded.wait(timeout=5)
+        second = executor.submit(load_second_context)
+        assert second_call_started.wait(timeout=5)
+        # The second load pass must wait for the first pass to finish.
+        assert not second.done()
+        release_first_load.set()
+        assert first.result(timeout=5) == ["alpha", "beta"]
+        assert second.result(timeout=5) == []
+
+    assert registry.get("alpha").marker == "first"
+    assert registry.get("beta").marker == "first"
