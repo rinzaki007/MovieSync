@@ -268,6 +268,10 @@ class CardFilePluginManager:
             self._context = dict(context or {})
             loaded = []
             for item in self.list_plugins():
+                # Repeated load_all calls are safe: do not turn already-loaded
+                # cards into false error states by attempting duplicate registration.
+                if item.get("loaded"):
+                    continue
                 try:
                     card = self.load_file(item["filename"], self._context)
                     loaded.append(card.card_id)
