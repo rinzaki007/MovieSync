@@ -269,3 +269,21 @@ def test_tmdb_category_search_filters_tv_by_variety_and_animation_genres():
     assert variety[0]["tag"] == "综艺"
     assert http.calls[0][1] == "https://api.themoviedb.org/3/search/tv"
     assert len(http.calls) == 1
+
+
+
+def test_tmdb_card_close_releases_http_client():
+    class ClosableHttp(FakeHttpClient):
+        def __init__(self):
+            super().__init__({})
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    http = ClosableHttp()
+    card = TMDBMetadataCard(FakeConfigStore(), http)
+
+    card.close()
+
+    assert http.closed is True
