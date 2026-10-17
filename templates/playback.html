@@ -8,32 +8,68 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    .playback-shell{background:linear-gradient(145deg,rgba(15,23,42,.94),rgba(2,6,23,.84));border:1px solid rgba(148,163,184,.14);box-shadow:0 18px 48px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.025)}
+    .playback-control{background:rgba(2,6,23,.62);border:1px solid rgba(71,85,105,.55)}
+    .media-row{border:1px solid transparent;transition:background .15s ease,border-color .15s ease}
+    .media-row:hover{background:rgba(51,65,85,.35);border-color:rgba(148,163,184,.16)}
+    .media-row.selected{background:rgba(16,185,129,.09);border-color:rgba(52,211,153,.3)}
+    #video-player{background:#000;max-height:68vh}
+    @media(max-width:767px){#video-player{max-height:42vh}.playback-main{padding:.75rem}.playback-shell{border-radius:1rem}.playback-header{align-items:flex-start}.playback-header-actions{flex-wrap:wrap;justify-content:flex-end}}
+  </style>
 </head>
 <body class="min-h-screen text-slate-100">
-  <header class="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-950/90 px-3 py-3 backdrop-blur-xl">
-    <div class="mx-auto flex max-w-6xl items-center justify-between gap-3">
-      <div class="flex items-center gap-3">
-        <a href="/" class="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800" aria-label="返回首页"><i class="fa-solid fa-arrow-left"></i></a>
-        <div><h1 class="text-base font-semibold">播放中心</h1><p class="text-xs text-slate-400">通过已安装的播放卡片浏览和播放视频</p></div>
+  <header class="playback-header sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/90 px-3 py-3 backdrop-blur-xl sm:px-5">
+    <div class="mx-auto flex max-w-screen-2xl items-center justify-between gap-3">
+      <div class="flex min-w-0 items-center gap-3">
+        <a href="/" class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-700 bg-slate-900/70 text-slate-300 transition hover:bg-slate-800" aria-label="返回首页"><i class="fa-solid fa-arrow-left"></i></a>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2"><span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-300"><i class="fa-solid fa-circle-play"></i></span><h1 class="text-base font-bold tracking-wide">播放中心</h1></div>
+          <p class="mt-1 text-xs text-slate-400">浏览已转存的视频，直接在 MovieSync 内播放</p>
+        </div>
       </div>
-      <a href="/admin" class="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800"><i class="fa-solid fa-gear mr-1"></i>卡片设置</a>
+      <div class="playback-header-actions flex shrink-0 items-center gap-2">
+        <span id="provider-badge" class="hidden rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-[10px] text-slate-400 sm:inline-flex sm:items-center sm:gap-1.5"><i class="fa-solid fa-circle text-[7px] text-slate-500"></i>正在检测播放卡片</span>
+        <a href="/admin" class="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-300 transition hover:bg-slate-800"><i class="fa-solid fa-sliders mr-1"></i>卡片设置</a>
+      </div>
     </div>
   </header>
-  <main class="mx-auto grid max-w-6xl gap-4 p-3 sm:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
-    <section class="min-w-0 rounded-2xl border border-slate-800 bg-slate-900/70 p-3 sm:p-4">
-      <div class="mb-3 flex items-center justify-between gap-2">
-        <div class="min-w-0"><h2 class="text-sm font-semibold">媒体文件</h2><p id="path-label" class="mt-1 break-all text-xs text-slate-500">正在读取目录…</p></div>
-        <button id="back-btn" class="shrink-0 rounded-lg border border-slate-700 px-3 py-2 text-xs disabled:opacity-40" disabled><i class="fa-solid fa-arrow-left mr-1"></i>上一级</button>
+  <main class="playback-main mx-auto grid w-full max-w-screen-2xl gap-4 p-3 sm:p-5 lg:grid-cols-[minmax(300px,.85fr)_minmax(0,1.4fr)]">
+    <section class="playback-shell flex min-w-0 flex-col overflow-hidden rounded-2xl">
+      <div class="border-b border-slate-800/80 p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div><h2 class="text-sm font-semibold text-white"><i class="fa-solid fa-folder-open mr-2 text-amber-300"></i>媒体文件</h2><p id="path-label" class="mt-1.5 break-all text-[11px] leading-5 text-slate-500">正在读取目录…</p></div>
+          <button id="back-btn" class="shrink-0 rounded-lg border border-slate-700 px-3 py-2 text-[11px] text-slate-300 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40" disabled><i class="fa-solid fa-arrow-up mr-1"></i>上一级</button>
+        </div>
+        <div class="mt-3 flex gap-2">
+          <label class="playback-control flex min-w-0 flex-1 items-center gap-2 rounded-xl px-3"><i class="fa-solid fa-magnifying-glass text-xs text-slate-500"></i><input id="file-search" type="search" placeholder="筛选当前目录…" class="w-full min-w-0 bg-transparent py-2.5 text-xs text-slate-200 outline-none placeholder:text-slate-600"></label>
+          <button id="refresh-btn" class="flex shrink-0 items-center gap-2 rounded-xl border border-slate-700 px-3 py-2 text-xs text-slate-300 transition hover:bg-slate-800" title="重新读取当前目录"><i class="fa-solid fa-rotate"></i><span class="hidden sm:inline">刷新</span></button>
+        </div>
       </div>
-      <div id="status" class="mb-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs leading-5 text-slate-400">正在连接播放卡片…</div>
-      <div id="file-list" class="space-y-1"></div>
+      <div class="flex items-center justify-between gap-2 px-4 pt-3"><span id="status" class="text-[11px] text-slate-400">正在连接播放卡片…</span><span id="file-count" class="shrink-0 text-[10px] text-slate-600"></span></div>
+      <div id="file-list" class="min-h-48 flex-1 space-y-1 overflow-y-auto p-2 sm:p-3"></div>
+      <div class="border-t border-slate-800/70 px-4 py-3 text-[10px] leading-5 text-slate-500"><i class="fa-solid fa-circle-info mr-1 text-slate-600"></i>仅显示当前目录内容；视频文件可点击播放，文件夹可继续浏览。</div>
     </section>
-    <section class="min-w-0 rounded-2xl border border-slate-800 bg-slate-900/70 p-3 sm:p-4">
-      <div class="mb-3"><h2 id="player-title" class="truncate text-sm font-semibold">选择一个视频开始播放</h2><p class="mt-1 text-xs text-slate-500">播放地址由卡片解析，视频流由浏览器直接请求</p></div>
-      <div class="overflow-hidden rounded-xl bg-black">
-        <video id="video-player" class="aspect-video w-full" controls playsinline preload="metadata"></video>
+    <section class="playback-shell min-w-0 overflow-hidden rounded-2xl">
+      <div class="flex items-start justify-between gap-3 border-b border-slate-800/80 p-4">
+        <div class="min-w-0"><div class="text-[10px] font-semibold uppercase tracking-[.18em] text-emerald-400">Now Playing</div><h2 id="player-title" class="mt-1.5 break-words text-sm font-semibold text-white">选择一个视频开始播放</h2><p id="player-path" class="mt-1 break-all text-[10px] leading-5 text-slate-500">尚未选择文件</p></div>
+        <span id="player-state" class="shrink-0 rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-[10px] text-slate-500"><i class="fa-solid fa-circle mr-1 text-[7px]"></i>待播放</span>
       </div>
-      <div id="player-status" class="mt-3 text-xs leading-5 text-slate-500">如果无法播放或拖动进度条，请检查 OpenList 的浏览器可访问地址及视频格式。</div>
+      <div class="p-3 sm:p-4">
+        <div class="overflow-hidden rounded-xl border border-slate-800 bg-black shadow-2xl shadow-black/20">
+          <video id="video-player" class="aspect-video w-full" controls playsinline preload="metadata"></video>
+        </div>
+        <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+          <div id="player-status" class="flex-1 text-xs leading-5 text-slate-400">播放地址由播放卡片解析，视频流由浏览器直接请求。</div>
+          <button id="stop-btn" class="rounded-lg border border-slate-700 px-3 py-2 text-[11px] text-slate-400 transition hover:bg-slate-800 hover:text-white"><i class="fa-solid fa-stop mr-1"></i>停止播放</button>
+        </div>
+        <div class="mt-4 grid gap-2 sm:grid-cols-3">
+          <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3"><div class="text-[10px] text-slate-500">播放方式</div><div class="mt-1 text-xs font-medium text-slate-300">浏览器原生播放器</div></div>
+          <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3"><div class="text-[10px] text-slate-500">播放进度</div><div id="playback-progress" class="mt-1 text-xs font-medium text-slate-300">00:00 / --:--</div></div>
+          <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3"><div class="text-[10px] text-slate-500">快捷提示</div><div class="mt-1 text-xs font-medium text-slate-300">支持全屏与进度拖动</div></div>
+        </div>
+        <div class="mt-4 rounded-xl border border-slate-800/70 bg-slate-950/35 p-3 text-[11px] leading-5 text-slate-500"><i class="fa-solid fa-lightbulb mr-1.5 text-amber-300"></i>如果无法播放或拖动进度条，请确认浏览器能访问 OpenList 返回的播放链接；部分编码格式也可能不受浏览器支持。</div>
+      </div>
     </section>
   </main>
 <script>
@@ -42,31 +78,58 @@
   const status = document.getElementById('status');
   const pathLabel = document.getElementById('path-label');
   const backButton = document.getElementById('back-btn');
+  const refreshButton = document.getElementById('refresh-btn');
+  const searchInput = document.getElementById('file-search');
+  const fileCount = document.getElementById('file-count');
   const player = document.getElementById('video-player');
   const playerTitle = document.getElementById('player-title');
+  const playerPath = document.getElementById('player-path');
   const playerStatus = document.getElementById('player-status');
+  const playerState = document.getElementById('player-state');
+  const progress = document.getElementById('playback-progress');
+  const providerBadge = document.getElementById('provider-badge');
   const history = [];
   let currentPath = '';
+  let currentItems = [];
+  let selectedPath = '';
 
   function escapeHtml(value) {
-    return String(value ?? '').replace(/[&<>"']/g, char => ({
-      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-    }[char]));
+    return String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   }
-
-  function renderItems(items) {
+  function formatSize(bytes) {
+    if (!Number.isFinite(bytes) || bytes < 0) return '';
+    if (bytes < 1024) return bytes + ' B';
+    const units = ['KB','MB','GB','TB'];
+    let value = bytes / 1024, index = 0;
+    while (value >= 1024 && index < units.length - 1) { value /= 1024; index++; }
+    return value.toFixed(1) + ' ' + units[index];
+  }
+  function formatTime(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) return '--:--';
+    const total = Math.floor(seconds);
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+    return hours ? [hours, String(minutes).padStart(2,'0'), String(secs).padStart(2,'0')].join(':') : [minutes, String(secs).padStart(2,'0')].join(':');
+  }
+  function renderItems() {
+    const query = searchInput.value.trim().toLocaleLowerCase();
+    const items = currentItems.filter(item => String(item.name || '').toLocaleLowerCase().includes(query));
     list.replaceChildren();
+    fileCount.textContent = items.length + ' / ' + currentItems.length + ' 项';
     if (!items.length) {
-      list.innerHTML = '<div class="rounded-xl border border-dashed border-slate-800 p-6 text-center text-xs text-slate-500">这个目录里暂时没有文件</div>';
+      list.innerHTML = '<div class="m-2 rounded-xl border border-dashed border-slate-800 p-7 text-center"><i class="fa-solid fa-folder-open mb-3 text-xl text-slate-600"></i><p class="text-xs text-slate-400">' + (currentItems.length ? '没有匹配的文件' : '这个目录里暂时没有文件') + '</p></div>';
       return;
     }
     for (const item of items) {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-3 text-left hover:border-slate-700 hover:bg-slate-800/70';
+      button.className = 'media-row flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left' + (item.path === selectedPath ? ' selected' : '');
       const icon = item.is_dir ? 'fa-folder text-amber-300' : (item.is_video ? 'fa-circle-play text-emerald-300' : 'fa-file text-slate-500');
-      const size = typeof item.size === 'number' && !item.is_dir ? ' · ' + formatSize(item.size) : '';
-      button.innerHTML = '<i class="fa-solid ' + icon + ' w-5 text-center"></i><span class="min-w-0 flex-1"><span class="block break-words text-sm text-slate-200">' + escapeHtml(item.name) + '</span><span class="mt-1 block text-[11px] text-slate-500">' + (item.is_dir ? '文件夹' : (item.is_video ? '视频' : '文件')) + escapeHtml(size) + '</span></span>' + (item.is_dir ? '<i class="fa-solid fa-chevron-right text-xs text-slate-600"></i>' : '');
+      const size = typeof item.size === 'number' && !item.is_dir ? formatSize(item.size) : '';
+      button.innerHTML = '<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-950/80"><i class="fa-solid ' + icon + '"></i></span><span class="min-w-0 flex-1"><span class="block break-words text-xs font-medium leading-5 text-slate-200">' + escapeHtml(item.name) + '</span><span class="mt-0.5 block text-[10px] text-slate-500">' + (item.is_dir ? '文件夹' : (item.is_video ? '视频文件' : '其他文件')) + (size ? ' · ' + escapeHtml(size) : '') + '</span></span>' + (item.is_dir ? '<i class="fa-solid fa-chevron-right text-[10px] text-slate-600"></i>' : (item.is_video ? '<i class="fa-solid fa-play text-[10px] text-emerald-400"></i>' : ''));
+      button.disabled = !item.is_dir && !item.is_video;
+      button.classList.toggle('cursor-not-allowed', button.disabled);
       button.addEventListener('click', () => {
         if (item.is_dir) loadDirectory(item.path, true);
         else if (item.is_video) playFile(item);
@@ -74,61 +137,90 @@
       list.appendChild(button);
     }
   }
-
-  function formatSize(bytes) {
-    if (!Number.isFinite(bytes) || bytes < 0) return '';
-    if (bytes < 1024) return bytes + ' B';
-    const units = ['KB', 'MB', 'GB', 'TB'];
-    let value = bytes / 1024, index = 0;
-    while (value >= 1024 && index < units.length - 1) { value /= 1024; index++; }
-    return value.toFixed(1) + ' ' + units[index];
-  }
-
-  async function loadDirectory(path = '', pushHistory = false) {
+  async function loadDirectory(path = currentPath, pushHistory = false) {
     status.textContent = '正在读取目录…';
-    list.replaceChildren();
+    status.className = 'text-[11px] text-slate-400';
+    list.innerHTML = '<div class="p-8 text-center text-xs text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-2"></i>正在读取文件列表…</div>';
     try {
       const query = path ? '?path=' + encodeURIComponent(path) : '';
-      const response = await fetch('/api/playback/files' + query, { credentials: 'same-origin' });
+      const response = await fetch('/api/playback/files' + query, {credentials:'same-origin'});
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.message || '读取目录失败');
       if (pushHistory) history.push(currentPath);
       currentPath = path;
+      currentItems = Array.isArray(result.items) ? result.items : [];
       pathLabel.textContent = path || '媒体根目录';
       backButton.disabled = history.length === 0;
-      status.textContent = '已读取 ' + result.items.length + ' 个条目';
-      renderItems(result.items || []);
+      status.textContent = '目录读取成功';
+      status.className = 'text-[11px] text-emerald-300';
+      renderItems();
     } catch (error) {
+      currentItems = [];
       status.textContent = error.message || '读取目录失败';
-      list.innerHTML = '<div class="rounded-xl border border-dashed border-rose-900/70 p-5 text-xs leading-5 text-rose-300">' + escapeHtml(status.textContent) + '<p class="mt-2 text-slate-500">请到卡片管理安装并启用 OpenList 播放卡片，填写地址、Token 和媒体根目录后再试。</p></div>';
+      status.className = 'text-[11px] text-rose-300';
+      fileCount.textContent = '';
+      list.innerHTML = '<div class="m-2 rounded-xl border border-dashed border-rose-900/70 p-5 text-center"><i class="fa-solid fa-triangle-exclamation mb-2 text-rose-300"></i><p class="text-xs leading-5 text-rose-200">' + escapeHtml(status.textContent) + '</p><p class="mt-2 text-[10px] leading-5 text-slate-500">请在卡片管理中安装并启用 OpenList 播放卡片，填写服务地址、Token 和媒体根目录。</p></div>';
       pathLabel.textContent = path || '媒体根目录';
     }
   }
-
   async function playFile(item) {
+    selectedPath = item.path;
+    renderItems();
     playerStatus.textContent = '正在获取播放地址…';
     playerTitle.textContent = item.name;
+    playerPath.textContent = item.path;
+    playerState.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1 text-[7px]"></i>加载中';
+    playerState.className = 'shrink-0 rounded-full border border-amber-400/20 bg-amber-400/5 px-2.5 py-1.5 text-[10px] text-amber-300';
     try {
-      const response = await fetch('/api/playback/resolve?path=' + encodeURIComponent(item.path), { credentials: 'same-origin' });
+      const response = await fetch('/api/playback/resolve?path=' + encodeURIComponent(item.path), {credentials:'same-origin'});
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.message || '获取播放地址失败');
       player.src = result.url;
       player.load();
       player.play().catch(() => {});
-      playerStatus.textContent = '播放地址已获取。如果视频未开始，请尝试点击播放按钮。';
+      playerStatus.textContent = '播放地址已获取，正在尝试开始播放。';
     } catch (error) {
       playerStatus.textContent = error.message || '获取播放地址失败';
+      playerState.textContent = '获取失败';
+      playerState.className = 'shrink-0 rounded-full border border-rose-400/20 bg-rose-400/5 px-2.5 py-1.5 text-[10px] text-rose-300';
     }
   }
-
-  backButton.addEventListener('click', () => {
-    if (!history.length) return;
-    loadDirectory(history.pop());
+  backButton.addEventListener('click', () => { if (history.length) loadDirectory(history.pop()); });
+  refreshButton.addEventListener('click', () => loadDirectory(currentPath));
+  searchInput.addEventListener('input', renderItems);
+  document.getElementById('stop-btn').addEventListener('click', () => {
+    player.pause();
+    player.removeAttribute('src');
+    player.load();
+    playerState.textContent = '已停止';
+    playerState.className = 'shrink-0 rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-[10px] text-slate-500';
+    playerStatus.textContent = '播放已停止。';
+  });
+  player.addEventListener('playing', () => {
+    playerState.innerHTML = '<i class="fa-solid fa-circle mr-1 text-[7px] text-emerald-400"></i>播放中';
+    playerState.className = 'shrink-0 rounded-full border border-emerald-400/20 bg-emerald-400/5 px-2.5 py-1.5 text-[10px] text-emerald-300';
+    playerStatus.textContent = '正在播放。';
+  });
+  player.addEventListener('pause', () => {
+    if (player.currentSrc && !player.ended) {
+      playerState.textContent = '已暂停';
+      playerState.className = 'shrink-0 rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-[10px] text-slate-400';
+    }
+  });
+  player.addEventListener('loadedmetadata', () => {
+    progress.textContent = formatTime(player.currentTime) + ' / ' + formatTime(player.duration);
+    if (providerBadge) providerBadge.innerHTML = '<i class="fa-solid fa-circle text-[7px] text-emerald-400"></i>播放卡片已就绪';
+  });
+  player.addEventListener('timeupdate', () => {
+    progress.textContent = formatTime(player.currentTime) + ' / ' + formatTime(player.duration);
   });
   player.addEventListener('error', () => {
-    if (player.currentSrc) playerStatus.textContent = '浏览器无法播放此视频。可能是播放链接不可达、格式不受支持，或上游不支持 Range 请求。';
+    if (!player.currentSrc) return;
+    playerState.textContent = '播放失败';
+    playerState.className = 'shrink-0 rounded-full border border-rose-400/20 bg-rose-400/5 px-2.5 py-1.5 text-[10px] text-rose-300';
+    playerStatus.textContent = '浏览器无法播放此视频。可能是播放链接不可达、格式不受支持，或上游不支持 Range 请求。';
   });
-  loadDirectory();
+  loadDirectory('');
 })();
 </script>
 </body>
