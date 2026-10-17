@@ -447,6 +447,20 @@ function renderSubscriptionDiagnostics(task) {
     ];
     const examples = Array.isArray(d.examples) ? d.examples.slice(0, 30) : [];
     const shares = Array.isArray(d.shares) ? d.shares.slice(0, 50) : [];
+    const coverage = task.episode_coverage && typeof task.episode_coverage === 'object' ? task.episode_coverage : {};
+    const gapGroups = Array.isArray(coverage.gaps) ? coverage.gaps : [];
+    const missingEpisodes = gapGroups.flatMap(group => (Array.isArray(group.episodes) ? group.episodes : []).map(episode => ({
+        season: group.season, episode: Number(episode)
+    }))).slice(0, 30);
+    const encodedTitle = encodeURIComponent(String(task.title || '')).replace(/'/g, '%27');
+    const encodedTag = encodeURIComponent(String(task.tag || '电视剧')).replace(/'/g, '%27');
+    const encodedType = encodeURIComponent(String(task.media_type || 'tv')).replace(/'/g, '%27');
+    const gapMarkup = missingEpisodes.length
+        ? '<section class="mt-3 rounded-xl border border-amber-800/50 bg-amber-950/20 p-3"><div class="text-xs font-semibold text-amber-200">已扫描范围内的疑似缺集</div><p class="mt-1 text-[10px] leading-5 text-slate-400">' + escapeTask(coverage.notice || '仅根据已扫描文件生成，不能推断整部剧的总集数。') + '</p><div class="mt-2 flex flex-wrap gap-2">' + missingEpisodes.map(item => {
+            const episodeLabel = (item.season ? 'S' + String(item.season).padStart(2, '0') : '') + 'E' + String(item.episode).padStart(2, '0');
+            return '<button type="button" onclick="searchMissingEpisode(decodeURIComponent(\'' + encodedTitle + '\'), decodeURIComponent(\'' + encodedTag + '\'), decodeURIComponent(\'' + encodedType + '\'), ' + Number(item.season || 0) + ', ' + item.episode + ')" class="rounded-lg border border-amber-700/60 px-2.5 py-1.5 text-[10px] text-amber-200 hover:bg-amber-900/30">补搜 ' + episodeLabel + '</button>';
+        }).join('') + '</div></section>'
+        : '';
     const diagnosticTimestamp = d.finished_at || d.updated_at || d.started_at;
     const diagnosticTimeLabel = d.finished_at ? '完成于 ' : (d.interrupted ? '中断于 ' : '最后更新 ');
     const finished = diagnosticTimestamp
@@ -457,6 +471,7 @@ function renderSubscriptionDiagnostics(task) {
         '<div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">' + metrics.map(([label, value]) =>
             '<div class="rounded-lg border border-slate-800 bg-slate-900/70 p-2.5"><div class="text-[10px] text-slate-500">' + label + '</div><div class="mt-1 text-lg font-semibold text-slate-100">' + Number(value || 0) + '</div></div>'
         ).join('') + '</div>' +
+        gapMarkup +
         '<div class="mt-3 text-[11px] ' + (d.success ? 'text-emerald-300' : 'text-amber-300') + '">' + escapeTask(d.message || '') + '</div>' +
         (shares.length ? '<details class="mt-3"><summary class="cursor-pointer text-[11px] text-slate-400">逐个分享的解析与扫描结果（最多 50 个）</summary><div class="mt-2 space-y-2">' + shares.map(item =>
             '<div class="rounded-lg border border-slate-800 px-3 py-2"><div class="flex flex-wrap items-center justify-between gap-2"><span class="break-all text-[11px] text-slate-300">' + escapeTask(item.resource_id || '未知分享') + '</span><span class="text-[10px] ' + (item.status === '已解析' ? 'text-emerald-300' : 'text-amber-300') + '">' + escapeTask(item.status || '未知状态') + '</span></div><div class="mt-1 text-[10px] text-slate-500">扫描 ' + Number(item.files_scanned || 0) + ' · 视频 ' + Number(item.video_files || 0) + ' · 入队 ' + Number(item.queued_files || 0) + ' · 跳过 ' + Number(item.skipped_files || 0) + '</div>' + (item.error ? '<div class="mt-1 break-words text-[10px] text-rose-300">' + escapeTask(item.error) + '</div>' : '') + '</div>'
@@ -854,6 +869,8 @@ async function createTask() {
     }
     const payload = {
         title:title,
+        media_type:selectedCandidate.candidate.media_type || '',
+        tag:selectedCandidate.candidate.tag || '',
         channel:selectedCandidate.candidate.channel_id || selectedCandidate.candidate.channel || '',
         channel_name:selectedCandidate.candidate.channel || '',
         source_id:selectedCandidate.candidate.source_id || '',
@@ -879,6 +896,20 @@ async function createTask() {
     }catch(err){
         taskToast(err.message || '保存失败');
         refreshTaskSubmitState();
+    }
+}
+
+function searchMissingEpisode(title, tag, mediaType, season, episode) {
+    try {
+        sessionStorage.setItem('moviesync_resource_movie', JSON.stringify({
+            title, tag: tag || '电视剧', media_type: mediaType || 'tv', cover: '', original_title: ''
+        }));
+        sessionStorage.setItem('moviesync_missing_episode', JSON.stringify({
+            title, season: Number(season || 0) || null, episode: Number(episode), created_at: Date.now()
+        }));
+        window.location.href = '/resource-select';
+    } catch (error) {
+        taskToast('无法打开补搜页面，请从首页重新搜索该剧');
     }
 }
 

@@ -72,6 +72,51 @@ def _declared_episode_count(source_title: str) -> int | None:
     return None
 
 
+def _candidate_match_explanation(
+    movie: dict,
+    source_title: str,
+    recognized_episode_files: int,
+    total_video_count: int,
+    declared_episode_count: int | None,
+    scan_complete: bool,
+) -> str:
+    """Explain the observable evidence behind a candidate without pretending it is a score."""
+    target_title = str(movie.get("title") or "").strip()
+    original_title = str(movie.get("original_title") or "").strip()
+    source = str(source_title or "").strip()
+    def normalize(value: object) -> str:
+        return re.sub(r"[\W_]+", "", str(value or "").casefold())
+
+    target_norm, source_norm = normalize(target_title), normalize(source)
+    original_norm = normalize(original_title)
+    if target_norm and target_norm in source_norm:
+        title_reason = "分享标题包含目标名称"
+    elif original_norm and original_norm in source_norm:
+        title_reason = "分享标题匹配影视原名"
+    else:
+        aliases = movie.get("aliases", [])
+        alias_norms = [normalize(alias) for alias in aliases] if isinstance(aliases, list) else []
+        title_reason = (
+            "分享标题匹配已知别名"
+            if any(alias and alias in source_norm for alias in alias_norms)
+            else "标题未直接匹配，建议人工核对"
+        )
+
+    reasons = [title_reason]
+    media_type = str(movie.get("media_type") or "").strip().lower()
+    if media_type in {"tv", "tv_show", "series", "anime", "variety", "documentary", "short_drama"}:
+        recognized = max(0, int(recognized_episode_files or 0))
+        total = max(0, int(total_video_count or 0))
+        reasons.append(f"已识别 {recognized}/{total} 个视频文件的集数")
+        if declared_episode_count:
+            reasons.append(f"分享标题标注共 {int(declared_episode_count)} 集（不代表实际文件齐全）")
+    elif media_type == "movie":
+        reasons.append("按电影候选检查")
+    if not scan_complete:
+        reasons.append("分享扫描不完整，文件数量与集数统计可能不完整")
+    return "；".join(reasons)
+
+
 def _episode_statistics(
     files: list[dict[str, Any]],
     source_id: str,
@@ -652,8 +697,17 @@ class SearchService:
                         and movie.get("media_type") == "movie"
                         and strong_episode_markers
                     )
+                    match_explanation = _candidate_match_explanation(
+                        movie if isinstance(movie, dict) else {"title": title},
+                        source_title,
+                        recognized_episode_files,
+                        total_video_count,
+                        declared_episode_count if is_series_media else None,
+                        scan_complete,
+                    )
                     seen_resource_keys.add(resource_key)
                     candidates.append({
+                        "match_explanation": match_explanation,
                         "source_id": source.get("source_id", "unknown"),
                         "resource_title": source_title,
                         "title_mismatch": title_mismatch,

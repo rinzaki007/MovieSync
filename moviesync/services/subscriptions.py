@@ -357,6 +357,8 @@ class SubscriptionManager:
         storage_target_id: str = "",
         cover: str = "",
         source_id: str = "",
+        media_type: str = "",
+        tag: str = "",
     ) -> dict:
         title = str(
             title or ""
@@ -454,6 +456,8 @@ class SubscriptionManager:
         subscription = {
             "id": uuid.uuid4().hex,
             "title": title,
+            "media_type": str(media_type or "").strip().lower()[:40],
+            "tag": str(tag or "").strip()[:40],
             "pwd_id": legacy_pwd_id,
             "resource_id": resource_id,
             "resource_type": resource_type,
@@ -793,6 +797,9 @@ class SubscriptionManager:
             "queued_files": 0,
             "transferred_files": 0,
             "shares": [],
+            "observed_episodes": [],
+            "episode_observations_truncated": False,
+            "source_scan_complete": False,
             "examples": [],
         }
 
@@ -887,6 +894,17 @@ class SubscriptionManager:
             file_name = str(item.get("file_name") or item.get("name") or "").strip()
             fid = str(item.get("fid") or "").strip()
             if file_name.lower().endswith(VIDEO_EXTENSIONS):
+                parsed_season, parsed_episode = _parse_source_episode(
+                    self.resource_sources, str(sub.get("source_id") or ""), file_name
+                )
+                if parsed_episode is not None:
+                    observed = diagnostics.setdefault("observed_episodes", [])
+                    marker = {"season": parsed_season, "episode": parsed_episode}
+                    if marker not in observed:
+                        if len(observed) < 1000:
+                            observed.append(marker)
+                        else:
+                            diagnostics["episode_observations_truncated"] = True
                 diagnostics["video_files"] += 1
             else:
                 diagnostics["non_video_files"] += 1
@@ -903,6 +921,7 @@ class SubscriptionManager:
                         "reason": "文件条目缺少 fid，无法追踪或转存",
                     })
 
+        diagnostics["source_scan_complete"] = bool(getattr(files, "scan_complete", True))
         self._persist_diagnostics_snapshot(sub, phase="scan")
         tracked_keys = {
             str(key).strip()
@@ -1530,6 +1549,7 @@ class SubscriptionManager:
                 "video_files": 0,
                 "queued_files": 0,
                 "skipped_files": 0,
+                "episodes": [],
                 "error": "",
             }
             if len(diagnostics["shares"]) < 50:
@@ -1598,6 +1618,35 @@ class SubscriptionManager:
                 fid = str(item.get("fid") or "").strip()
                 file_name = str(item.get("file_name") or item.get("name") or "").strip()
                 is_video = bool(file_name.lower().endswith(VIDEO_EXTENSIONS))
+                parsed_season, parsed_episode = _parse_source_episode(
+                    self.resource_sources, source_id, file_name
+                ) if is_video and file_name else (None, None)
+                if parsed_episode is not None:
+                    marker = {"season": parsed_season, "episode": parsed_episode}
+                    observed = diagnostics.setdefault("observed_episodes", [])
+                    if marker not in observed:
+                        if len(observed) < 1000:
+                            observed.append(marker)
+                        else:
+                            diagnostics["episode_observations_truncated"] = True
+                if (
+                    share_diag is not None
+                    and parsed_episode is not None
+                    and not any(
+                        isinstance(entry, dict)
+                        and entry.get("season") == parsed_season
+                        and entry.get("episode") == parsed_episode
+                        for entry in share_diag.get("episodes", [])
+                    )
+                ):
+                    episode_list = share_diag.setdefault("episodes", [])
+                    if len(episode_list) < 100:
+                        episode_list.append({
+                            "season": parsed_season,
+                            "episode": parsed_episode,
+                        })
+                    else:
+                        diagnostics["episode_observations_truncated"] = True
                 if is_video:
                     diagnostics["video_files"] += 1
                     if share_diag is not None:
@@ -1697,11 +1746,7 @@ class SubscriptionManager:
                             file_name,
                         )
                     continue
-                season, episode = _parse_source_episode(
-                    self.resource_sources,
-                    source_id,
-                    file_name,
-                )
+                season, episode = parsed_season, parsed_episode
                 if episode is None:
                     if share_diag is not None:
                         share_diag["skipped_files"] += 1
@@ -1946,6 +1991,9 @@ class SubscriptionManager:
         if scan_complete:
             self._save_channel_scan_cursor(sub, scan_cursor)
         self._save_channel_history_cursor(sub, history_cursor, history_complete)
+        diagnostics["source_scan_complete"] = bool(
+            scan_complete and (history_complete or sub.get("channel_history_complete"))
+        )
         return self._finish(
             sub,
             True,
