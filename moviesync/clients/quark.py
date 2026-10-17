@@ -110,7 +110,7 @@ class QuarkClient:
         while page <= 20:
             url = (
                 "https://drive.quark.cn/1/clouddrive/file/sort"
-                f"?pr=ucpro&fr=pc&pdir_fid={quote(str(parent_fid))}&p={page}&num=200"
+                f"?pr=ucpro&fr=pc&pdir_fid={quote(str(parent_fid))}&_page={page}&_size=200&_fetch_total=1"
             )
             try:
                 response, data = self._request_json("GET", url, timeout=6, retries=1)
@@ -172,7 +172,7 @@ class QuarkClient:
         while page <= 20:
             url = (
                 "https://drive.quark.cn/1/clouddrive/file/sort"
-                f"?pr=ucpro&fr=pc&pdir_fid={quote(parent)}&p={page}&num=200"
+                f"?pr=ucpro&fr=pc&pdir_fid={quote(parent)}&_page={page}&_size=200&_fetch_total=1"
             )
             response, data = self._request_json("GET", url, timeout=6, retries=1)
             if response.status_code != 200 or data.get("code") != 0:
@@ -272,7 +272,7 @@ class QuarkClient:
                     "https://drive.quark.cn/1/clouddrive/share/sharepage/detail"
                     f"?pr=ucpro&fr=pc&pwd_id={quote(pwd_id)}"
                     f"&stoken={quote(stoken, safe='')}"
-                    f"&pdir_fid={quote(str(parent_fid))}&p={page}&num=200"
+                    f"&pdir_fid={quote(str(parent_fid))}&_page={page}&_size=200&_fetch_total=1"
                 )
 
                 try:
