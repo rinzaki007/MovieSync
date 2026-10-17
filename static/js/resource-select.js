@@ -31,7 +31,7 @@ function isEpisode(n){return /(?:S\d{1,2}E\d{1,4}|第\s*\d+\s*[集话]|(?:EP|E)\
 function mediaCategoryLabel(){const tag=String(movie?.tag||'').trim();if(['电视剧','剧集','综艺','动漫','动画','纪录片','短剧'].includes(tag))return tag;const type=String(movie?.media_type||'').toLowerCase();return ({tv:'电视剧',tv_show:'电视剧',series:'剧集',anime:'动画',variety:'综艺',documentary:'纪录片',short_drama:'短剧'})[type]||'电影'}
 function completenessHints(c,series){const hints=[];if(series&&Number(c.declared_episode_count)>0){const claimed=Number(c.declared_episode_count),recognized=Number(c.episode_count||0);if(c.episode_count_warning)hints.push('<span class="resource-chip border-amber-700/60 text-amber-300"><i class="fa-solid fa-triangle-exclamation"></i>标题宣称 '+claimed+' 集，当前识别到 '+recognized+' 集；可能缺集，也可能是多集打包或命名未识别，请核实</span>');else hints.push('<span class="resource-chip"><i class="fa-solid fa-clipboard-check"></i>标题宣称 '+claimed+' 集</span>')}if(c.scan_complete===false){const details=Array.isArray(c.scan_warnings)?c.scan_warnings.join('；'):'分享目录可能未完整扫描';hints.push('<span class="resource-chip border-amber-700/60 text-amber-300" title="'+escapeHtml(details)+'"><i class="fa-solid fa-triangle-exclamation"></i>分享扫描可能不完整</span>')}return hints.join('')}
 function seasonFromFilename(name){const text=String(name||'');const match=text.match(/(?:^|[^A-Za-z0-9])S\s*(\d{1,2})(?:[\s._-]*E[Pp]?\s*\d{1,4})?/i)||text.match(/第\s*(\d{1,2})\s*季/);return match?Number(match[1]):null}
-function fp(f){return String(f?.relative_path||'').split('/').filter(Boolean).join('/')}
+function fp(f){const raw=String(f?.relative_path??f?.relative_dir??'').trim().replace(/\\\\/g,'/');return raw.split('/').map(part=>part.trim()).filter(part=>part&&part!=='.'&&part!=='..').join('/')}
 function selectedSet(i){return selectedResourceFiles[i]||(selectedResourceFiles[i]=new Set())}
 function under(path,folder){return !folder||path===folder||path.startsWith(folder+'/')}
 function hasResourceFolders(fs){return (fs||[]).some(f=>fp(f)!=='')}
@@ -85,7 +85,7 @@ function applyMissingEpisodeTarget() {
         const toggle = document.getElementById('toggle-' + i);
         if (toggle) toggle.innerHTML = '<i class="fa-solid fa-chevron-up mr-1"></i>收起文件夹/文件';
         updateButton(i);
-        input.closest('article')?.scrollIntoView({behavior: 'smooth', block: 'center'});
+        document.getElementById('transfer-' + i)?.closest('article')?.scrollIntoView({behavior: 'smooth', block: 'center'});
         sessionStorage.removeItem('moviesync_missing_episode');
         const label = (wantedSeason ? 'S' + String(wantedSeason).padStart(2, '0') : '') + 'E' + String(episode).padStart(2, '0');
         showToast('已定位并预选 ' + label + '。请核对资源来源后，再手动点击转存。');
