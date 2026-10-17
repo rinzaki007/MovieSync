@@ -816,7 +816,13 @@ async function searchTaskCandidates() {
                     folderCounts.set(path, (folderCounts.get(path) || 0) + 1);
                 }
             });
-            const hasFolderMetadata = files.some(file => fileFolder(file));
+            // SearchService always includes relative_path, including an empty string for files in the share root.
+            // Do not treat an all-root share as missing folder metadata; it must still open the root folder first.
+            const hasFolderMetadata = files.some(file => file && typeof file === 'object' && (
+                Object.prototype.hasOwnProperty.call(file, 'relative_path')
+                || Object.prototype.hasOwnProperty.call(file, 'relative_dir')
+                || Object.prototype.hasOwnProperty.call(file, 'folder_path')
+            ));
             const folderOptions = [...folderCounts.keys()].sort((a, b) => {
                 const depthA = a ? a.split('/').length : 0;
                 const depthB = b ? b.split('/').length : 0;
