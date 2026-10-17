@@ -21,9 +21,9 @@ from .regex_safety import has_nested_unbounded_quantifier
 
 CARD_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 CARD_VERSION_RE = re.compile(
-    r"^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)"
-    r"(?:-([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?"
-    r"(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$"
+    r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)"
+    r"(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?"
+    r"(?:\\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$"
 )
 CARD_CAPABILITY_RE = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9*]+)*$")
 CARD_CONFIG_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
