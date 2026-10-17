@@ -1,5 +1,7 @@
 """Regression tests for the public card manifest contract."""
 
+from dataclasses import replace
+
 import pytest
 
 from moviesync.cards import CardManifest
@@ -152,3 +154,16 @@ def test_manifest_config_fields_are_deeply_immutable_and_serializable():
     # Caller-owned input is detached as well as the manifest's internal view.
     config_fields[0]["item_fields"][0]["key"] = "caller-change"
     assert manifest.config_fields[0]["item_fields"][0]["key"] == "pattern"
+
+
+def test_manifest_can_be_copied_after_config_fields_are_frozen():
+    manifest = CardManifest(
+        id="manifest.copy-frozen",
+        name="Copy frozen",
+        config_fields=({"key": "endpoint", "type": "string"},),
+    )
+
+    copied = replace(manifest, description="updated description")
+
+    assert copied.description == "updated description"
+    assert copied.to_dict()["config_fields"] == [{"key": "endpoint", "type": "string"}]
