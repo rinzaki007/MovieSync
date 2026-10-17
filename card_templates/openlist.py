@@ -6,13 +6,13 @@ normalized file and playback URL methods.
 """
 from __future__ import annotations
 
-import requests
 from typing import Any
 from urllib.parse import urljoin, urlparse
 
+import requests
+
 from moviesync.cards import CardManifest, PlaybackProviderCard
 from moviesync.errors import ConfigValidationError
-
 
 _VIDEO_EXTENSIONS = {
     ".3gp", ".asf", ".avi", ".flv", ".m2ts", ".m4v", ".mkv", ".mov",
