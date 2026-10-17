@@ -127,6 +127,8 @@ def test_middle_follow_start_does_not_hide_gaps_before_start_episode():
                 {"season": 1, "episode": 2},
                 {"season": 1, "episode": 4},
                 {"season": 1, "episode": 5},
+                {"season": 1, "episode": 6},
+                {"season": 1, "episode": 7},
                 {"season": 1, "episode": 8},
                 {"season": 1, "episode": 9},
             ],
@@ -134,7 +136,7 @@ def test_middle_follow_start_does_not_hide_gaps_before_start_episode():
     })
 
     assert coverage["gaps"] == [
-        {"season": 1, "episodes": [3], "range_start": 3, "range_end": 3}
+        {"season": 1, "episodes": [3], "range_start": 1, "range_end": 8}
     ]
 
 
@@ -154,5 +156,5 @@ def test_middle_season_follow_does_not_hide_gaps_in_earlier_observed_season():
     })
 
     assert coverage["gaps"] == [
-        {"season": 1, "episodes": [2], "range_start": 2, "range_end": 2}
+        {"season": 1, "episodes": [2], "range_start": 1, "range_end": 2}
     ]
