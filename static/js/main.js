@@ -818,7 +818,12 @@ function openCandidateModal(movies, candidatesMap) {
             </div>`;
 
         if (!candidates.length) {
-            html += '<div class="rounded-xl border border-amber-900/50 bg-amber-950/20 p-4 text-xs text-amber-300">未在当前频道配置中找到可用资源。</div>';
+            const isStillSearching = candidateSearchProgressText
+                && !candidateSearchProgressText.includes('搜索完成')
+                && !candidateSearchProgressText.includes('失败');
+            html += isStillSearching
+                ? '<div class="rounded-xl border border-sky-900/50 bg-sky-950/20 p-4 text-xs text-sky-300">正在继续检索其他资源来源，找到后会自动显示…</div>'
+                : '<div class="rounded-xl border border-amber-900/50 bg-amber-950/20 p-4 text-xs text-amber-300">未找到可用资源，或后续检索未能完成。</div>';
         } else {
             html += '<div class="space-y-3">';
             candidates.forEach((cand, cIdx) => {
