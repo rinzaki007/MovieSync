@@ -28,6 +28,12 @@ def _normalize_resource_id(value: object) -> str:
         raise ValueError("分享资源 ID 无效")
     return value
 
+def _file_relative_folder(item: object) -> str:
+    if not isinstance(item, dict):
+        return ""
+    value = item.get("relative_path") or item.get("relative_dir") or item.get("folder_path") or ""
+    return str(value).replace("\\", "/").strip("/")
+
 def _parse_tv_episode(file_name: str) -> tuple[int | None, int | None]:
     """兼容旧调用；新订阅优先使用对应资源卡片的解析规则。"""
     return parse_tv_episode(file_name)
@@ -463,7 +469,11 @@ class SubscriptionManager:
             "pwd_id": legacy_pwd_id,
             "resource_id": resource_id,
             "resource_type": resource_type,
-            "source_folder_path": "/".join(part for part in str(source_folder_path or "").replace("\\", "/").split("/") if part and part not in {".", ".."})[:1000],
+            "source_folder_path": "/".join(
+                part
+                for part in str(source_folder_path or "").replace("\\", "/").split("/")
+                if part and part not in {".", ".."}
+            )[:1000],
             "source_folder_scoped": bool(source_folder_scoped),
             "target_fid": target_fid,
             "storage_target_id": str(storage_target_id or "").strip(),
@@ -870,8 +880,11 @@ class SubscriptionManager:
                 item for item in files
                 if isinstance(item, dict)
                 and (
-                    (str(item.get("relative_path") or item.get("relative_dir") or item.get("folder_path") or "").replace("\\", "/").strip("/") == source_folder_path)
-                    or (source_folder_path and str(item.get("relative_path") or item.get("relative_dir") or item.get("folder_path") or "").replace("\\", "/").strip("/").startswith(source_folder_path + "/"))
+                    _file_relative_folder(item) == source_folder_path
+                    or (
+                        source_folder_path
+                        and _file_relative_folder(item).startswith(source_folder_path + "/")
+                    )
                 )
             ]
             if not files:
@@ -1542,14 +1555,20 @@ class SubscriptionManager:
                     item for item in files
                     if isinstance(item, dict)
                     and (
-                        (str(item.get("relative_path") or item.get("relative_dir") or item.get("folder_path") or "").replace("\\", "/").strip("/") == source_folder_path)
-                        or (source_folder_path and str(item.get("relative_path") or item.get("relative_dir") or item.get("folder_path") or "").replace("\\", "/").strip("/").startswith(source_folder_path + "/"))
+                        _file_relative_folder(item) == source_folder_path
+                        or (
+                            source_folder_path
+                            and _file_relative_folder(item).startswith(source_folder_path + "/")
+                        )
                     )
                 ]
                 if not files:
                     diagnostics["examples"].append({
                         "file": f"{resource_id}/{source_folder_path}",
-                        "reason": f"所选来源文件夹未匹配到文件（原分享文件数 {original_file_count}）；已阻止扫描其他文件夹",
+                        "reason": (
+                            f"所选来源文件夹未匹配到文件（原分享文件数 {original_file_count}）；"
+                            "已阻止扫描其他文件夹"
+                        ),
                     })
             token = resolved.get("token")
             target_id = str(
