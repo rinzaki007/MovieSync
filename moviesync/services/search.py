@@ -417,8 +417,14 @@ class SearchService:
             score += 2
         if re.search(r"\b(?:2160p|1080p|720p|4k|web[- .]?dl|bluray|bdrip|remux)\b", text, re.I):
             score += 1
-        simplified_title = re.sub(r"[^\w\u4e00-\u9fa5]", "", movie_title).lower()
-        simplified_text = re.sub(r"[^\w\u4e00-\u9fa5]", "", text)
+        # Release years are metadata, not part of title identity. Strip a
+        # trailing parenthesized year before sequel-number checks; otherwise
+        # "潜伏6 (2025)" can be mistaken for a title numbered 2025.
+        normalized_movie_title = re.sub(
+            r"[\\(（]\\s*(19\\d{2}|20\\d{2})\\s*[\\)）]", "", movie_title
+        ).strip()
+        simplified_title = re.sub(r"[^\\w\\u4e00-\\u9fa5]", "", normalized_movie_title).lower()
+        simplified_text = re.sub(r"[^\\w\\u4e00-\\u9fa5]", "", text)
         if simplified_title and simplified_title in simplified_text:
             score += 3
         # A sequel number is part of the title, not disposable punctuation:
