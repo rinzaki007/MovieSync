@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass
 from threading import RLock
-from typing import Any, Mapping
+from typing import Any
 from urllib.parse import urlparse
 
 from .errors import ConfigValidationError
@@ -43,6 +44,7 @@ class _FrozenDict(dict):
     popitem = _immutable
     setdefault = _immutable
     update = _immutable
+    __ior__ = _immutable
 
 
 class _FrozenList(list):
@@ -213,7 +215,11 @@ class CardManifest:
         # Detach the validated manifest from caller-owned mutable containers.
         # A frozen dataclass does not freeze lists or dictionaries nested inside it.
         object.__setattr__(self, "capabilities", tuple(self.capabilities))
-        object.__setattr__(self, "config_fields", tuple(_freeze_manifest_value(dict(field)) for field in self.config_fields))
+        object.__setattr__(
+            self,
+            "config_fields",
+            tuple(_freeze_manifest_value(dict(field)) for field in self.config_fields),
+        )
         object.__setattr__(self, "image_hosts", tuple(self.image_hosts))
 
     def to_dict(self) -> dict[str, Any]:
