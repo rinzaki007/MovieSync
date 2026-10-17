@@ -1416,6 +1416,8 @@ def get_tasks():
             "type": "subscription",
             "kind": "智能追剧",
             "title": sub.get("title", "未命名任务"),
+            "media_type": sub.get("media_type", ""),
+            "tag": sub.get("tag", ""),
             "status": task_state["status"],
             "progress": task_state["progress"],
             "total": len(sub.get("tracked_file_keys", []) or []),
@@ -1638,6 +1640,8 @@ def subscriptions():
                 ),
                 cover=cover,
                 source_id=data.get("source_id", ""),
+                media_type=data.get("media_type", ""),
+                tag=data.get("tag", ""),
 
 
             )
