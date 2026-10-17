@@ -1,0 +1,11 @@
+from pathlib import Path
+
+from jinja2 import Environment
+
+
+def test_playback_template_compiles_as_jinja():
+    template_path = Path(__file__).resolve().parents[1] / "templates" / "playback.html"
+    source = template_path.read_text(encoding="utf-8")
+
+    # CSS selectors such as `{#video-player` collide with Jinja's comment opener.
+    Environment().parse(source)
