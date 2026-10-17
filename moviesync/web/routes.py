@@ -1233,6 +1233,13 @@ def search_candidates():
             return _json_error("检索分页参数无效")
     candidates_map = {}
     candidate_pages = {}
+    source_ids = data.get("source_ids")
+    if source_ids is not None and (
+        not isinstance(source_ids, list)
+        or any(not isinstance(source_id, str) for source_id in source_ids)
+        or len(source_ids) > 100
+    ):
+        return _json_error("资源来源筛选参数无效")
 
     for movie in movies:
         title = (
@@ -1252,12 +1259,17 @@ def search_candidates():
             search_movie["storage_target_id"] = storage_target_id
             page_info = {} if scan_limit is not None else None
             if page_info is not None:
+                search_kwargs = {
+                    "offset": page_offset,
+                    "scan_limit": scan_limit,
+                    "page_info": page_info,
+                }
+                if source_ids is not None:
+                    search_kwargs["source_ids"] = source_ids
                 candidates_map[title] = service.search_movie_candidates(
                     search_movie,
                     config.load(),
-                    offset=page_offset,
-                    scan_limit=scan_limit,
-                    page_info=page_info,
+                    **search_kwargs,
                 )
                 candidate_pages[title] = page_info
             else:

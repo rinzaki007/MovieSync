@@ -16,6 +16,34 @@ const metadataListCache = new Map();
 const metadataListRequests = new Map();
 const METADATA_LIST_CACHE_TTL_MS = 90_000;
 let candidateSearchProgressText = '';
+let candidateSearchProgressTimer = null;
+
+function startCandidateSearchProgress(requestId) {
+    const startedAt = Date.now();
+    const update = () => {
+        if (requestId !== candidateSearchRequestSeq) return;
+        const seconds = Math.floor((Date.now() - startedAt) / 1000);
+        const elapsed = seconds < 1 ? '刚刚开始' : `已等待 ${seconds} 秒`;
+        candidateSearchProgressText = seconds < 4
+            ? `${elapsed}：正在并发查询已启用的资源来源，并筛选可用分享链接。首批结果返回后会立即显示。`
+            : `${elapsed}：首批候选仍在生成中，可能有资源来源正在等待上游响应或解析网盘分享。搜索仍在进行；结果返回后会自动显示，随后继续补充更多资源。`;
+        const progress = document.getElementById('candidate-search-progress');
+        if (progress) progress.textContent = candidateSearchProgressText;
+        const emptyState = document.querySelector('#candidate-content .candidate-search-empty-state');
+        if (emptyState) emptyState.textContent = candidateSearchProgressText;
+    };
+    if (candidateSearchProgressTimer) window.clearInterval(candidateSearchProgressTimer);
+    update();
+    candidateSearchProgressTimer = window.setInterval(update, 1000);
+}
+
+function stopCandidateSearchProgress(requestId) {
+    if (requestId !== candidateSearchRequestSeq) return;
+    if (candidateSearchProgressTimer) {
+        window.clearInterval(candidateSearchProgressTimer);
+        candidateSearchProgressTimer = null;
+    }
+}
 
 function metadataListCacheKey(tag, sort, providerId) {
     return [tag, sort, providerId || ''].join('::');
@@ -532,27 +560,37 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
     }
 
     const canPage = selectedMovies.length === 1;
+    const title = selectedMovies[0]?.title || '';
     let candidatesMap = {};
-    let nextOffset = 0;
-    let hasMore = false;
     let opened = false;
-    candidateSearchProgressText = canPage ? '正在搜索首批资源…找到结果后会立即显示，并继续搜索更多资源。' : '';
+    candidateSearchProgressText = canPage
+        ? '正在启动资源检索：会并发查询已启用的资源来源，首批可用结果返回后立即显示。'
+        : '';
+
+    if (canPage && !keepModalOpen) {
+        openCandidateModal(selectedMovies, {});
+        opened = true;
+        startCandidateSearchProgress(requestId);
+    } else if (keepModalOpen && canPage) {
+        startCandidateSearchProgress(requestId);
+    }
     if (keepModalOpen) {
         candidateModalState = { movies: selectedMovies, candidatesMap: {} };
-        const content = document.getElementById('candidate-content');
-        if (content) {
-            content.innerHTML = '<div class="rounded-xl border border-sky-900/50 bg-sky-950/20 p-5 text-center text-xs text-sky-300">正在按所选存储卡片重新搜索对应网盘资源…</div>';
+        const container = document.getElementById('candidate-content');
+        if (container) {
+            container.innerHTML = '<div id="candidate-search-progress" class="rounded-xl border border-sky-900/50 bg-sky-950/20 p-5 text-center text-xs leading-6 text-sky-300">正在按所选存储卡片重新搜索资源…</div>';
         }
-    } else {
-        showToast('正在搜索资源，找到首批结果后会立即显示…', 'info');
+    } else if (!canPage) {
+        showToast('正在搜索资源，找到结果后会立即显示…', 'info');
     }
 
-    const requestPage = async (offset = 0, firstPage = false) => {
+    const requestPage = async (offset = 0, sourceIds = null) => {
         const body = { movies: selectedMovies, storage_target_id: storageTargetId };
         if (canPage) {
             body.scan_limit = 10;
             body.offset = offset;
         }
+        if (Array.isArray(sourceIds)) body.source_ids = sourceIds;
         const response = await apiFetch('/api/search-candidates', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -569,16 +607,16 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
 
     const mergePage = (pageMap) => {
         for (const movie of selectedMovies) {
-            const title = movie.title;
-            const incoming = Array.isArray(pageMap?.[title]) ? pageMap[title] : [];
-            if (!Array.isArray(candidatesMap[title])) candidatesMap[title] = [];
-            const seen = new Set(candidatesMap[title].map(item =>
+            const movieTitle = movie.title;
+            const incoming = Array.isArray(pageMap?.[movieTitle]) ? pageMap[movieTitle] : [];
+            if (!Array.isArray(candidatesMap[movieTitle])) candidatesMap[movieTitle] = [];
+            const seen = new Set(candidatesMap[movieTitle].map(item =>
                 [item.source_id || '', item.resource_type || '', item.resource_id || item.share_id || ''].join('::')
             ));
             for (const item of incoming) {
                 const key = [item.source_id || '', item.resource_type || '', item.resource_id || item.share_id || ''].join('::');
                 if (!seen.has(key)) {
-                    candidatesMap[title].push(item);
+                    candidatesMap[movieTitle].push(item);
                     seen.add(key);
                 }
             }
@@ -593,6 +631,7 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
                 .map(input => input.name + '::' + input.value)
         );
         openCandidateModal(selectedMovies, candidatesMap);
+        opened = true;
         const refreshed = document.getElementById('candidate-content');
         if (!refreshed) return;
         for (const input of refreshed.querySelectorAll('input[type="checkbox"]')) {
@@ -604,76 +643,144 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
     };
 
     try {
-        const first = await requestPage(0, true);
-        if (requestId !== candidateSearchRequestSeq) return;
-        mergePage(first.candidates_map || {});
-        const title = selectedMovies[0]?.title;
-        const firstPageInfo = first.candidate_pages?.[title] || {};
-        hasMore = canPage && Boolean(firstPageInfo.has_more);
-        nextOffset = Number(firstPageInfo.next_offset || 0);
-
         if (canPage) {
-            const totalFound = selectedMovies.reduce((sum, movie) => sum + (candidatesMap[movie.title] || []).length, 0);
-            candidateSearchProgressText = hasMore
-                ? `已显示首批 ${totalFound} 个可用资源，正在继续搜索…`
-                : `搜索完成，共找到 ${totalFound} 个可用资源。`;
-            refreshModalPreservingSelection();
-            opened = true;
-            if (totalFound) showToast(`已先显示 ${totalFound} 个资源，正在继续搜刮更多结果…`, 'success');
-        } else {
-            candidatesMap = first.candidates_map || {};
-            const totalFound = selectedMovies.reduce((sum, movie) => sum + ((candidatesMap[movie.title] || []).length), 0);
-            if (!totalFound) {
-                if (keepModalOpen) openCandidateModal(selectedMovies, candidatesMap);
-                const unavailable = (first.resource_sources || [])
-                    .filter(source => source.enabled !== false && source.health?.status === 'unavailable')
-                    .map(source => source.name || source.id)
-                    .join('、');
-                return showToast(first.message || (unavailable
-                    ? '资源来源不可用：' + unavailable + '。请先检查资源来源状态。'
-                    : '当前资源来源暂未找到可用候选，可稍后重试。'), 'warning');
+            // Split the first scan by resource card. A slow card (for example a source
+            // aggregating dozens of upstream providers) no longer blocks fast cards.
+            let sourceResponse;
+            try {
+                const response = await apiFetch('/api/resource-sources');
+                sourceResponse = await response.json();
+                if (!response.ok || !sourceResponse.success) throw new Error('无法读取资源来源列表');
+            } catch (err) {
+                console.warn('读取资源来源列表失败，回退到兼容搜索模式:', err);
             }
-            candidateSearchProgressText = '';
-            openCandidateModal(selectedMovies, candidatesMap);
-            opened = true;
-            showToast('已按所选存储卡片找到 ' + totalFound + ' 个可用资源版本', 'success');
+
+            const sources = Array.isArray(sourceResponse?.resource_sources)
+                ? sourceResponse.resource_sources.filter(source => source.enabled !== false && source.id)
+                : [];
+
+            if (!sources.length) {
+                const result = await requestPage(0);
+                if (requestId !== candidateSearchRequestSeq) return;
+                stopCandidateSearchProgress(requestId);
+                mergePage(result.candidates_map || {});
+                const pageInfo = result.candidate_pages?.[title] || {};
+                candidateSearchProgressText = pageInfo.has_more
+                    ? `已找到 ${(candidatesMap[title] || []).length} 个资源，正在继续搜索…`
+                    : `搜索完成，共找到 ${(candidatesMap[title] || []).length} 个可用资源。`;
+                refreshModalPreservingSelection();
+            } else {
+                let nextSourceIndex = 0;
+                let completedSources = 0;
+                let failedSources = 0;
+                let firstSourceResponse = false;
+                const sourceNames = new Map(sources.map(source => [source.id, source.name || source.id]));
+                const sourceFailures = [];
+
+                const updateSourceProgress = (activeName = '') => {
+                    const count = (candidatesMap[title] || []).length;
+                    const remaining = Math.max(0, sources.length - completedSources);
+                    const activeText = activeName ? `当前正在查询：${activeName}。` : '';
+                    candidateSearchProgressText = remaining
+                        ? `已完成 ${completedSources}/${sources.length} 个资源来源，发现 ${count} 个可用资源；还有 ${remaining} 个来源正在检索。 ${activeText}结果会陆续显示。`
+                        : `来源检索完成，共找到 ${count} 个可用资源。${failedSources ? `另有 ${failedSources} 个来源请求失败。` : ''}`;
+                };
+
+                const searchOneSource = async source => {
+                    let offset = 0;
+                    let hasMore = true;
+                    let sourceHadResponse = false;
+                    try {
+                        while (hasMore && requestId === candidateSearchRequestSeq) {
+                            const result = await requestPage(offset, [source.id]);
+                            if (requestId !== candidateSearchRequestSeq) return;
+                            if (!firstSourceResponse) {
+                                firstSourceResponse = true;
+                                stopCandidateSearchProgress(requestId);
+                            }
+                            sourceHadResponse = true;
+                            const before = (candidatesMap[title] || []).length;
+                            mergePage(result.candidates_map || {});
+                            const pageInfo = result.candidate_pages?.[title] || {};
+                            hasMore = Boolean(pageInfo.has_more);
+                            const nextOffset = Number(pageInfo.next_offset || 0);
+                            const after = (candidatesMap[title] || []).length;
+                            updateSourceProgress(sourceNames.get(source.id));
+                            if (after > before || !opened) refreshModalPreservingSelection();
+                            offset = nextOffset;
+                            if (hasMore && offset <= 0) {
+                                throw new Error('资源分页没有向前推进');
+                            }
+                        }
+                    } catch (err) {
+                        failedSources++;
+                        sourceFailures.push(`${sourceNames.get(source.id)}：${err.message || '请求失败'}`);
+                    } finally {
+                        completedSources++;
+                        if (!sourceHadResponse && !firstSourceResponse) {
+                            stopCandidateSearchProgress(requestId);
+                            firstSourceResponse = true;
+                        }
+                        updateSourceProgress();
+                        refreshModalPreservingSelection();
+                    }
+                };
+
+                const worker = async () => {
+                    while (requestId === candidateSearchRequestSeq) {
+                        const index = nextSourceIndex++;
+                        if (index >= sources.length) return;
+                        await searchOneSource(sources[index]);
+                    }
+                };
+                await Promise.all(Array.from(
+                    { length: Math.min(4, sources.length) },
+                    () => worker()
+                ));
+                if (requestId !== candidateSearchRequestSeq) return;
+                candidateSearchProgressText = `搜索完成：查询 ${completedSources}/${sources.length} 个资源来源，共找到 ${(candidatesMap[title] || []).length} 个可用资源。${failedSources ? ` ${failedSources} 个来源失败。` : ''}`;
+                refreshModalPreservingSelection();
+                if (sourceFailures.length) console.debug('部分资源来源搜索失败:', sourceFailures);
+                if (!(candidatesMap[title] || []).length) {
+                    showToast(failedSources === sources.length
+                        ? '资源来源请求均未成功，请检查卡片状态或后台日志。'
+                        : '已搜索完当前启用的资源来源，暂未找到可用资源。', 'warning');
+                } else {
+                    showToast(`已陆续找到 ${candidatesMap[title].length} 个可用资源${failedSources ? `，另有 ${failedSources} 个来源失败` : ''}`, 'success');
+                }
+            }
             return;
         }
 
-        // 单部影片采用小页扫描：首批结果先展示，后续页在后台逐批追加。
-        while (hasMore && requestId === candidateSearchRequestSeq) {
-            const page = await requestPage(nextOffset);
-            if (requestId !== candidateSearchRequestSeq) return;
-            const before = (candidatesMap[title] || []).length;
-            mergePage(page.candidates_map || {});
-            const pageInfo = page.candidate_pages?.[title] || {};
-            hasMore = Boolean(pageInfo.has_more);
-            nextOffset = Number(pageInfo.next_offset || 0);
-            const after = (candidatesMap[title] || []).length;
-            candidateSearchProgressText = hasMore
-                ? `已显示 ${after} 个可用资源，仍在继续搜索更多来源…`
-                : `搜索完成，共找到 ${after} 个可用资源。`;
-            if (after > before || !hasMore) refreshModalPreservingSelection();
-        }
-        if (requestId === candidateSearchRequestSeq && !opened) {
-            candidateSearchProgressText = `搜索完成，共找到 ${(candidatesMap[title] || []).length} 个可用资源。`;
-            refreshModalPreservingSelection();
-        }
-        if (requestId === candidateSearchRequestSeq && !(candidatesMap[title] || []).length) {
-            const unavailable = (first.resource_sources || [])
+        // 多部影片仍使用旧的完整响应路径，避免改变批量搜索行为。
+        const result = await requestPage(0);
+        if (requestId !== candidateSearchRequestSeq) return;
+        candidatesMap = result.candidates_map || {};
+        const totalFound = selectedMovies.reduce((sum, movie) => sum + ((candidatesMap[movie.title] || []).length), 0);
+        if (!totalFound) {
+            const unavailable = (result.resource_sources || [])
                 .filter(source => source.enabled !== false && source.health?.status === 'unavailable')
                 .map(source => source.name || source.id)
                 .join('、');
-            showToast(unavailable
+            showToast(result.message || (unavailable
                 ? '资源来源不可用：' + unavailable + '。请先检查资源来源状态。'
-                : '已搜索完所有来源，暂未找到可用资源。', 'warning');
+                : '当前资源来源暂未找到可用候选，可稍后重试。'), 'warning');
+            return;
         }
+        candidateSearchProgressText = '';
+        openCandidateModal(selectedMovies, candidatesMap);
+        showToast('已按所选存储卡片找到 ' + totalFound + ' 个可用资源版本', 'success');
     } catch (err) {
         if (requestId !== candidateSearchRequestSeq) return;
-        candidateSearchProgressText = opened ? '后续搜索暂时失败，已显示的资源仍可正常选择。' : '';
+        candidateSearchProgressText = opened
+            ? '搜索遇到问题，已显示的资源仍可正常选择；可以稍后重新搜索。'
+            : '';
+        stopCandidateSearchProgress(requestId);
         if (opened) refreshModalPreservingSelection();
         else if (keepModalOpen) openCandidateModal(selectedMovies, {});
         showToast(err.message || '资源检索异常', 'error');
+    } finally {
+        stopCandidateSearchProgress(requestId);
     }
 }
 
@@ -822,7 +929,7 @@ function openCandidateModal(movies, candidatesMap) {
                 && !candidateSearchProgressText.includes('搜索完成')
                 && !candidateSearchProgressText.includes('失败');
             html += isStillSearching
-                ? '<div class="rounded-xl border border-sky-900/50 bg-sky-950/20 p-4 text-xs text-sky-300">正在继续检索其他资源来源，找到后会自动显示…</div>'
+                ? '<div class="candidate-search-empty-state rounded-xl border border-sky-900/50 bg-sky-950/20 p-4 text-xs leading-6 text-sky-300"></div>'
                 : '<div class="rounded-xl border border-amber-900/50 bg-amber-950/20 p-4 text-xs text-amber-300">未找到可用资源，或后续检索未能完成。</div>';
         } else {
             html += '<div class="space-y-3">';

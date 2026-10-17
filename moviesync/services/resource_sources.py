@@ -31,7 +31,13 @@ class ResourceSource(ResourceSourceCard):
         capabilities=("resource.search", "resource.health_check"),
     )
 
-    def search(self, movie: object, config: dict) -> list[dict[str, Any]]:
+    def search(
+        self,
+        movie: object,
+        config: dict,
+        *,
+        source_ids: Iterable[str] | None = None,
+    ) -> list[dict[str, Any]]:
         raise NotImplementedError
 
     def check(self, config: dict) -> dict[str, Any]:
@@ -161,8 +167,17 @@ class ResourceSourceManager:
                 enabled.append(source)
         return enabled
 
-    def search(self, movie: object, config: dict) -> list[dict[str, Any]]:
+    def search(
+        self,
+        movie: object,
+        config: dict,
+        *,
+        source_ids: Iterable[str] | None = None,
+    ) -> list[dict[str, Any]]:
         enabled_sources = self._enabled_sources(config)
+        if source_ids is not None:
+            selected_ids = {str(source_id).strip() for source_id in source_ids if str(source_id).strip()}
+            enabled_sources = [source for source in enabled_sources if source.card_id in selected_ids]
         if not enabled_sources:
             return []
 

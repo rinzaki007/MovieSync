@@ -461,6 +461,7 @@ class SearchService:
         offset: int = 0,
         scan_limit: int | None = None,
         page_info: dict | None = None,
+        source_ids: list[str] | None = None,
     ) -> list[dict]:
         title, cleaned_title = self._title(movie)
         if not title:
@@ -519,7 +520,10 @@ class SearchService:
                 "storage_target_id": selected_target_id,
                 "resource_types": resource_types,
             })
-        discovered = self.resource_sources.search(search_context, config)
+        if source_ids is None:
+            discovered = self.resource_sources.search(search_context, config)
+        else:
+            discovered = self.resource_sources.search(search_context, config, source_ids=source_ids)
         total_discovered = len(discovered)
         # 排序稳定：高置信度资源优先，无法识别命名的资源仍保留在后续页。
         discovered = sorted(
