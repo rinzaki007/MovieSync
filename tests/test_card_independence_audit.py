@@ -80,3 +80,36 @@ def test_all_bundled_card_implementations_are_single_file_factories():
         assert "from card_templates." not in source, (
             f"{card_id}.py must not import another bundled card implementation"
         )
+
+
+def test_core_services_do_not_import_concrete_platform_clients_or_card_templates():
+    """New cards must plug into the contracts, not concrete built-in implementations."""
+    import ast
+
+    services_dir = pathlib.Path(__file__).resolve().parents[1] / "moviesync" / "services"
+    forbidden_import_prefixes = (
+        "card_templates.",
+        "moviesync.clients.quark",
+        "moviesync.clients.telegram",
+    )
+    forbidden_names = {"QuarkStorageCard", "TelegramResourceSource"}
+
+    for path in sorted(services_dir.glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                imported = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                imported = [node.module or ""]
+            else:
+                imported = []
+            for module in imported:
+                assert not module.startswith(forbidden_import_prefixes), (
+                    f"{path.relative_to(services_dir.parent.parent)} must use card "
+                    f"contracts instead of importing concrete platform module {module!r}"
+                )
+            if isinstance(node, ast.Name):
+                assert node.id not in forbidden_names, (
+                    f"{path.relative_to(services_dir.parent.parent)} must not reference "
+                    f"concrete built-in card class {node.id!r}"
+                )
