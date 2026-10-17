@@ -1530,6 +1530,7 @@ class SubscriptionManager:
                 "video_files": 0,
                 "queued_files": 0,
                 "skipped_files": 0,
+                "episodes": [],
                 "error": "",
             }
             if len(diagnostics["shares"]) < 50:
@@ -1598,6 +1599,23 @@ class SubscriptionManager:
                 fid = str(item.get("fid") or "").strip()
                 file_name = str(item.get("file_name") or item.get("name") or "").strip()
                 is_video = bool(file_name.lower().endswith(VIDEO_EXTENSIONS))
+                parsed_season, parsed_episode = _parse_source_episode(
+                    self.resource_sources, source_id, file_name
+                ) if is_video and file_name else (None, None)
+                if (
+                    share_diag is not None
+                    and parsed_episode is not None
+                    and not any(
+                        isinstance(entry, dict)
+                        and entry.get("season") == parsed_season
+                        and entry.get("episode") == parsed_episode
+                        for entry in share_diag.get("episodes", [])
+                    )
+                ):
+                    share_diag.setdefault("episodes", []).append({
+                        "season": parsed_season,
+                        "episode": parsed_episode,
+                    })
                 if is_video:
                     diagnostics["video_files"] += 1
                     if share_diag is not None:
@@ -1697,11 +1715,7 @@ class SubscriptionManager:
                             file_name,
                         )
                     continue
-                season, episode = _parse_source_episode(
-                    self.resource_sources,
-                    source_id,
-                    file_name,
-                )
+                season, episode = parsed_season, parsed_episode
                 if episode is None:
                     if share_diag is not None:
                         share_diag["skipped_files"] += 1
