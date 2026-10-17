@@ -16,3 +16,13 @@ def test_movie_cards_do_not_receive_series_episode_completeness_warning():
     source = (Path(__file__).resolve().parents[1] / "static" / "js" / "resource-select.js").read_text(encoding="utf-8")
 
     assert "if(series&&Number(c.declared_episode_count)>0)" in source
+
+
+def test_resource_selector_shows_only_clickable_share_code():
+    source = (Path(__file__).resolve().parents[1] / "static" / "js" / "resource-select.js").read_text(encoding="utf-8")
+
+    assert "function shareCodeLink(c)" in source
+    assert "分享码：'+shareCodeLink(c)" in source
+    assert "原分享路径（用于核对实际集数）" not in source
+    assert " · 默认不选择文件</p>" not in source
+    assert "href=\"'+escapeHtml(parsed.href)+'\"" in source
