@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "moviesync-example-resource-card"
+version = "0.1.0"
+description = "A safe demonstration resource-source plugin for MovieSync"
+requires-python = ">=3.12"
+
+[project.entry-points."moviesync.resource_sources"]
+example-resource = "moviesync_example_resource:create_card"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
