@@ -151,6 +151,12 @@ class CardManifest:
                 if field_type not in text_field_types or value_format not in {"url", "email"}:
                     raise ValueError(f"配置字段「{field.get('label') or field.get('key')}」的格式规则无效")
 
+        # Detach the validated manifest from caller-owned mutable containers.
+        # A frozen dataclass does not freeze lists or dictionaries nested inside it.
+        object.__setattr__(self, "capabilities", tuple(self.capabilities))
+        object.__setattr__(self, "config_fields", tuple(deepcopy(dict(field)) for field in self.config_fields))
+        object.__setattr__(self, "image_hosts", tuple(self.image_hosts))
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,

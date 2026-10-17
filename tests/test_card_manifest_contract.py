@@ -99,3 +99,26 @@ def test_manifest_allows_existing_quark_and_filename_capabilities():
 
     assert "storage.accepts.quark_share" in quark.capabilities
     assert "filename.normalize" in filename.capabilities
+
+
+def test_manifest_detaches_mutable_inputs_after_validation():
+    capabilities = ["custom.read"]
+    config_fields = [{"key": "endpoint", "type": "string"}]
+    image_hosts = ["example.com"]
+
+    manifest = CardManifest(
+        id="manifest.detached",
+        name="Detached metadata",
+        capabilities=capabilities,
+        config_fields=config_fields,
+        image_hosts=image_hosts,
+    )
+
+    capabilities.append("custom.write")
+    config_fields[0]["key"] = "injected_secret"
+    image_hosts.append("attacker.example")
+
+    assert manifest.capabilities == ("custom.read",)
+    assert manifest.config_fields[0]["key"] == "endpoint"
+    assert manifest.image_hosts == ("example.com",)
+
