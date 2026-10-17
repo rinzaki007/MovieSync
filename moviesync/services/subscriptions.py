@@ -357,6 +357,8 @@ class SubscriptionManager:
         storage_target_id: str = "",
         cover: str = "",
         source_id: str = "",
+        media_type: str = "",
+        tag: str = "",
     ) -> dict:
         title = str(
             title or ""
@@ -454,6 +456,8 @@ class SubscriptionManager:
         subscription = {
             "id": uuid.uuid4().hex,
             "title": title,
+            "media_type": str(media_type or "").strip().lower()[:40],
+            "tag": str(tag or "").strip()[:40],
             "pwd_id": legacy_pwd_id,
             "resource_id": resource_id,
             "resource_type": resource_type,
