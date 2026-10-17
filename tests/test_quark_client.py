@@ -228,15 +228,34 @@ def test_get_share_files_reports_when_file_limit_is_reached():
     assert any("扫描上限" in warning for warning in files.scan_warnings)
 
 
-def test_get_share_files_uses_explicit_pagination_and_keeps_all_47_episodes():
+def test_get_share_files_uses_reported_total_when_page_is_short_and_keeps_all_47_episodes():
     response = FakeResponse(200)
-    files = [
+    first_page = [
         {"fid": f"episode-{number}", "file_name": f"Show.E{number:02d}.mkv"}
-        for number in range(1, 48)
+        for number in range(1, 24)
+    ]
+    second_page = [
+        {"fid": f"episode-{number}", "file_name": f"Show.E{number:02d}.mkv"}
+        for number in range(24, 48)
     ]
     http = FakeHttp([
         (response, {"code": 0, "data": {"stoken": "share-token"}}),
-        (response, {"code": 0, "data": {"list": files}}),
+        (
+            response,
+            {
+                "code": 0,
+                "metadata": {"_total": 47},
+                "data": {"list": first_page},
+            },
+        ),
+        (
+            response,
+            {
+                "code": 0,
+                "metadata": {"_total": 47},
+                "data": {"list": second_page},
+            },
+        ),
     ])
     client = QuarkClient("session=value")
     client.http = http
@@ -246,8 +265,11 @@ def test_get_share_files_uses_explicit_pagination_and_keeps_all_47_episodes():
     assert error is None
     assert token == "share-token"
     assert len(parsed) == 47
-    share_listing_url = http.calls[1][1]
-    assert "_page=1" in share_listing_url
-    assert "_size=200" in share_listing_url
-    assert "_fetch_total=1" in share_listing_url
-    assert "&p=1&num=200" not in share_listing_url
+    assert [item["fid"] for item in parsed] == [f"episode-{number}" for number in range(1, 48)]
+    first_url, second_url = http.calls[1][1], http.calls[2][1]
+    assert "_page=1" in first_url
+    assert "_page=2" in second_url
+    assert "_size=50" in first_url
+    assert "_fetch_total=1" in first_url
+    assert "_sort=file_type:asc,file_name:asc" in first_url
+    assert "&p=1&num=200" not in first_url
