@@ -13,6 +13,7 @@ from threading import Lock
 from flask import jsonify, redirect, request, session
 
 from .routes import api, pages
+from .playback import playback_api, playback_pages
 
 
 class LoginRateLimiter:
@@ -73,6 +74,8 @@ class LoginRateLimiter:
 def register_web(app, services):
     app.register_blueprint(pages)
     app.register_blueprint(api)
+    app.register_blueprint(playback_pages)
+    app.register_blueprint(playback_api)
 
     @app.before_request
     def protect_requests():
