@@ -42,12 +42,19 @@ def build_episode_coverage(subscription: dict) -> dict:
 
     missing = []
     for season, episodes in sorted(observed.items()):
-        lower = start_episode if season == start_season else 0
+        if not episodes or (start_season > 0 and season > 0 and season < start_season):
+            continue
         if season == 0 and start_season > 0:
             # Seasonless files cannot safely be compared against a season-aware baseline.
             continue
-        if not episodes:
-            continue
+        if season == start_season:
+            lower = start_episode
+        elif start_season == 0 and season > 0:
+            # Without a season-aware starting point, never infer missing episodes before
+            # the first observed file of a season.
+            lower = min(episodes) - 1
+        else:
+            lower = 0
         upper = max(episodes)
         absent = [number for number in range(lower + 1, upper) if number not in episodes]
         if absent:
@@ -64,6 +71,7 @@ def build_episode_coverage(subscription: dict) -> dict:
         and not diagnostics.get("resolution_failures")
         and not diagnostics.get("source_search_errors")
         and not diagnostics.get("unrecognized")
+        and not diagnostics.get("episode_observations_truncated")
     )
     known_count = sum(len(values) for values in observed.values())
     return {
