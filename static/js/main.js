@@ -643,6 +643,7 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
     try {
         const first = await requestPage(0, true);
         if (requestId !== candidateSearchRequestSeq) return;
+        stopCandidateSearchProgress(requestId);
         mergePage(first.candidates_map || {});
         const title = selectedMovies[0]?.title;
         const firstPageInfo = first.candidate_pages?.[title] || {};
