@@ -101,7 +101,7 @@ class CardManifest:
             raise ValueError("卡片 capabilities 不能重复")
         if not isinstance(self.config_fields, (tuple, list)):
             raise ValueError("卡片 config_fields 必须是对象列表")
-        if any(not isinstance(field, dict) for field in self.config_fields):
+        if any(not isinstance(field, Mapping) for field in self.config_fields):
             raise ValueError("卡片配置字段必须是对象")
         if not isinstance(self.image_hosts, (tuple, list)):
             raise ValueError("卡片 image_hosts 必须是域名列表")
@@ -179,7 +179,7 @@ class CardManifest:
         # Detach the validated manifest from caller-owned mutable containers.
         # A frozen dataclass does not freeze lists or dictionaries nested inside it.
         object.__setattr__(self, "capabilities", tuple(self.capabilities))
-        object.__setattr__(self, "config_fields", tuple(_freeze_manifest_value(field) for field in self.config_fields))
+        object.__setattr__(self, "config_fields", tuple(_freeze_manifest_value(dict(field)) for field in self.config_fields))
         object.__setattr__(self, "image_hosts", tuple(self.image_hosts))
 
     def to_dict(self) -> dict[str, Any]:
