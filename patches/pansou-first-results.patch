@@ -1,0 +1,186 @@
+diff --git a/service/search_service.go b/service/search_service.go
+--- a/service/search_service.go
++++ b/service/search_service.go
+@@ -1865,4 +1865,25 @@
++// PluginCacheSnapshot 返回当前关键词已写入主缓存的插件结果快照。
++// 异步插件会在各自完成时更新这份缓存，因此调用方无需等待整个插件批次结束。
++func (s *SearchService) PluginCacheSnapshot(keyword string, plugins []string, ext map[string]interface{}) ([]model.SearchResult, bool) {
++	if ext == nil {
++		ext = make(map[string]interface{})
++	}
++	if config.AppConfig == nil || !config.AppConfig.CacheEnabled || !cacheInitialized || enhancedTwoLevelCache == nil {
++		return nil, false
++	}
++	key := cache.GeneratePluginCacheKey(keyword, plugins, util.ExtDigest(ext))
++	data, hit, err := enhancedTwoLevelCache.Get(key)
++	if err != nil || !hit {
++		return nil, false
++	}
++	var results []model.SearchResult
++	if err := enhancedTwoLevelCache.GetSerializer().Deserialize(data, &results); err != nil {
++		return nil, false
++	}
++	return results, true
++}
++
+ // GetPluginManager 获取插件管理器
+ func (s *SearchService) GetPluginManager() *plugin.PluginManager {
+ 	return s.pluginManager
+ }
+diff --git a/api/router.go b/api/router.go
+--- a/api/router.go
++++ b/api/router.go
+@@ -41,3 +41,5 @@
+ 		api.POST("/search", SearchHandler)
+ 		api.GET("/search", SearchHandler) // 添加GET方式支持
++		// 首批结果接口：插件结果一旦进入缓存就可提前返回，完整搜索继续在后台进行。
++		api.GET("/search/first", SearchFirstHandler)
+ 		api.POST("/check/links", CheckHandler)
+diff --git a/api/search_first_handler.go b/api/search_first_handler.go
+new file mode 100644
+--- /dev/null
++++ b/api/search_first_handler.go
+@@ -0,0 +1,143 @@
++package api
++
++import (
++	"encoding/json"
++	"fmt"
++	"net/http"
++	"strings"
++	"sync"
++	"time"
++
++	"github.com/gin-gonic/gin"
++	"pansou/config"
++	"pansou/model"
++	"pansou/util"
++)
++
++type firstSearchJob struct {
++	done   chan struct{}
++	result model.SearchResponse
++	err    error
++}
++
++var (
++	firstSearchJobsMu sync.Mutex
++	firstSearchJobs   = make(map[string]*firstSearchJob)
++)
++
++// SearchFirstHandler 在后台启动正常的 PanSou 搜索，并尽早返回已进入主缓存的插件结果。
++// 旧的 /api/search 保持原有完整响应语义；调用方可重复请求本接口读取后续缓存增量。
++func SearchFirstHandler(c *gin.Context) {
++	keyword := strings.TrimSpace(c.Query("kw"))
++	if keyword == "" {
++		c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "缺少搜索关键词 kw"))
++		return
++	}
++
++	channels := splitCSV(c.Query("channels"))
++	if len(channels) == 0 {
++		channels = append([]string(nil), config.AppConfig.DefaultChannels...)
++	}
++	plugins := splitCSV(c.Query("plugins"))
++	cloudTypes := splitCSV(c.Query("cloud_types"))
++	concurrency := util.StringToInt(c.Query("conc"))
++	forceRefresh := strings.EqualFold(c.Query("refresh"), "true")
++	sourceType := strings.TrimSpace(c.Query("src"))
++	if sourceType == "" {
++		sourceType = "all"
++	}
++
++	ext := make(map[string]interface{})
++	if raw := strings.TrimSpace(c.Query("ext")); raw != "" {
++		if err := json.Unmarshal([]byte(raw), &ext); err != nil {
++			c.JSON(http.StatusBadRequest, model.NewErrorResponse(400, "无效的 ext 参数格式"))
++			return
++		}
++		if ext == nil {
++			ext = make(map[string]interface{})
++		}
++	}
++	if forceRefresh {
++		ext["refresh"] = true
++	}
++
++	jobKey := fmt.Sprintf("%s|%s|%s|%s|%s|%s|%t", keyword, sourceType, strings.Join(channels, ","), strings.Join(plugins, ","), strings.Join(cloudTypes, ","), util.ExtDigest(ext), forceRefresh)
++	firstSearchJobsMu.Lock()
++	job := firstSearchJobs[jobKey]
++	if job == nil {
++		job = &firstSearchJob{done: make(chan struct{})}
++		firstSearchJobs[jobKey] = job
++		searchExt := make(map[string]interface{}, len(ext))
++		for key, value := range ext {
++			searchExt[key] = value
++		}
++		go func(j *firstSearchJob) {
++			result, err := searchService.Search(keyword, channels, concurrency, forceRefresh, "all", sourceType, plugins, cloudTypes, searchExt)
++			j.result, j.err = result, err
++			close(j.done)
++			firstSearchJobsMu.Lock()
++			if firstSearchJobs[jobKey] == j {
++				delete(firstSearchJobs, jobKey)
++			}
++			firstSearchJobsMu.Unlock()
++		}(job)
++	}
++	firstSearchJobsMu.Unlock()
++
++	wait := 1800 * time.Millisecond
++	if requested := util.StringToInt(c.Query("wait_ms")); requested > 0 {
++		if requested < 100 {
++			requested = 100
++		}
++		if requested > 2500 {
++			requested = 2500
++		}
++		wait = time.Duration(requested) * time.Millisecond
++	}
++	deadline := time.NewTimer(wait)
++	defer deadline.Stop()
++	ticker := time.NewTicker(100 * time.Millisecond)
++	defer ticker.Stop()
++
++	for {
++		if results, hit := searchService.PluginCacheSnapshot(keyword, plugins, ext); hit && len(results) > 0 {
++			c.JSON(http.StatusOK, model.NewSuccessResponse(model.SearchResponse{
++				Total: len(results),
++				Results: results,
++			}))
++			return
++		}
++		select {
++		case <-job.done:
++			if job.err != nil {
++				c.JSON(http.StatusInternalServerError, model.NewErrorResponse(500, "搜索失败: "+job.err.Error()))
++				return
++			}
++			c.JSON(http.StatusOK, model.NewSuccessResponse(job.result))
++			return
++		case <-ticker.C:
++			continue
++		case <-deadline.C:
++			results, _ := searchService.PluginCacheSnapshot(keyword, plugins, ext)
++			c.JSON(http.StatusOK, model.NewSuccessResponse(model.SearchResponse{
++				Total: len(results),
++				Results: results,
++			}))
++			return
++		}
++	}
++}
++
++func splitCSV(value string) []string {
++	if strings.TrimSpace(value) == "" {
++		return nil
++	}
++	parts := strings.Split(value, ",")
++	result := make([]string, 0, len(parts))
++	for _, part := range parts {
++		if part = strings.TrimSpace(part); part != "" {
++			result = append(result, part)
++		}
++	}
++	return result
++}

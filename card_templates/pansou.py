@@ -282,18 +282,36 @@ class PanSouResourceSource(ResourceSourceCard):
             timeout = int(config.get("timeout", 45))
         except (TypeError, ValueError):
             timeout = 45
-        _, payload = self._request(
-            "GET",
-            f"{base_url}/api/search",
-            config,
-            timeout=timeout,
-            params={
-                "kw": title,
-                "res": "all",
-                "src": "all",
-                "cloud_types": ",".join(cloud_types),
-            },
-        )
+        search_params = {
+            "kw": title,
+            "res": "all",
+            "src": "plugin",
+            "cloud_types": ",".join(cloud_types),
+            "wait_ms": 1800,
+        }
+        try:
+            # Bundled PanSou returns the first cached plugin results as soon as they
+            # are available; the search job continues and later requests see updates.
+            _, payload = self._request(
+                "GET",
+                f"{base_url}/api/search/first",
+                config,
+                timeout=timeout,
+                params=search_params,
+            )
+        except RuntimeError as exc:
+            # Preserve compatibility with external PanSou instances that do not yet
+            # provide the progressive endpoint.
+            if "HTTP 404" not in str(exc):
+                raise
+            search_params.pop("wait_ms", None)
+            _, payload = self._request(
+                "GET",
+                f"{base_url}/api/search",
+                config,
+                timeout=timeout,
+                params=search_params,
+            )
         results: list[dict[str, Any]] = []
         seen: set[tuple[str, str]] = set()
 

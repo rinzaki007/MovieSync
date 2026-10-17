@@ -712,6 +712,46 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
                                 throw new Error('资源分页没有向前推进');
                             }
                         }
+
+                        // PanSou's first-result endpoint returns an early cache snapshot
+                        // while its background plugin batch continues. Re-read that card
+                        // briefly so later plugin results are appended without restarting
+                        // the entire movie search or disturbing the user's selection.
+                        if (source.id === 'pansou' && sourceHadResponse) {
+                            const pollingStartedAt = Date.now();
+                            let lastGrowthAt = Date.now();
+                            while (
+                                requestId === candidateSearchRequestSeq
+                                && Date.now() - pollingStartedAt < 12000
+                                && (
+                                    Date.now() - pollingStartedAt < 6500
+                                    || Date.now() - lastGrowthAt < 2500
+                                )
+                            ) {
+                                await new Promise(resolve => window.setTimeout(resolve, 700));
+                                let pollOffset = 0;
+                                let pollHasMore = true;
+                                while (pollHasMore && requestId === candidateSearchRequestSeq) {
+                                    const result = await requestPage(pollOffset, [source.id]);
+                                    if (requestId !== candidateSearchRequestSeq) return;
+                                    const before = (candidatesMap[title] || []).length;
+                                    mergePage(result.candidates_map || {});
+                                    const pageInfo = result.candidate_pages?.[title] || {};
+                                    pollHasMore = Boolean(pageInfo.has_more);
+                                    const nextOffset = Number(pageInfo.next_offset || 0);
+                                    const after = (candidatesMap[title] || []).length;
+                                    if (after > before) {
+                                        lastGrowthAt = Date.now();
+                                        updateSourceProgress(sourceNames.get(source.id));
+                                        refreshModalPreservingSelection();
+                                    }
+                                    if (pollHasMore && nextOffset <= pollOffset) {
+                                        throw new Error('PanSou 增量分页没有向前推进');
+                                    }
+                                    pollOffset = nextOffset;
+                                }
+                            }
+                        }
                     } catch (err) {
                         failedSources++;
                         sourceFailures.push(`${sourceNames.get(source.id)}：${err.message || '请求失败'}`);
