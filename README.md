@@ -79,6 +79,10 @@ docker run -d \\
 
 如需首次自动安装镜像内置的全部卡片，可设置 \`MOVIESYNC_AUTO_INSTALL_BUNDLED_CARDS=1\`。
 
+## 🧩 卡片开发与扩展
+
+卡片作者请先阅读 [卡片开发规范（CARD_DEVELOPMENT.md）](CARD_DEVELOPMENT.md)，了解 manifest、能力声明、配置版本迁移、安装安全边界和提交前验证要求。
+
 ## 💾 数据与备份
 
 运行数据保存在 \`/app/data/\`，包括账号、配置、已安装卡片、任务和追剧记录。不要将这些数据提交到公开仓库。
