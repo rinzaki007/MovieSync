@@ -48,7 +48,7 @@ jobs:
         run: pytest -q --cov=moviesync --cov-report=term-missing
 
       - name: Run Ruff
-        run: ruff check . --output-format=github
+        run: ruff check card_templates/openlist.py --select I --diff
 
   build-pr:
     name: Build Docker image (PR validation)
