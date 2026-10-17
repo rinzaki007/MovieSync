@@ -28,6 +28,12 @@ def _normalize_resource_id(value: object) -> str:
         raise ValueError("分享资源 ID 无效")
     return value
 
+def _file_relative_folder(item: object) -> str:
+    if not isinstance(item, dict):
+        return ""
+    value = item.get("relative_path") or item.get("relative_dir") or item.get("folder_path") or ""
+    return str(value).replace("\\", "/").strip("/")
+
 def _parse_tv_episode(file_name: str) -> tuple[int | None, int | None]:
     """兼容旧调用；新订阅优先使用对应资源卡片的解析规则。"""
     return parse_tv_episode(file_name)
@@ -359,6 +365,8 @@ class SubscriptionManager:
         source_id: str = "",
         media_type: str = "",
         tag: str = "",
+        source_folder_path: str = "",
+        source_folder_scoped: bool = False,
     ) -> dict:
         title = str(
             title or ""
@@ -461,6 +469,12 @@ class SubscriptionManager:
             "pwd_id": legacy_pwd_id,
             "resource_id": resource_id,
             "resource_type": resource_type,
+            "source_folder_path": "/".join(
+                part
+                for part in str(source_folder_path or "").replace("\\", "/").split("/")
+                if part and part not in {".", ".."}
+            )[:1000],
+            "source_folder_scoped": bool(source_folder_scoped),
             "target_fid": target_fid,
             "storage_target_id": str(storage_target_id or "").strip(),
             "interval_hours": interval_hours,
@@ -860,6 +874,24 @@ class SubscriptionManager:
                 "reason": f"文件列表返回 {type(files).__name__}，预期为列表",
             })
             return self._finish(sub, False, "解析链接失败：文件列表格式异常")
+        source_folder_path = str(sub.get("source_folder_path") or "").strip().strip("/")
+        if sub.get("source_folder_scoped"):
+            files = [
+                item for item in files
+                if isinstance(item, dict)
+                and (
+                    _file_relative_folder(item) == source_folder_path
+                    or (
+                        source_folder_path
+                        and _file_relative_folder(item).startswith(source_folder_path + "/")
+                    )
+                )
+            ]
+            if not files:
+                diagnostics["examples"].append({
+                    "file": source_folder_path,
+                    "reason": "所选来源文件夹中没有可扫描的文件；已阻止回退到其他文件夹",
+                })
         fetched_stoken = resolved.get("token")
         target_id = str(
             resolved.get("target_id")
@@ -1516,6 +1548,28 @@ class SubscriptionManager:
             if not isinstance(resolved, dict):
                 resolved = {"error": "资源解析返回格式无效", "files": [], "token": None}
             files = resolved.get("files") or []
+            source_folder_path = str(sub.get("source_folder_path") or "").strip().strip("/")
+            if sub.get("source_folder_scoped") and isinstance(files, list):
+                original_file_count = len(files)
+                files = [
+                    item for item in files
+                    if isinstance(item, dict)
+                    and (
+                        _file_relative_folder(item) == source_folder_path
+                        or (
+                            source_folder_path
+                            and _file_relative_folder(item).startswith(source_folder_path + "/")
+                        )
+                    )
+                ]
+                if not files:
+                    diagnostics["examples"].append({
+                        "file": f"{resource_id}/{source_folder_path}",
+                        "reason": (
+                            f"所选来源文件夹未匹配到文件（原分享文件数 {original_file_count}）；"
+                            "已阻止扫描其他文件夹"
+                        ),
+                    })
             token = resolved.get("token")
             target_id = str(
                 resolved.get("target_id")

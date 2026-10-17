@@ -1680,6 +1680,8 @@ def subscriptions():
                 source_id=data.get("source_id", ""),
                 media_type=data.get("media_type", ""),
                 tag=data.get("tag", ""),
+                source_folder_path=data.get("source_folder_path", ""),
+                source_folder_scoped=data.get("source_folder_scoped", False),
 
 
             )
