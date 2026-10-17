@@ -10,6 +10,10 @@ RUN git init . \
     && git remote add origin https://github.com/fish2018/pansou.git \
     && git fetch --depth 1 origin "${PANSOU_REF}" \
     && git checkout --detach FETCH_HEAD
+COPY patches/pansou-first-results.patch /tmp/pansou-first-results.patch
+RUN git apply /tmp/pansou-first-results.patch \
+    && gofmt -w api/search_first_handler.go service/search_service.go api/router.go
+
 RUN mkdir -p /out
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w -extldflags '-static'" -o /out/pansou .
