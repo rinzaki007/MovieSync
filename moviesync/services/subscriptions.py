@@ -799,6 +799,7 @@ class SubscriptionManager:
             "shares": [],
             "observed_episodes": [],
             "episode_observations_truncated": False,
+            "source_scan_complete": False,
             "examples": [],
         }
 
@@ -920,6 +921,7 @@ class SubscriptionManager:
                         "reason": "文件条目缺少 fid，无法追踪或转存",
                     })
 
+        diagnostics["source_scan_complete"] = bool(getattr(files, "scan_complete", True))
         self._persist_diagnostics_snapshot(sub, phase="scan")
         tracked_keys = {
             str(key).strip()
@@ -1989,6 +1991,9 @@ class SubscriptionManager:
         if scan_complete:
             self._save_channel_scan_cursor(sub, scan_cursor)
         self._save_channel_history_cursor(sub, history_cursor, history_complete)
+        diagnostics["source_scan_complete"] = bool(
+            scan_complete and (history_complete or sub.get("channel_history_complete"))
+        )
         return self._finish(
             sub,
             True,
