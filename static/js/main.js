@@ -723,7 +723,10 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
                             while (
                                 requestId === candidateSearchRequestSeq
                                 && Date.now() - pollingStartedAt < 12000
-                                && Date.now() - lastGrowthAt < 2500
+                                && (
+                                    Date.now() - pollingStartedAt < 6500
+                                    || Date.now() - lastGrowthAt < 2500
+                                )
                             ) {
                                 await new Promise(resolve => window.setTimeout(resolve, 700));
                                 let pollOffset = 0;
