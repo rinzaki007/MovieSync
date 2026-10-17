@@ -226,3 +226,28 @@ def test_get_share_files_reports_when_file_limit_is_reached():
     assert len(files) == 1
     assert files.scan_complete is False
     assert any("扫描上限" in warning for warning in files.scan_warnings)
+
+
+def test_get_share_files_uses_explicit_pagination_and_keeps_all_47_episodes():
+    response = FakeResponse(200)
+    files = [
+        {"fid": f"episode-{number}", "file_name": f"Show.E{number:02d}.mkv"}
+        for number in range(1, 48)
+    ]
+    http = FakeHttp([
+        (response, {"code": 0, "data": {"stoken": "share-token"}}),
+        (response, {"code": 0, "data": {"list": files}}),
+    ])
+    client = QuarkClient("session=value")
+    client.http = http
+
+    parsed, token, error = client.get_share_files("share123")
+
+    assert error is None
+    assert token == "share-token"
+    assert len(parsed) == 47
+    share_listing_url = http.calls[1][1]
+    assert "_page=1" in share_listing_url
+    assert "_size=200" in share_listing_url
+    assert "_fetch_total=1" in share_listing_url
+    assert "&p=1&num=200" not in share_listing_url
