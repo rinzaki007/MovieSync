@@ -2763,6 +2763,7 @@ def test_subscription_scopes_initial_and_future_scan_to_selected_folder(tmp_path
         pwd_id="share123",
         storage_target_id="demo-storage",
         source_folder_path="1080p",
+        source_folder_scoped=True,
         files=[{"fid": "s1e1", "file_name": "Show.S01E01.mkv", "relative_path": "1080p"}],
     )
 
