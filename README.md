@@ -1,4 +1,5 @@
 # 🎬 MovieSync
+![Uploading image.png…]()
 
 > 自托管影视检索、资源选择与网盘任务管理平台
 
