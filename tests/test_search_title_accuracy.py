@@ -130,3 +130,36 @@ def test_declared_episode_count_can_be_extracted_without_forcing_movie_warning()
 
     # Category gating is performed when candidate metadata is assembled.
     assert _declared_episode_count("电影合集 全47集") == 47
+
+
+def test_candidate_priority_ignores_parenthesized_release_year_for_sequel_titles():
+    exact_sequel = {
+        "title": "潜伏6 4K BluRay 1080p",
+        "file_name": "潜伏6.mkv",
+    }
+    older_franchise_entry = {
+        "title": "潜伏 第06季 全集",
+        "file_name": "潜伏.S06E01.mkv",
+    }
+
+    exact_score = SearchService._candidate_priority(
+        exact_sequel, "潜伏6 (2025)", "movie"
+    )
+    older_score = SearchService._candidate_priority(
+        older_franchise_entry, "潜伏6 (2025)", "movie"
+    )
+    assert exact_score > older_score
+
+
+def test_candidate_priority_keeps_numbered_title_as_identity():
+    sequel_score = SearchService._candidate_priority(
+        {"title": "潜伏6 4K", "file_name": "潜伏6.mkv"},
+        "潜伏6",
+        "movie",
+    )
+    franchise_score = SearchService._candidate_priority(
+        {"title": "潜伏 第06季", "file_name": "潜伏.S06E01.mkv"},
+        "潜伏6",
+        "movie",
+    )
+    assert sequel_score > franchise_score
