@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor
 from importlib.metadata import entry_points
 from typing import Any
 
@@ -161,28 +162,46 @@ class ResourceSourceManager:
         return enabled
 
     def search(self, movie: object, config: dict) -> list[dict[str, Any]]:
-        results: list[dict[str, Any]] = []
-        for source in self._enabled_sources(config):
+        enabled_sources = self._enabled_sources(config)
+        if not enabled_sources:
+            return []
+
+        def search_one(source: ResourceSourceCard) -> list[dict[str, Any]]:
             try:
                 items = source.search(movie, self._card_config(config, source.card_id))
                 if not isinstance(items, list):
                     raise TypeError("资源卡片 search 必须返回列表")
-                for item in items:
-                    if not isinstance(item, dict):
-                        continue
-                    results.append({
+                return [
+                    {
                         **item,
                         # Resource identity is owned by the manager, not plugin output.
                         "source_id": source.card_id,
                         "source_name": self._source_name(source),
-                    })
+                    }
+                    for item in items
+                    if isinstance(item, dict)
+                ]
             except Exception as exc:
                 self.logger.exception(
                     "资源源 %s 搜索异常: %s",
                     source.card_id,
                     exc,
                 )
-        return results
+                return []
+
+        # Resource cards are independent network sources. Search them concurrently
+        # to avoid adding each provider's latency one after another. executor.map
+        # preserves registration order, so candidate ranking remains deterministic.
+        with ThreadPoolExecutor(
+            max_workers=min(8, len(enabled_sources)),
+            thread_name_prefix="moviesync-resource-search",
+        ) as executor:
+            source_results = executor.map(search_one, enabled_sources)
+            return [
+                item
+                for items in source_results
+                for item in items
+            ]
 
     def parse_tv_episode(self, source_id: str, file_name: str) -> tuple[int | None, int | None]:
         """优先使用全局文件名识别规则，兼容旧资源卡片的专属规则。"""

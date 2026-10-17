@@ -804,3 +804,44 @@ def test_channel_search_fails_safely_when_config_cannot_be_read():
         "cursor": None,
         "complete": False,
     }
+
+def test_resource_source_search_runs_cards_concurrently_and_preserves_order():
+    import threading
+
+    barrier = threading.Barrier(2)
+
+    class Store:
+        def load(self):
+            return {
+                "cards": {
+                    "first-source": {"enabled": True, "config": {}},
+                    "second-source": {"enabled": True, "config": {}},
+                }
+            }
+
+    class ConcurrentCard(ResourceSourceCard):
+        def __init__(self, card_id):
+            self.manifest = CardManifest(
+                id=card_id,
+                name=card_id,
+                type="resource_source",
+                capabilities=("resource.search",),
+            )
+
+        def search(self, movie, config):
+            barrier.wait(timeout=2)
+            return [{"title": self.card_id}]
+
+        def check(self, config):
+            return {"status": "healthy"}
+
+    manager = ResourceSourceManager(
+        Store(),
+        FakeLogger(),
+        resource_cards=[ConcurrentCard("first-source"), ConcurrentCard("second-source")],
+    )
+
+    results = manager.search({"title": "Film"}, Store().load())
+
+    assert [item["source_id"] for item in results] == ["first-source", "second-source"]
+
