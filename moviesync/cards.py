@@ -13,7 +13,6 @@ import re
 from copy import deepcopy
 from dataclasses import dataclass
 from threading import RLock
-from types import MappingProxyType
 from typing import Any, Mapping
 from urllib.parse import urlparse
 
@@ -31,14 +30,49 @@ CARD_CONFIG_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 
 
 
+class _FrozenDict(dict):
+    """JSON-serializable dictionary that rejects mutation."""
+
+    def _immutable(self, *args, **kwargs):
+        raise TypeError("卡片 Manifest 配置字段不可修改")
+
+    __setitem__ = _immutable
+    __delitem__ = _immutable
+    clear = _immutable
+    pop = _immutable
+    popitem = _immutable
+    setdefault = _immutable
+    update = _immutable
+
+
+class _FrozenList(list):
+    """JSON-serializable list that rejects mutation."""
+
+    def _immutable(self, *args, **kwargs):
+        raise TypeError("卡片 Manifest 配置字段不可修改")
+
+    __setitem__ = _immutable
+    __delitem__ = _immutable
+    __iadd__ = _immutable
+    __imul__ = _immutable
+    append = _immutable
+    clear = _immutable
+    extend = _immutable
+    insert = _immutable
+    pop = _immutable
+    remove = _immutable
+    reverse = _immutable
+    sort = _immutable
+
+
 def _freeze_manifest_value(value: Any) -> Any:
-    """Recursively freeze manifest metadata after validation."""
+    """Recursively freeze manifest metadata while preserving JSON container types."""
     if isinstance(value, dict):
-        return MappingProxyType({key: _freeze_manifest_value(item) for key, item in value.items()})
+        return _FrozenDict({key: _freeze_manifest_value(item) for key, item in value.items()})
     if isinstance(value, (list, tuple)):
-        return tuple(_freeze_manifest_value(item) for item in value)
-    if isinstance(value, set):
-        return frozenset(_freeze_manifest_value(item) for item in value)
+        return _FrozenList(_freeze_manifest_value(item) for item in value)
+    if isinstance(value, (set, frozenset)):
+        return _FrozenList(_freeze_manifest_value(item) for item in value)
     return value
 
 
