@@ -800,7 +800,18 @@ async function searchTaskCandidates() {
             const resolutions = Object.keys(candidate.resolutions || {});
             const resolutionText = resolutions.length ? resolutions.join(' / ') : [...new Set(files.map(f => f.resolution).filter(Boolean))].join(' / ') || '未知';
             const totalSize = candidate.total_size_text || formatTaskSize(files.reduce((sum, f) => sum + Number(f.size || 0), 0));
-            const validFids = files.map(file => String(file.fid || '').trim()).filter(Boolean);
+            const normalizeFolder = value => String(value || '').replace(/\\/g, '/').replace(/^\\/+|\\/+$/g, '').replace(/\\/{2,}/g, '/');
+            const fileFolder = file => normalizeFolder(file.relative_path || file.relative_dir || file.folder_path || '');
+            const folderCounts = new Map();
+            files.forEach(file => { if (String(file.fid || '').trim()) { const folder = fileFolder(file); folderCounts.set(folder, (folderCounts.get(folder) || 0) + 1); } });
+            const hasFolderMetadata = files.some(file => fileFolder(file));
+            const folderOptions = [...folderCounts.keys()].sort((a, b) => (folderCounts.get(b) - folderCounts.get(a)) || a.localeCompare(b));
+            const selectedFolder = hasFolderMetadata ? (folderOptions[0] || '') : '';
+            const folderFiles = files.filter(file => {
+                const folder = fileFolder(file);
+                return !hasFolderMetadata || folder === selectedFolder || (selectedFolder && folder.startsWith(selectedFolder + '/'));
+            });
+            const validFids = folderFiles.map(file => String(file.fid || '').trim()).filter(Boolean);
             const selectedFids = new Set(validFids);
             row.className = 'rounded-2xl border border-slate-800 bg-slate-950/80 p-4 transition hover:border-slate-700';
             if (index >= initiallyVisibleCandidates) {
@@ -814,26 +825,32 @@ async function searchTaskCandidates() {
                 '<span class="rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-[10px] text-slate-400"><i class="fa-solid fa-hard-drive mr-1"></i>' + escapeTask(totalSize) + '</span>' +
                 '<span class="rounded-lg border border-blue-900/60 bg-blue-950/30 px-2 py-1 text-[10px] text-blue-300"><i class="fa-solid fa-display mr-1"></i>' + escapeTask(resolutionText) + '</span></div></div>' +
                 '<button data-candidate="' + index + '" class="candidate-select shrink-0 rounded-xl border border-purple-700 bg-purple-950/40 px-4 py-2.5 text-[11px] font-medium text-purple-200 hover:bg-purple-900/50">选择此源</button></div>' +
+                (hasFolderMetadata
+                    ? '<div class="mt-3 rounded-xl border border-purple-900/50 bg-purple-950/20 p-3"><label class="mb-2 block text-[11px] font-medium text-purple-200">先选择分享文件夹</label><select data-smart-folder class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200">' + folderOptions.map(folder => '<option value="' + escapeTask(folder) + '"' + (folder === selectedFolder ? ' selected' : '') + '>' + escapeTask(folder || '分享根目录') + ' · ' + folderCounts.get(folder) + ' 个视频</option>').join('') + '</select><p class="mt-2 text-[10px] text-slate-400">追剧只会扫描这个文件夹范围，避免把其他画质或版本混在一起。</p></div>'
+                    : '<div class="mt-3 rounded-xl border border-amber-900/50 bg-amber-950/20 p-3 text-[10px] text-amber-200">此资源没有提供文件夹路径信息，只能按原有文件列表选择；后台不会猜测文件夹范围。</div>') +
                 '<div class="mt-2 flex items-center justify-between rounded-xl border border-slate-800 bg-slate-900/60 px-3 py-2">' +
-                '<span class="text-[11px] text-slate-400">已选 <strong data-selected-count class="text-slate-200">' + validFids.length + '</strong> / ' + validFids.length + ' 集</span>' +
+                '<span class="text-[11px] text-slate-400">当前文件夹已选 <strong data-selected-count class="text-slate-200">' + validFids.length + '</strong> / ' + validFids.length + ' 集</span>' +
                 '<button type="button" data-toggle-files class="text-[11px] text-purple-300 hover:text-purple-200">' + (validFids.length ? '取消全选' : '全选') + '</button>' +
                 '</div>' +
                 '<div class="mt-2 max-h-60 overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/80 p-2 space-y-1">' +
                 files.map((file, fileIndex) => {
                     const fid = String(file.fid || '').trim();
+                    const folder = fileFolder(file);
+                    const inFolder = !hasFolderMetadata || folder === selectedFolder || (selectedFolder && folder.startsWith(selectedFolder + '/'));
                     if (!fid) return '';
-                    return '<label class="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-slate-800/70"><input type="checkbox" data-file-index="' + fileIndex + '" class="task-episode-checkbox h-4 w-4 rounded border-slate-600 bg-slate-950 text-purple-600 focus:ring-purple-500" checked><span class="min-w-0 flex-1 truncate text-xs text-slate-300">' + escapeTask(file.file_name) + '</span><span class="shrink-0 text-[10px] text-slate-500">' + escapeTask(file.resolution || '未知') + ' · ' + escapeTask(file.size_text || formatTaskSize(file.size)) + '</span></label>';
+                    return '<label data-smart-folder-row="' + fileIndex + '" class="' + (inFolder ? '' : 'hidden ') + 'flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-slate-800/70"><input type="checkbox" data-file-index="' + fileIndex + '" class="task-episode-checkbox h-4 w-4 rounded border-slate-600 bg-slate-950 text-purple-600 focus:ring-purple-500"' + (inFolder ? ' checked' : ' disabled') + '><span class="min-w-0 flex-1 truncate text-xs text-slate-300">' + escapeTask(file.file_name) + '</span><span class="shrink-0 text-[10px] text-slate-500">' + escapeTask(file.resolution || '未知') + ' · ' + escapeTask(file.size_text || formatTaskSize(file.size)) + '</span></label>';
                 }).join('') +
                 '</div>' +
-                '<div class="mt-2 text-[10px] text-slate-500">默认选择当前已发现的全部集数；取消某些集只影响首次处理，后续新集仍会自动追更。</div>';
+                '<div class="mt-2 text-[10px] text-slate-500">首次处理仅使用所选文件夹中的勾选集数；后续自动追更也会沿用该文件夹范围。</div>';
             const updateSelectionUi = () => {
                 const checked = [...row.querySelectorAll('.task-episode-checkbox:checked')];
                 const selected = new Set(checked.map(input => {
                     const file = files[Number(input.dataset.fileIndex)];
                     return String(file?.fid || '').trim();
                 }).filter(Boolean));
+                const visibleInputs = [...row.querySelectorAll('.task-episode-checkbox:not(:disabled)')];
                 row.querySelector('[data-selected-count]').textContent = selected.size;
-                row.querySelector('[data-toggle-files]').textContent = selected.size === validFids.length ? '取消全选' : '全选';
+                row.querySelector('[data-toggle-files]').textContent = selected.size === visibleInputs.length ? '取消全选' : '全选';
                 if (selectedCandidate?.row === row) {
                     selectedCandidate.selectedFids = selected;
                     refreshTaskSubmitState();
@@ -845,16 +862,42 @@ async function searchTaskCandidates() {
             };
             row.querySelectorAll('.task-episode-checkbox').forEach(input => input.addEventListener('change', updateSelectionUi));
             row.querySelector('[data-toggle-files]').onclick = () => {
-                const shouldSelectAll = row.querySelectorAll('.task-episode-checkbox:checked').length !== validFids.length;
-                row.querySelectorAll('.task-episode-checkbox').forEach(input => { input.checked = shouldSelectAll; });
+                const visibleInputs = [...row.querySelectorAll('.task-episode-checkbox:not(:disabled)')];
+                const shouldSelectAll = visibleInputs.some(input => !input.checked);
+                visibleInputs.forEach(input => { input.checked = shouldSelectAll; });
                 updateSelectionUi();
             };
+            row.querySelector('[data-smart-folder]')?.addEventListener('change', event => {
+                const folder = normalizeFolder(event.target.value);
+                const visibleFids = new Set();
+                row.querySelectorAll('[data-smart-folder-row]').forEach(label => {
+                    const fileIndex = Number(label.dataset.smartFolderRow);
+                    const file = files[fileIndex];
+                    const path = fileFolder(file);
+                    const visible = path === folder || (folder && path.startsWith(folder + '/'));
+                    label.classList.toggle('hidden', !visible);
+                    const input = label.querySelector('.task-episode-checkbox');
+                    input.disabled = !visible;
+                    input.checked = visible;
+                    if (visible && file?.fid) visibleFids.add(String(file.fid).trim());
+                });
+                row.querySelector('[data-selected-count]').textContent = visibleFids.size;
+                row.querySelector('[data-toggle-files]').textContent = visibleFids.size ? '取消全选' : '全选';
+                if (selectedCandidate?.row === row) {
+                    selectedCandidate.selectedFids = visibleFids;
+                    selectedCandidate.sourceFolderPath = folder;
+                    selectedCandidate.sourceFolderScoped = true;
+                    refreshTaskSubmitState();
+                }
+                updateSelectionUi();
+            });
             row.querySelector('.candidate-select').onclick = function() {
                 const currentSelected = new Set([...row.querySelectorAll('.task-episode-checkbox:checked')].map(input => {
                     const file = files[Number(input.dataset.fileIndex)];
                     return String(file?.fid || '').trim();
                 }).filter(Boolean));
-                selectedCandidate = {candidate:candidate,row:row,selectedFids:currentSelected};
+                const folderSelect = row.querySelector("[data-smart-folder]");
+                selectedCandidate = {candidate:candidate,row:row,selectedFids:currentSelected,sourceFolderPath:folderSelect ? normalizeFolder(folderSelect.value) : "",sourceFolderScoped:Boolean(folderSelect)};
                 const hasCompatibleTargets = filterStorageTargetsForCandidate(candidate);
                 document.querySelectorAll('.candidate-select').forEach(b => { b.className='candidate-select shrink-0 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-[11px] text-slate-400'; b.textContent='选择此源'; });
                 this.className='candidate-select shrink-0 rounded-xl bg-emerald-600 px-4 py-2.5 text-[11px] font-medium text-white';
@@ -882,7 +925,7 @@ async function createTask() {
     const selectedFids = selectedCandidate.selectedFids || new Set();
     const files = (selectedCandidate.candidate.files || [])
         .filter(x => selectedFids.has(String(x.fid || '').trim()))
-        .map(x => ({fid:x.fid, file_name:x.file_name || ''}))
+        .map(x => ({fid:x.fid, file_name:x.file_name || '', relative_path:x.relative_path || x.relative_dir || x.folder_path || ''}))
         .filter(x => x.fid);
     if (!files.length) return taskToast('请至少选择 1 集作为首次处理基线');
     const storageTargetId = document.getElementById('task-storage-target')?.value;
@@ -903,6 +946,8 @@ async function createTask() {
         pwd_id:selectedCandidate.candidate.pwd_id || '',
         resource_id:selectedCandidate.candidate.resource_id || selectedCandidate.candidate.share_id || selectedCandidate.candidate.pwd_id || '',
         resource_type:selectedCandidate.candidate.resource_type || '',
+        source_folder_path:selectedCandidate.sourceFolderPath || '',
+        source_folder_scoped:Boolean(selectedCandidate.sourceFolderScoped),
         files:files,
         cover:selectedCandidate.candidate.cover || '',
         interval_hours:Number(document.getElementById('task-interval').value || 6),
