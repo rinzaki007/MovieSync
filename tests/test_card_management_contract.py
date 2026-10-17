@@ -828,3 +828,13 @@ def test_telegram_channel_config_uses_full_width_and_wide_dialog():
     assert 'field.editor === "channel_chips" ? " md:col-span-2" : ""' in template
     assert '.generic-card-dialog-wide{' in template
     assert 'classList.toggle("generic-card-dialog-wide", cardId === "telegram")' in template
+
+
+def test_card_management_surfaces_unhealthy_connection_state():
+    from pathlib import Path
+
+    template = Path(__file__).resolve().parents[1] / "templates" / "admin.html"
+    source = template.read_text(encoding="utf-8")
+    assert 'healthStatus === "unhealthy"' in source
+    assert '"连接异常"' in source
+    assert "border-rose-400/20 bg-rose-400/5 text-rose-300" in source
