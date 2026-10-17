@@ -1,5 +1,3 @@
-from types import SimpleNamespace
-
 import pytest
 
 from card_templates.openlist import OpenListPlaybackCard, _clean_path
