@@ -800,7 +800,7 @@ async function searchTaskCandidates() {
             const resolutions = Object.keys(candidate.resolutions || {});
             const resolutionText = resolutions.length ? resolutions.join(' / ') : [...new Set(files.map(f => f.resolution).filter(Boolean))].join(' / ') || '未知';
             const totalSize = candidate.total_size_text || formatTaskSize(files.reduce((sum, f) => sum + Number(f.size || 0), 0));
-            const normalizeFolder = value => String(value || '').replace(/\\/g, '/').replace(/^\\/+|\\/+$/g, '').replace(/\\/{2,}/g, '/');
+            const normalizeFolder = value => String(value || '').split('\\\\').join('/').split('/').filter(part => part && part !== '.').join('/');
             const fileFolder = file => normalizeFolder(file.relative_path || file.relative_dir || file.folder_path || '');
             const folderCounts = new Map();
             files.forEach(file => { if (String(file.fid || '').trim()) { const folder = fileFolder(file); folderCounts.set(folder, (folderCounts.get(folder) || 0) + 1); } });
