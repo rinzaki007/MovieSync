@@ -39,7 +39,7 @@ class FakeSession:
 
 
 def test_openlist_card_manifest_and_config_validation():
-    card = OpenListPlaybackCard(FakeConfigStore())
+    card = OpenListPlaybackCard({"config_store": FakeConfigStore()})
 
     assert isinstance(card, PlaybackProviderCard)
     assert card.card_id == "openlist"
@@ -69,7 +69,7 @@ def test_openlist_lists_and_normalizes_video_files():
         "root_path": "/media",
         "token": "secret-token",
     }
-    card = OpenListPlaybackCard(FakeConfigStore(config))
+    card = OpenListPlaybackCard({"config_store": FakeConfigStore(config)})
     card.session = FakeSession({
         "code": 200,
         "data": {
