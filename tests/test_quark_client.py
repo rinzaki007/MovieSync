@@ -34,9 +34,12 @@ def test_get_share_files_walks_nested_directories():
             {"fid": "folder-1", "file_name": "Season 1", "dir_file": True},
             {"fid": "root-video", "file_name": "Show.S01E02.mkv"},
         ]}}),
+        # A short root page is not necessarily the last page; terminate with an empty page.
+        (response, {"code": 0, "data": {"list": []}}),
         (response, {"code": 0, "data": {"list": [
             {"fid": "nested-video", "file_name": "Show.S01E01.mkv"},
         ]}}),
+        (response, {"code": 0, "data": {"list": []}}),
     ])
     client = QuarkClient("Cookie: session=value")
     client.http = http
@@ -46,7 +49,7 @@ def test_get_share_files_walks_nested_directories():
     assert error is None
     assert token == "share-token"
     assert {item["fid"] for item in files} == {"root-video", "nested-video"}
-    assert len(http.calls) == 3
+    assert len(http.calls) == 5
     assert all(call[2]["timeout"] == 8 for call in http.calls[1:])
 
 
@@ -193,9 +196,11 @@ def test_get_share_files_reports_when_nested_directory_exceeds_depth_limit():
         (response, {"code": 0, "data": {"list": [
             {"fid": "folder-1", "file_name": "Season 1", "dir_file": True},
         ]}}),
+        (response, {"code": 0, "data": {"list": []}}),
         (response, {"code": 0, "data": {"list": [
             {"fid": "folder-2", "file_name": "Nested", "dir_file": True},
         ]}}),
+        (response, {"code": 0, "data": {"list": []}}),
     ])
     client = QuarkClient("session=value")
     client.http = http
