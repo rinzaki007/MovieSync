@@ -226,7 +226,7 @@ def test_storage_target_manager_loads_installed_plugins(monkeypatch):
     received_context = {}
 
     class EntryPoint:
-        name = "external-storage"
+        name = "demo-storage"
 
         def load(self):
             def factory(context):

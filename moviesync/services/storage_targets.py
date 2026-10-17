@@ -57,6 +57,10 @@ class StorageTargetManager:
                     raise TypeError("存储卡片插件工厂必须返回 StorageTargetCard 实例")
                 if card.card_type != "storage_target":
                     raise ValueError("卡片类型必须是 storage_target")
+                if card.card_id != str(entry_point.name or "").strip():
+                    raise ValueError(
+                        f"存储卡片入口名称「{entry_point.name}」必须与 manifest ID「{card.card_id}」一致"
+                    )
                 registered = self.registry.register(card)
                 loaded.append(registered.card_id)
                 self.logger.info("已加载存储卡片插件: %s", registered.card_id)
