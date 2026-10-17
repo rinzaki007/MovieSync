@@ -37,4 +37,4 @@ def test_resource_selector_supports_folder_browsing_and_folder_selection():
     assert 'function openResourceFolder(i,path)' in source
     assert 'function toggleFolderSelection(i,path,checked)' in source
     assert 'relative_path' in source
-    assert '已选 '+"+set.size+"+' 个文件' in source
+    assert "count.textContent='已选 '+set.size+' 个文件'" in source
