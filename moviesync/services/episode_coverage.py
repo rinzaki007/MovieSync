@@ -14,10 +14,13 @@ def build_episode_coverage(subscription: dict) -> dict:
     shares = shares if isinstance(shares, list) else []
 
     observed: dict[int, set[int]] = {}
-    for share in shares:
-        if not isinstance(share, dict):
-            continue
-        episodes = share.get("episodes")
+    episode_groups = [diagnostics.get("observed_episodes")]
+    episode_groups.extend(
+        share.get("episodes")
+        for share in shares
+        if isinstance(share, dict)
+    )
+    for episodes in episode_groups:
         if not isinstance(episodes, list):
             continue
         for item in episodes:
