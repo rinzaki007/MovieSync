@@ -75,3 +75,37 @@ def test_season_aware_baseline_does_not_mix_seasonless_episode_numbers():
     assert coverage["gaps"] == [
         {"season": 2, "episodes": [9], "range_start": 8, "range_end": 9}
     ]
+
+
+def test_truncated_episode_observations_are_not_marked_complete():
+    coverage = build_episode_coverage({
+        "start_season": 0,
+        "start_ep": 0,
+        "last_diagnostics": {
+            "success": True,
+            "episode_observations_truncated": True,
+            "observed_episodes": [
+                {"season": 0, "episode": 1},
+                {"season": 0, "episode": 3},
+            ],
+        },
+    })
+
+    assert coverage["gaps"][0]["episodes"] == [2]
+    assert coverage["confidence"] == "incomplete_scan"
+
+
+def test_unknown_season_baseline_does_not_infer_missing_early_season_episodes():
+    coverage = build_episode_coverage({
+        "start_season": 0,
+        "start_ep": 8,
+        "last_diagnostics": {
+            "success": True,
+            "observed_episodes": [
+                {"season": 1, "episode": 8},
+                {"season": 1, "episode": 10},
+            ],
+        },
+    })
+
+    assert coverage["gaps"][0]["episodes"] == [9]
