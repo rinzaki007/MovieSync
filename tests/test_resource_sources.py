@@ -845,3 +845,45 @@ def test_resource_source_search_runs_cards_concurrently_and_preserves_order():
 
     assert [item["source_id"] for item in results] == ["first-source", "second-source"]
 
+
+
+def test_resource_source_search_can_filter_to_selected_cards():
+    class Store:
+        def load(self):
+            return {
+                "cards": {
+                    "source-a": {"enabled": True, "config": {}},
+                    "source-b": {"enabled": True, "config": {}},
+                }
+            }
+
+    class NamedCard(ResourceSourceCard):
+        def __init__(self, card_id):
+            self.manifest = CardManifest(
+                id=card_id,
+                name=card_id,
+                type="resource_source",
+                capabilities=("resource.search",),
+            )
+
+        def search(self, movie, config):
+            return [{"title": self.card_id}]
+
+        def check(self, config):
+            return {"status": "healthy"}
+
+    store = Store()
+    manager = ResourceSourceManager(
+        store,
+        FakeLogger(),
+        resource_cards=[NamedCard("source-a"), NamedCard("source-b")],
+    )
+
+    results = manager.search(
+        {"title": "Film"},
+        store.load(),
+        source_ids=["source-b"],
+    )
+
+    assert [item["source_id"] for item in results] == ["source-b"]
+    assert manager.search({"title": "Film"}, store.load(), source_ids=["missing"]) == []
