@@ -84,7 +84,9 @@ def _candidate_match_explanation(
     target_title = str(movie.get("title") or "").strip()
     original_title = str(movie.get("original_title") or "").strip()
     source = str(source_title or "").strip()
-    normalize = lambda value: re.sub(r"[\W_]+", "", str(value or "").casefold())
+    def normalize(value: object) -> str:
+        return re.sub(r"[\W_]+", "", str(value or "").casefold())
+
     target_norm, source_norm = normalize(target_title), normalize(source)
     original_norm = normalize(original_title)
     if target_norm and target_norm in source_norm:
