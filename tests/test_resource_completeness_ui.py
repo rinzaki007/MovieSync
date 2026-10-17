@@ -28,3 +28,13 @@ def test_resource_selector_shows_only_clickable_share_code():
     assert "原分享路径（用于核对实际集数）" not in source
     assert " · 默认不选择文件</p>" not in source
     assert "href=\"'+escapeHtml(parsed.href)+'\"" in source
+
+
+def test_resource_selector_supports_folder_browsing_and_folder_selection():
+    source = (Path(__file__).resolve().parents[1] / "static" / "js" / "resource-select.js").read_text(encoding="utf-8")
+
+    assert 'function renderResourceFiles(i)' in source
+    assert 'function openResourceFolder(i,path)' in source
+    assert 'function toggleFolderSelection(i,path,checked)' in source
+    assert 'relative_path' in source
+    assert '已选 '+"+set.size+"+' 个文件' in source
