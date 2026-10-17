@@ -196,10 +196,11 @@ def test_get_share_files_reports_when_nested_directory_exceeds_depth_limit():
         (response, {"code": 0, "data": {"list": [
             {"fid": "folder-1", "file_name": "Season 1", "dir_file": True},
         ]}}),
-        (response, {"code": 0, "data": {"list": []}}),
+        # Recursive directory reads happen before the parent directory's next page.
         (response, {"code": 0, "data": {"list": [
             {"fid": "folder-2", "file_name": "Nested", "dir_file": True},
         ]}}),
+        (response, {"code": 0, "data": {"list": []}}),
         (response, {"code": 0, "data": {"list": []}}),
     ])
     client = QuarkClient("session=value")
