@@ -798,6 +798,7 @@ class SubscriptionManager:
             "transferred_files": 0,
             "shares": [],
             "observed_episodes": [],
+            "episode_observations_truncated": False,
             "examples": [],
         }
 
@@ -898,8 +899,11 @@ class SubscriptionManager:
                 if parsed_episode is not None:
                     observed = diagnostics.setdefault("observed_episodes", [])
                     marker = {"season": parsed_season, "episode": parsed_episode}
-                    if marker not in observed and len(observed) < 1000:
-                        observed.append(marker)
+                    if marker not in observed:
+                        if len(observed) < 1000:
+                            observed.append(marker)
+                        else:
+                            diagnostics["episode_observations_truncated"] = True
                 diagnostics["video_files"] += 1
             else:
                 diagnostics["non_video_files"] += 1
@@ -1618,8 +1622,11 @@ class SubscriptionManager:
                 if parsed_episode is not None:
                     marker = {"season": parsed_season, "episode": parsed_episode}
                     observed = diagnostics.setdefault("observed_episodes", [])
-                    if marker not in observed and len(observed) < 1000:
-                        observed.append(marker)
+                    if marker not in observed:
+                        if len(observed) < 1000:
+                            observed.append(marker)
+                        else:
+                            diagnostics["episode_observations_truncated"] = True
                 if (
                     share_diag is not None
                     and parsed_episode is not None
@@ -1630,10 +1637,14 @@ class SubscriptionManager:
                         for entry in share_diag.get("episodes", [])
                     )
                 ):
-                    share_diag.setdefault("episodes", []).append({
-                        "season": parsed_season,
-                        "episode": parsed_episode,
-                    })
+                    episode_list = share_diag.setdefault("episodes", [])
+                    if len(episode_list) < 100:
+                        episode_list.append({
+                            "season": parsed_season,
+                            "episode": parsed_episode,
+                        })
+                    else:
+                        diagnostics["episode_observations_truncated"] = True
                 if is_video:
                     diagnostics["video_files"] += 1
                     if share_diag is not None:
