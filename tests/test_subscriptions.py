@@ -2745,6 +2745,43 @@ def test_shutdown_waits_for_inflight_scheduler_check_and_prevents_restart(tmp_pa
         manager.shutdown()
 
 
+
+def test_subscription_scopes_root_folder_without_including_subfolders(tmp_path):
+    storage = DynamicStorageTargets()
+    storage.files = [
+        {"fid": "root1", "file_name": "Show.S01E01.mkv", "relative_path": ""},
+        {"fid": "sub1", "file_name": "Show.S01E01.4K.mkv", "relative_path": "4K"},
+    ]
+    manager = SubscriptionManager(
+        tmp_path / "subscriptions-root-folder-scope.json",
+        storage,
+        FakeResourceSources(),
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-root",
+        storage_target_id="demo-storage",
+        source_folder_path="",
+        source_folder_scoped=True,
+        files=[{"fid": "root1", "file_name": "Show.S01E01.mkv", "relative_path": ""}],
+    )
+
+    assert sub["source_folder_path"] == ""
+    assert sub["source_folder_scoped"] is True
+    ok, _message = manager.check_subscription_now(sub["id"])
+    assert ok is True
+    assert storage.transfers == [["root1"]]
+
+    storage.files.extend([
+        {"fid": "root2", "file_name": "Show.S01E02.mkv", "relative_path": ""},
+        {"fid": "sub2", "file_name": "Show.S01E02.4K.mkv", "relative_path": "4K"},
+    ])
+    ok, _message = manager.check_subscription_now(sub["id"])
+    assert ok is True
+    assert storage.transfers == [["root1"], ["root2"]]
+    manager.stop_scheduler()
+
 def test_subscription_scopes_initial_and_future_scan_to_selected_folder(tmp_path):
     storage = DynamicStorageTargets()
     storage.files = [
