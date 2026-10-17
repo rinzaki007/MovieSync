@@ -7,10 +7,10 @@
 """
 from __future__ import annotations
 
-from copy import deepcopy
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from datetime import datetime
 from threading import Event, RLock, Thread, current_thread
 
