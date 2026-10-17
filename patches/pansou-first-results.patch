@@ -1,0 +1,39 @@
+diff --git a/service/search_service.go b/service/search_service.go
+--- a/service/search_service.go
++++ b/service/search_service.go
+@@
+-// GetPluginManager 获取插件管理器
++// PluginCacheSnapshot 返回当前关键词已写入主缓存的插件结果快照。
++// 异步插件会在各自完成时更新这份缓存，因此调用方无需等待整个插件批次结束。
++func (s *SearchService) PluginCacheSnapshot(keyword string, plugins []string, ext map[string]interface{}) ([]model.SearchResult, bool) {
++	if ext == nil {
++		ext = make(map[string]interface{})
++	}
++	if !cacheInitialized || !config.AppConfig.CacheEnabled || enhancedTwoLevelCache == nil {
++		return nil, false
++	}
++	key := cache.GeneratePluginCacheKey(keyword, plugins, util.ExtDigest(ext))
++	data, hit, err := enhancedTwoLevelCache.Get(key)
++	if err != nil || !hit {
++		return nil, false
++	}
++	var results []model.SearchResult
++	if err := enhancedTwoLevelCache.GetSerializer().Deserialize(data, &results); err != nil {
++		return nil, false
++	}
++	return results, true
++}
++
++// GetPluginManager 获取插件管理器
+ func (s *SearchService) GetPluginManager() *plugin.PluginManager {
+ 	return s.pluginManager
+ }
+diff --git a/api/router.go b/api/router.go
+--- a/api/router.go
++++ b/api/router.go
+@@
+ 		api.POST("/search", SearchHandler)
+ 		api.GET("/search", SearchHandler) // 添加GET方式支持
++		// 首批结果接口：插件结果一旦进入缓存就可提前返回，完整搜索继续在后台进行。
++		api.GET("/search/first", SearchFirstHandler)
+ 		api.POST("/check/links", CheckHandler)
