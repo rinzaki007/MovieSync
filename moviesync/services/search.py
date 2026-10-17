@@ -105,7 +105,9 @@ def _candidate_match_explanation(
     reasons = [title_reason]
     media_type = str(movie.get("media_type") or "").strip().lower()
     if media_type in {"tv", "tv_show", "series", "anime", "variety", "documentary", "short_drama"}:
-        reasons.append(f"已识别 {max(0, int(recognized_episode_files or 0))}/{max(0, int(total_video_count or 0))} 个视频文件的集数")
+        recognized = max(0, int(recognized_episode_files or 0))
+        total = max(0, int(total_video_count or 0))
+        reasons.append(f"已识别 {recognized}/{total} 个视频文件的集数")
         if declared_episode_count:
             reasons.append(f"分享标题标注共 {int(declared_episode_count)} 集（不代表实际文件齐全）")
     elif media_type == "movie":
