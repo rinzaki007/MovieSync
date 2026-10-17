@@ -67,6 +67,7 @@ def build_episode_coverage(subscription: dict) -> dict:
 
     complete = (
         diagnostics.get("success") is True
+        and diagnostics.get("source_scan_complete") is True
         and not diagnostics.get("interrupted")
         and not diagnostics.get("resolution_failures")
         and not diagnostics.get("source_search_errors")
