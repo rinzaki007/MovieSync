@@ -110,3 +110,49 @@ def test_unknown_season_baseline_does_not_infer_missing_early_season_episodes():
     })
 
     assert coverage["gaps"][0]["episodes"] == [9]
+
+
+def test_middle_follow_start_does_not_hide_gaps_before_start_episode():
+    coverage = build_episode_coverage({
+        "start_season": 1,
+        "start_ep": 8,
+        "last_diagnostics": {
+            "success": True,
+            "source_scan_complete": True,
+            "resolution_failures": 0,
+            "source_search_errors": 0,
+            "unrecognized": 0,
+            "observed_episodes": [
+                {"season": 1, "episode": 1},
+                {"season": 1, "episode": 2},
+                {"season": 1, "episode": 4},
+                {"season": 1, "episode": 5},
+                {"season": 1, "episode": 8},
+                {"season": 1, "episode": 9},
+            ],
+        },
+    })
+
+    assert coverage["gaps"] == [
+        {"season": 1, "episodes": [3], "range_start": 3, "range_end": 3}
+    ]
+
+
+def test_middle_season_follow_does_not_hide_gaps_in_earlier_observed_season():
+    coverage = build_episode_coverage({
+        "start_season": 2,
+        "start_ep": 6,
+        "last_diagnostics": {
+            "success": True,
+            "observed_episodes": [
+                {"season": 1, "episode": 1},
+                {"season": 1, "episode": 3},
+                {"season": 2, "episode": 6},
+                {"season": 2, "episode": 7},
+            ],
+        },
+    })
+
+    assert coverage["gaps"] == [
+        {"season": 1, "episodes": [2], "range_start": 2, "range_end": 2}
+    ]
