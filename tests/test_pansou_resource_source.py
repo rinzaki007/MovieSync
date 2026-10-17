@@ -9,7 +9,7 @@ class FakeResponse:
 
 
 class FakeHttpClient:
-    def __init__(self, search_payload=None, health_payload=None):
+    def __init__(self, search_payload=None, health_payload=None, progressive_supported=True):
         self.search_payload = search_payload or {
             "code": 200,
             "data": {
@@ -34,6 +34,7 @@ class FakeHttpClient:
                 "merged_by_type": {},
             },
         }
+        self.progressive_supported = progressive_supported
         self.health_payload = health_payload or {
             "status": "ok",
             "plugins_enabled": True,
@@ -49,7 +50,9 @@ class FakeHttpClient:
         self.calls.append((method, url, timeout, kwargs))
         if url.endswith("/api/health"):
             return FakeResponse(), self.health_payload
-        if url.endswith("/api/search"):
+        if url.endswith("/api/search/first") and not self.progressive_supported:
+            return FakeResponse(404), {}
+        if url.endswith("/api/search") or url.endswith("/api/search/first"):
             return FakeResponse(), self.search_payload
         raise AssertionError(f"Unexpected request: {method} {url}")
 
@@ -70,10 +73,11 @@ def test_pansou_search_normalizes_quark_links_and_skips_other_drives():
     assert results[0]["url"] == "https://pan.quark.cn/s/share123"
     method, url, timeout, kwargs = http.calls[0]
     assert method == "GET"
-    assert url == "http://pansou.local/api/search"
+    assert url == "http://pansou.local/api/search/first"
     assert timeout == 45
     assert kwargs["params"]["kw"] == "测试电影"
     assert kwargs["params"]["cloud_types"] == "quark"
+    assert kwargs["params"]["wait_ms"] == 1800
 
 
 def test_pansou_search_supports_merged_response_and_deduplicates():
@@ -254,3 +258,20 @@ def test_pansou_card_close_releases_http_client():
     source.close()
 
     assert getattr(http, "closed", False) is True
+
+
+def test_pansou_falls_back_for_external_instances_without_progressive_endpoint():
+    http = FakeHttpClient(progressive_supported=False)
+    source = PanSouResourceSource(http)
+
+    results = source.search(
+        {"title": "测试电影"},
+        {"base_url": "http://external-pansou.local", "timeout": 45},
+    )
+
+    assert len(results) == 1
+    assert [call[1] for call in http.calls] == [
+        "http://external-pansou.local/api/search/first",
+        "http://external-pansou.local/api/search",
+    ]
+    assert "wait_ms" not in http.calls[1][3]["params"]
