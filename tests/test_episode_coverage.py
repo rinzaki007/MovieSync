@@ -8,6 +8,7 @@ def test_reports_only_gaps_inside_observed_range_and_never_claims_future_episode
         "start_ep": 1,
         "last_diagnostics": {
             "success": True,
+            "source_scan_complete": True,
             "interrupted": False,
             "resolution_failures": 0,
             "source_search_errors": 0,
