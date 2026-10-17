@@ -229,7 +229,7 @@
             <button
                 onclick="switchTab('backup')"
                 id="tab-btn-backup"
-                class="tab-btn w-full text-left glass-panel hover:bg-slate-800/80 text-slate-300 px-3.5 py-2.5 rounded text-xs font-semibold flex items-center gap-2 transition"
+                class="tab-btn w-full lg:w-full min-w-max lg:min-w-0 text-left glass-panel hover:bg-slate-800/80 text-slate-300 px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition"
             >
                 <i class="fa-solid fa-box-archive"></i>
                 备份与恢复
@@ -239,7 +239,7 @@
             <button
                 onclick="switchTab('security')"
                 id="tab-btn-security"
-                class="tab-btn w-full text-left glass-panel hover:bg-slate-800/80 text-slate-300 px-3.5 py-2.5 rounded text-xs font-semibold flex items-center gap-2 transition"
+                class="tab-btn w-full lg:w-full min-w-max lg:min-w-0 text-left glass-panel hover:bg-slate-800/80 text-slate-300 px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition"
             >
                 <i class="fa-solid fa-shield-halved"></i>
                 账户安全
@@ -249,7 +249,7 @@
             <button
                 onclick="switchTab('logs')"
                 id="tab-btn-logs"
-                class="tab-btn w-full text-left glass-panel hover:bg-slate-800/80 text-slate-300 px-3.5 py-2.5 rounded text-xs font-semibold flex items-center gap-2 transition"
+                class="tab-btn w-full lg:w-full min-w-max lg:min-w-0 text-left glass-panel hover:bg-slate-800/80 text-slate-300 px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition"
             >
                 <i class="fa-solid fa-terminal"></i>
                 系统运行日志
@@ -986,7 +986,7 @@
             ).forEach(btn => {
 
                 btn.className =
-                    'tab-btn w-full text-left glass-panel hover:bg-slate-800/80 text-slate-300 px-3.5 py-2.5 rounded text-xs font-semibold flex items-center gap-2 transition';
+                    'tab-btn w-full lg:w-full min-w-max lg:min-w-0 text-left glass-panel hover:bg-slate-800/80 text-slate-300 px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition';
 
             });
 
@@ -1011,7 +1011,7 @@
             if (activeBtn) {
 
                 activeBtn.className =
-                    'tab-btn w-full text-left bg-blue-600 text-white px-3.5 py-2.5 rounded text-xs font-semibold flex items-center gap-2 transition';
+                    'tab-btn w-full lg:w-full min-w-max lg:min-w-0 text-left bg-blue-600 text-white px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition';
 
             }
 
