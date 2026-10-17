@@ -1,83 +1,93 @@
-# MovieSync 2.x 架构说明
+# MovieSync 架构说明
 
-## 目标
+MovieSync 的目标是让核心平台与可选能力保持松耦合。核心负责 Web 界面、认证、配置、任务、调度和持久化；影视信息、资源来源、存储目标等具体集成通过卡片扩展。
 
-2.x 保留原有产品能力，但把 Web、业务、第三方平台、调度和持久化彻底解耦。
-
-```text
-Browser
-  │
-  ▼
-Flask Web / Blueprints
-  │
-  ├── Auth / CSRF / Rate Limit
-  ├── Config API
-  ├── Movie API
-  ├── Search API
-  ├── Transfer API
-  └── Subscription API
-        │
-        ▼
-     Services
-        │
-        ├── SearchService
-        └── SubscriptionManager
-        │
-        ▼
-     Providers / Clients
-        ├── DoubanClient
-        ├── TelegramClient
-        └── QuarkClient
-        │
-        ▼
-     HTTP + local JSON storage
-```
-
-## 目录
+## 总体结构
 
 ```text
-moviesync/
-├── app.py                 # Application Factory 与依赖组装
-├── settings.py            # 环境变量、数据目录、Secret Key
-├── storage.py             # 原子 JSON 持久化与线程锁
-├── config_store.py        # 应用配置与频道配置
-├── auth.py                # 管理员初始化、密码校验
-├── logging_setup.py       # RingBuffer + 文件轮转日志
-├── clients/
-│   ├── http.py            # 线程本地 Session、重试、JSON 错误处理
-│   ├── douban.py          # 豆瓣适配
-│   ├── telegram.py        # Telegram HTML 解析与频道探测
-│   └── quark.py           # 夸克 API 适配
-├── services/
-│   ├── search.py          # 频道并发检索、候选聚合、转存校验
-│   └── subscriptions.py  # 订阅 CRUD、执行、调度
-└── web/
-    ├── __init__.py        # Web 中间件、认证保护、错误处理
-    └── routes.py          # 页面及 API 路由
+Browser UI
+   │
+   ▼
+moviesync/web
+   │  页面、API、认证与请求校验
+   ▼
+Core services
+   ├── 影视信息与搜索流程
+   ├── 资源选择与转存编排
+   ├── 自动追剧、调度与去重
+   ├── 文件名/季集识别
+   └── 任务状态、日志与诊断
+   │
+   ├──────── Card platform ────────┐
+   │                                │
+   ▼                                ▼
+Configuration / storage       Optional cards
+   │                          ├── metadata providers
+   ▼                          ├── resource sources
+/app/data                      ├── storage targets
+                              ├── filename processors
+                              └── other capabilities
 ```
 
-## 关键设计
+卡片按 manifest、类型和能力声明接入。核心通过统一接口与卡片交互，不应把某个第三方平台的 Cookie、频道、目录或业务规则写死在通用流程中。
 
-### 1. 所有运行数据统一进入 `/app/data`
+## 主要目录
 
-管理员、Cookie、配置、订阅、Secret Key 和日志都由数据目录管理。这样 Docker 只需要挂载一个 volume 即可完整持久化。
+```text
+.
+├── moviesync/
+│   ├── app.py                 # Flask 应用创建与依赖组装
+│   ├── auth.py                # 管理员认证
+│   ├── cards.py               # 卡片类型、manifest 与基础接口
+│   ├── card_plugins.py        # 卡片发现、注册与生命周期管理
+│   ├── config_store.py        # 配置读取、校验与敏感字段处理
+│   ├── settings.py            # 环境变量与运行设置
+│   ├── storage.py             # 本地数据持久化
+│   ├── clients/               # 可复用的 HTTP/第三方客户端
+│   ├── services/              # 搜索、转存、文件名识别、追剧等业务
+│   └── web/                   # Web 路由与页面/API 处理
+├── card_templates/            # 可供安装的内置卡片模板
+├── examples/                  # 卡片开发示例
+├── static/                    # 前端资源
+├── templates/                 # HTML 模板
+├── tests/                     # 自动化测试
+├── patches/                   # 随镜像构建应用的上游补丁
+├── Dockerfile
+└── docker-entrypoint.sh
+```
 
-### 2. Secret 与 Cookie 不再暴露给浏览器
+## 设计原则
 
-配置接口只返回 `has_quark_cookie`。前端不再通过 `localStorage` 保存 Cookie；真正执行搜索、转存和追剧时由服务端读取配置。
+### 1. 卡片可选，核心可独立启动
 
-### 3. 转存时不信任客户端的 Token
+新安装不要求预装任何特定卡片。单张卡片缺失、未启用、配置无效或初始化失败，不应阻断核心平台和其他卡片。默认行为应清晰可见，不能悄悄换用另一个存储目标。
 
-搜索结果返回给浏览器的候选信息不包含 `stoken`。用户确认转存后，服务端重新解析分享链接并验证所选 FID 是否属于当前分享源，然后才执行转存。
+### 2. 能力声明优先于平台名称
 
-### 4. 订阅调度真正使用 `interval_hours`
+核心流程应依据卡片类型、能力和兼容资源类型选择可用功能，而不是通过大量卡片 ID 特判。只有声明并实际实现的能力才可对外提供。
 
-旧版本固定每小时检查一次，实际上忽略了每个任务自己的频率。2.x 为每个任务维护 `next_run_at`，调度循环每 30 秒扫描一次，到期后才执行。
+### 3. 配置与凭据由服务端管理
 
-### 5. JSON 存储做了原子写入
+Cookie、Token 和密码等敏感值不应回显到浏览器或写入日志。卡片配置需要遵守统一的字段声明、校验、脱敏和版本迁移约定。
 
-先写临时文件并 `fsync`，再 `os.replace`。避免容器异常退出时留下半截 JSON。
+### 4. 追剧筛选与资源识别分工
 
-## 扩展方向
+资源卡片或文件名规则可以帮助识别标题、季数、集数和来源特有的命名方式；核心负责起追基线、跨季比较、去重、任务状态、持久化与转存调用。识别规则不能绕过核心筛选，也不能把“无法识别”伪装成识别成功。
 
-当前版本仍然适合单机、单实例部署。若以后出现多实例、高并发或大量订阅，可以把 `storage.py` 替换成 SQLite/PostgreSQL，把后台任务迁移到 Redis Queue/Celery，而 Web API 基本不需要改变。
+### 5. 结果不确定时避免盲目重试
+
+第三方接口接受请求不一定代表目标目录立即可见。转存结果应结合可用的核验信息判断；暂时无法确认时应清楚记录状态，避免因为目录列表延迟而重复提交。
+
+### 6. 运行数据统一持久化
+
+Docker 部署应把 `/app/data` 挂载到宿主机。更新镜像不应清理该目录。备份时注意其中可能包含敏感凭据。
+
+## 开发文档
+
+- [卡片开发规范](CARD_DEVELOPMENT.md)
+- [卡片接口约定](CARD_CONTRACT.md)
+- [智能追剧规则与回归防护](SMART_FOLLOW_RULES.md)
+
+## 当前边界
+
+MovieSync 主要面向单实例、自托管部署。卡片类型是扩展接口，不代表仓库已内置所有类型的实现。新增卡片时应先验证接口契约、错误隔离、配置安全和核心回归测试，再考虑扩展功能。
