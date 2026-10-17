@@ -452,9 +452,9 @@ function renderSubscriptionDiagnostics(task) {
     const missingEpisodes = gapGroups.flatMap(group => (Array.isArray(group.episodes) ? group.episodes : []).map(episode => ({
         season: group.season, episode: Number(episode)
     }))).slice(0, 30);
-    const encodedTitle = encodeURIComponent(String(task.title || ''));
-    const encodedTag = encodeURIComponent(String(task.tag || '电视剧'));
-    const encodedType = encodeURIComponent(String(task.media_type || 'tv'));
+    const encodedTitle = encodeURIComponent(String(task.title || '')).replace(/'/g, '%27');
+    const encodedTag = encodeURIComponent(String(task.tag || '电视剧')).replace(/'/g, '%27');
+    const encodedType = encodeURIComponent(String(task.media_type || 'tv')).replace(/'/g, '%27');
     const gapMarkup = missingEpisodes.length
         ? '<section class="mt-3 rounded-xl border border-amber-800/50 bg-amber-950/20 p-3"><div class="text-xs font-semibold text-amber-200">已扫描范围内的疑似缺集</div><p class="mt-1 text-[10px] leading-5 text-slate-400">' + escapeTask(coverage.notice || '仅根据已扫描文件生成，不能推断整部剧的总集数。') + '</p><div class="mt-2 flex flex-wrap gap-2">' + missingEpisodes.map(item => {
             const episodeLabel = (item.season ? 'S' + String(item.season).padStart(2, '0') : '') + 'E' + String(item.episode).padStart(2, '0');
