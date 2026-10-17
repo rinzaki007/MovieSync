@@ -12,8 +12,8 @@ from threading import Lock
 
 from flask import jsonify, redirect, request, session
 
-from .routes import api, pages
 from .playback import playback_api, playback_pages
+from .routes import api, pages
 
 
 class LoginRateLimiter:
