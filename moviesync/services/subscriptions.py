@@ -797,6 +797,7 @@ class SubscriptionManager:
             "queued_files": 0,
             "transferred_files": 0,
             "shares": [],
+            "observed_episodes": [],
             "examples": [],
         }
 
@@ -891,6 +892,14 @@ class SubscriptionManager:
             file_name = str(item.get("file_name") or item.get("name") or "").strip()
             fid = str(item.get("fid") or "").strip()
             if file_name.lower().endswith(VIDEO_EXTENSIONS):
+                parsed_season, parsed_episode = _parse_source_episode(
+                    self.resource_sources, str(sub.get("source_id") or ""), file_name
+                )
+                if parsed_episode is not None:
+                    observed = diagnostics.setdefault("observed_episodes", [])
+                    marker = {"season": parsed_season, "episode": parsed_episode}
+                    if marker not in observed and len(observed) < 1000:
+                        observed.append(marker)
                 diagnostics["video_files"] += 1
             else:
                 diagnostics["non_video_files"] += 1
@@ -1606,6 +1615,11 @@ class SubscriptionManager:
                 parsed_season, parsed_episode = _parse_source_episode(
                     self.resource_sources, source_id, file_name
                 ) if is_video and file_name else (None, None)
+                if parsed_episode is not None:
+                    marker = {"season": parsed_season, "episode": parsed_episode}
+                    observed = diagnostics.setdefault("observed_episodes", [])
+                    if marker not in observed and len(observed) < 1000:
+                        observed.append(marker)
                 if (
                     share_diag is not None
                     and parsed_episode is not None
