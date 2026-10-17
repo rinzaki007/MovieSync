@@ -57,6 +57,34 @@ def test_openlist_card_manifest_and_config_validation():
     assert config["token"] == "secret-token"
 
 
+def test_openlist_optional_playback_prefix_accepts_empty_value():
+    card = OpenListPlaybackCard({"config_store": FakeConfigStore()})
+
+    config = card.validate_config({
+        "base_url": "http://openlist.local:5244",
+        "root_path": "/media",
+        "playback_base_url": "",
+    })
+
+    assert config["playback_base_url"] == ""
+
+
+def test_openlist_optional_playback_prefix_rewrites_only_when_configured():
+    config = {
+        "base_url": "http://openlist.local:5244",
+        "root_path": "/media",
+        "playback_base_url": "",
+    }
+    card = OpenListPlaybackCard({"config_store": FakeConfigStore(config)})
+    card.session = FakeSession({
+        "code": 200,
+        "data": {"raw_url": "http://openlist.local:5244/d/film.mp4"},
+    })
+
+    result = card.resolve_playback("/media/film.mp4")
+    assert result["play_url"] == "http://openlist.local:5244/d/film.mp4"
+
+
 def test_openlist_path_validation_rejects_parent_traversal():
     assert _clean_path("media/movies") == "/media/movies"
     with pytest.raises(ConfigValidationError):

@@ -127,10 +127,16 @@ class OpenListPlaybackCard(PlaybackProviderCard):
         return config if isinstance(config, dict) else {}
 
     def validate_config(self, config: dict[str, Any]) -> dict[str, Any]:
-        normalized = super().validate_config(config)
+        # The generic validator checks URL format whenever a field is present.
+        # Omit an empty optional prefix during that pass, then restore its empty
+        # normalized value so the form can save without a browser-facing prefix.
+        incoming = dict(config)
+        playback_base = str(incoming.get("playback_base_url") or "").strip()
+        if not playback_base:
+            incoming.pop("playback_base_url", None)
+        normalized = super().validate_config(incoming)
         normalized["base_url"] = _clean_base_url(normalized.get("base_url"))
         normalized["root_path"] = _clean_path(normalized.get("root_path", "/"))
-        playback_base = str(normalized.get("playback_base_url") or "").strip()
         normalized["playback_base_url"] = _clean_base_url(playback_base) if playback_base else ""
         normalized["token"] = str(normalized.get("token") or "").strip()
         normalized["verify_tls"] = normalized.get("verify_tls", True) is not False

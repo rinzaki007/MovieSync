@@ -95,6 +95,39 @@
             caret-color: #e2e8f0 !important;
         }
 
+    
+        /* Responsive admin layout: horizontal section navigation on phones, stable side rail on desktop. */
+        .panel-content { width: 100%; max-width: none; }
+        .panel-content > h2, .panel-content > .border-b { scroll-margin-top: 1rem; }
+        .tab-btn { transition: background-color .18s ease, border-color .18s ease, color .18s ease, transform .18s ease; }
+        .tab-btn:active { transform: translateY(1px); }
+        .glass-shell, .glass-panel { border-radius: 1rem; }
+        .glass-input { min-height: 2.5rem; border-radius: .7rem; }
+        #cards-list > * { min-width: 0; }
+        #card-plugin-files > * { overflow-wrap: anywhere; }
+        #admin-log-box { max-height: min(65vh, 720px); overflow: auto; }
+        @media (max-width: 1023px) {
+            body { min-height: 100dvh; }
+            body > div.flex-1 { overflow: visible; }
+            body > div.flex-1 > aside { position: sticky; top: 57px; z-index: 35; }
+            body > div.flex-1 > aside .tab-btn { flex: 0 0 auto; white-space: nowrap; }
+            body > div.flex-1 > main { overflow: visible; }
+            .generic-card-dialog-wide { height: calc(100dvh - 1rem); }
+        }
+        @media (max-width: 640px) {
+            body > header { gap: .5rem; align-items: flex-start; }
+            body > header > div:first-child { font-size: .9rem; line-height: 1.3; }
+            body > header > div:last-child { gap: .35rem; }
+            body > header a, body > header button, body > header form button { padding: .5rem .6rem; white-space: nowrap; }
+            body > div.flex-1 > aside { padding: .5rem; }
+            body > div.flex-1 > main { padding: .75rem; }
+            .panel-content { gap: 1rem; }
+            .panel-content .glass-shell, .panel-content .glass-panel { padding: .85rem; }
+            #cards-list { grid-template-columns: minmax(0, 1fr); }
+            #panel-logs .flex.items-center.justify-between { align-items: flex-start; flex-wrap: wrap; gap: .75rem; }
+            #admin-log-box { max-height: 55dvh; font-size: 11px; }
+        }
+
     </style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=20261012-mobile-v3">
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
@@ -162,7 +195,7 @@
          侧边栏 + 内容区
          ========================================================== -->
 
-    <div class="flex-1 flex overflow-hidden">
+    <div class="flex-1 min-h-0 flex flex-col lg:flex-row overflow-visible lg:overflow-hidden">
 
 
         <!-- ======================================================
@@ -170,13 +203,13 @@
              ====================================================== -->
 
         <aside
-            class="w-60 glass-nav border-r border-slate-800/70 p-4 shrink-0 flex flex-col gap-2"
+            class="w-full lg:w-60 glass-nav border-b lg:border-b-0 lg:border-r border-slate-800/70 p-2 sm:p-3 lg:p-4 shrink-0 flex flex-row lg:flex-col gap-2 overflow-x-auto lg:overflow-x-visible lg:overflow-y-auto"
         >
 
             <button
                 onclick="switchTab('global')"
                 id="tab-btn-global"
-                class="tab-btn w-full text-left bg-blue-600 text-white px-3.5 py-2.5 rounded text-xs font-semibold flex items-center gap-2 transition"
+                class="tab-btn w-full lg:w-full min-w-max lg:min-w-0 text-left bg-blue-600 text-white px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition"
             >
                 <i class="fa-solid fa-sliders"></i>
                 全局系统参数设置
@@ -186,7 +219,7 @@
             <button
                 onclick="switchTab('cards')"
                 id="tab-btn-cards"
-                class="tab-btn w-full text-left glass-panel hover:bg-slate-800/80 text-slate-300 px-3.5 py-2.5 rounded text-xs font-semibold flex items-center gap-2 transition"
+                class="tab-btn w-full lg:w-full min-w-max lg:min-w-0 text-left glass-panel hover:bg-slate-800/80 text-slate-300 px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition"
             >
                 <i class="fa-solid fa-puzzle-piece"></i>
                 卡片管理
@@ -196,7 +229,7 @@
             <button
                 onclick="switchTab('backup')"
                 id="tab-btn-backup"
-                class="tab-btn w-full text-left glass-panel hover:bg-slate-800/80 text-slate-300 px-3.5 py-2.5 rounded text-xs font-semibold flex items-center gap-2 transition"
+                class="tab-btn w-full lg:w-full min-w-max lg:min-w-0 text-left glass-panel hover:bg-slate-800/80 text-slate-300 px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition"
             >
                 <i class="fa-solid fa-box-archive"></i>
                 备份与恢复
@@ -206,7 +239,7 @@
             <button
                 onclick="switchTab('security')"
                 id="tab-btn-security"
-                class="tab-btn w-full text-left glass-panel hover:bg-slate-800/80 text-slate-300 px-3.5 py-2.5 rounded text-xs font-semibold flex items-center gap-2 transition"
+                class="tab-btn w-full lg:w-full min-w-max lg:min-w-0 text-left glass-panel hover:bg-slate-800/80 text-slate-300 px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition"
             >
                 <i class="fa-solid fa-shield-halved"></i>
                 账户安全
@@ -216,7 +249,7 @@
             <button
                 onclick="switchTab('logs')"
                 id="tab-btn-logs"
-                class="tab-btn w-full text-left glass-panel hover:bg-slate-800/80 text-slate-300 px-3.5 py-2.5 rounded text-xs font-semibold flex items-center gap-2 transition"
+                class="tab-btn w-full lg:w-full min-w-max lg:min-w-0 text-left glass-panel hover:bg-slate-800/80 text-slate-300 px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition"
             >
                 <i class="fa-solid fa-terminal"></i>
                 系统运行日志
@@ -229,7 +262,7 @@
              右侧内容
              ====================================================== -->
 
-        <main class="flex-1 overflow-y-auto p-4 sm:p-6 glass-panel">
+        <main class="flex-1 min-w-0 overflow-y-auto p-3 sm:p-5 lg:p-6 glass-panel">
 
 
             <!-- ==================================================
@@ -238,7 +271,7 @@
 
             <div
                 id="panel-global"
-                class="panel-content space-y-6 max-w-4xl"
+                class="panel-content space-y-5 sm:space-y-6 w-full max-w-none"
             >
 
                 <h2
@@ -250,12 +283,6 @@
 
 
                 <!-- Core 基础设置 -->
-
-                <div class="space-y-1">
-                    <label for="openlist-url" class="block text-xs text-slate-400 font-semibold">OpenList 访问地址:</label>
-                    <input type="text" id="openlist-url" value="" placeholder="例如：https://你的-openlist.example.com/" class="glass-input w-full border border-slate-800 rounded px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500">
-                    <p class="mt-1 text-[10px] text-slate-500">仅用于后台的 OpenList 跳转按钮，MovieSync 不连接或操作 OpenList。</p>
-                </div>
 
                 <div class="space-y-1">
                     <label for="default-storage-target" class="block text-xs text-slate-400 font-semibold">默认存储目标:</label>
@@ -297,7 +324,7 @@
 
             <div
                 id="panel-cards"
-                class="panel-content hidden space-y-6 max-w-5xl"
+                class="panel-content hidden space-y-5 sm:space-y-6 w-full max-w-none"
             >
                 <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
                     <div>
@@ -385,7 +412,7 @@
                  ================================================== -->
             <div
                 id="panel-backup"
-                class="panel-content hidden space-y-6 max-w-4xl"
+                class="panel-content hidden space-y-5 sm:space-y-6 w-full max-w-none"
             >
                 <div class="border-b border-slate-800 pb-3">
                     <h2 class="text-base font-bold text-white flex items-center gap-2">
@@ -695,7 +722,7 @@
 
             <div
                 id="panel-logs"
-                class="panel-content hidden space-y-4 max-w-5xl"
+                class="panel-content hidden space-y-4 sm:space-y-5 w-full max-w-none"
             >
 
                 <div
@@ -934,12 +961,6 @@
                     renderStorageTargets(targetRes.targets || [], cfg.default_storage_target_id || targetRes.default_target_id || "");
 
 
-                    document.getElementById(
-                        'openlist-url'
-                    ).value =
-                        cfg.openlist_url || '';
-
-
                 }
 
             } catch (err) {
@@ -965,7 +986,7 @@
             ).forEach(btn => {
 
                 btn.className =
-                    'tab-btn w-full text-left glass-panel hover:bg-slate-800/80 text-slate-300 px-3.5 py-2.5 rounded text-xs font-semibold flex items-center gap-2 transition';
+                    'tab-btn w-full lg:w-full min-w-max lg:min-w-0 text-left glass-panel hover:bg-slate-800/80 text-slate-300 px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition';
 
             });
 
@@ -990,7 +1011,7 @@
             if (activeBtn) {
 
                 activeBtn.className =
-                    'tab-btn w-full text-left bg-blue-600 text-white px-3.5 py-2.5 rounded text-xs font-semibold flex items-center gap-2 transition';
+                    'tab-btn w-full lg:w-full min-w-max lg:min-w-0 text-left bg-blue-600 text-white px-3.5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition';
 
             }
 
@@ -1856,11 +1877,6 @@
         async function saveAllSettings() {
 
             const payload = {
-
-                openlist_url:
-                    document.getElementById(
-                        'openlist-url'
-                    ).value.trim(),
 
                 default_storage_target_id:
                     document.getElementById(
