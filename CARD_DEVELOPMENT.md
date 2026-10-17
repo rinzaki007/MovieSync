@@ -22,6 +22,7 @@ MovieSync 的卡片是独立能力单元。核心程序负责统一配置、调�
 - 每张单文件卡片放在持久化目录 `/app/data/cards/`，文件名使用小写字母、数字、下划线和连字符，例如 `my_storage.py`。
 - 文件名（不含 `.py`）必须与 manifest 的卡片 ID 一致。
 - 模块必须提供 `create_card(context)`，并返回对应类型的 MovieSync `Card` 子类实例。
+- 使用 Python 包入口点安装时，入口点名称必须与 manifest 的 `id` 完全一致；例如 `example-storage = "moviesync_example_storage:create_card"` 对应 `id="example-storage"`。名称不一致的存储卡片会被拒绝注册，避免入口别名造成卡片身份混乱。
 - `context` 是依赖注入入口。只读取卡片需要的依赖，不要假设可访问其他卡片的内部对象。
 - 卡片应提供 `close()` 清理会话、线程和其他资源；清理失败不得影响其他卡片。
 - 一个卡片加载失败不应阻断 MovieSync 或其他卡片启动。
