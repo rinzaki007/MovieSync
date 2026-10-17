@@ -23,6 +23,8 @@ def test_resource_selector_shows_only_clickable_share_code():
 
     assert "function shareCodeLink(c)" in source
     assert "分享码：'+shareCodeLink(c)" in source
+    assert "resource_type||'').toLowerCase()==='quark_share'" in source
+    assert "'https://pan.quark.cn/s/'+encodeURIComponent(quarkId)" in source
     assert "原分享路径（用于核对实际集数）" not in source
     assert " · 默认不选择文件</p>" not in source
     assert "href=\"'+escapeHtml(parsed.href)+'\"" in source
