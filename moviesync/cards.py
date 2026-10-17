@@ -13,7 +13,8 @@ import re
 from copy import deepcopy
 from dataclasses import dataclass
 from threading import RLock
-from typing import Any
+from types import MappingProxyType
+from typing import Any, Mapping
 from urllib.parse import urlparse
 
 from .errors import ConfigValidationError
@@ -27,6 +28,30 @@ CARD_VERSION_RE = re.compile(
 )
 CARD_CAPABILITY_RE = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9*]+)*$")
 CARD_CONFIG_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
+
+
+
+def _freeze_manifest_value(value: Any) -> Any:
+    """Recursively freeze manifest metadata after validation."""
+    if isinstance(value, dict):
+        return MappingProxyType({key: _freeze_manifest_value(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return tuple(_freeze_manifest_value(item) for item in value)
+    if isinstance(value, set):
+        return frozenset(_freeze_manifest_value(item) for item in value)
+    return value
+
+
+def _thaw_manifest_value(value: Any) -> Any:
+    """Return JSON-friendly copies of recursively frozen manifest metadata."""
+    if isinstance(value, Mapping):
+        return {key: _thaw_manifest_value(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [_thaw_manifest_value(item) for item in value]
+    if isinstance(value, (set, frozenset)):
+        return [_thaw_manifest_value(item) for item in value]
+    return deepcopy(value)
+
 
 CARD_TYPES = {
     "resource_source",
@@ -154,7 +179,7 @@ class CardManifest:
         # Detach the validated manifest from caller-owned mutable containers.
         # A frozen dataclass does not freeze lists or dictionaries nested inside it.
         object.__setattr__(self, "capabilities", tuple(self.capabilities))
-        object.__setattr__(self, "config_fields", tuple(deepcopy(dict(field)) for field in self.config_fields))
+        object.__setattr__(self, "config_fields", tuple(_freeze_manifest_value(field) for field in self.config_fields))
         object.__setattr__(self, "image_hosts", tuple(self.image_hosts))
 
     def to_dict(self) -> dict[str, Any]:
@@ -166,7 +191,7 @@ class CardManifest:
             "description": self.description,
             "capabilities": list(self.capabilities),
             "config_version": self.config_version,
-            "config_fields": deepcopy(list(self.config_fields)),
+            "config_fields": [_thaw_manifest_value(field) for field in self.config_fields],
             "image_hosts": list(self.image_hosts),
             "image_referer": self.image_referer,
         }
