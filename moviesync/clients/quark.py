@@ -248,7 +248,7 @@ class QuarkClient:
                 all_files.scan_warnings.append(message)
             all_files.scan_complete = False
 
-        def walk(parent_fid: str, depth: int) -> None:
+        def walk(parent_fid: str, depth: int, relative_path: str = "") -> None:
             nonlocal walk_error
 
             if walk_error or parent_fid in visited:
@@ -356,9 +356,13 @@ class QuarkClient:
                     ):
                         fid = item.get("fid")
                         if fid:
-                            walk(str(fid), depth + 1)
+                            child_name = str(item.get("file_name") or "").strip()
+                            child_path = "/".join(part for part in (relative_path, child_name) if part)
+                            walk(str(fid), depth + 1, child_path)
                     else:
-                        all_files.append(item)
+                        normalized_item = dict(item)
+                        normalized_item["relative_path"] = relative_path
+                        all_files.append(normalized_item)
                         if len(all_files) >= max_files:
                             add_scan_warning(f"已达到分享文件扫描上限（{max_files} 个），列表可能不完整")
                             return
@@ -367,8 +371,8 @@ class QuarkClient:
                 # Trust the reported total instead of treating a short page as EOF.
                 if reported_total is not None and len(seen_children) >= reported_total:
                     break
-                if reported_total is None and len(batch) < page_size:
-                    break
+                # Without total metadata, keep requesting pages until an empty or repeated page.
+                # A short page is not proof that the share directory is complete.
                 if page >= 100:
                     add_scan_warning("单个目录超过分页扫描上限，可能还有未读取的文件")
                     break

@@ -34,9 +34,12 @@ def test_get_share_files_walks_nested_directories():
             {"fid": "folder-1", "file_name": "Season 1", "dir_file": True},
             {"fid": "root-video", "file_name": "Show.S01E02.mkv"},
         ]}}),
+        # The nested directory is read before pagination resumes in the root directory.
         (response, {"code": 0, "data": {"list": [
             {"fid": "nested-video", "file_name": "Show.S01E01.mkv"},
         ]}}),
+        (response, {"code": 0, "data": {"list": []}}),
+        (response, {"code": 0, "data": {"list": []}}),
     ])
     client = QuarkClient("Cookie: session=value")
     client.http = http
@@ -46,7 +49,9 @@ def test_get_share_files_walks_nested_directories():
     assert error is None
     assert token == "share-token"
     assert {item["fid"] for item in files} == {"root-video", "nested-video"}
-    assert len(http.calls) == 3
+    paths = {item["fid"]: item.get("relative_path") for item in files}
+    assert paths == {"root-video": "", "nested-video": "Season 1"}
+    assert len(http.calls) == 5
     assert all(call[2]["timeout"] == 8 for call in http.calls[1:])
 
 
@@ -193,9 +198,12 @@ def test_get_share_files_reports_when_nested_directory_exceeds_depth_limit():
         (response, {"code": 0, "data": {"list": [
             {"fid": "folder-1", "file_name": "Season 1", "dir_file": True},
         ]}}),
+        # Recursive directory reads happen before the parent directory's next page.
         (response, {"code": 0, "data": {"list": [
             {"fid": "folder-2", "file_name": "Nested", "dir_file": True},
         ]}}),
+        (response, {"code": 0, "data": {"list": []}}),
+        (response, {"code": 0, "data": {"list": []}}),
     ])
     client = QuarkClient("session=value")
     client.http = http
@@ -273,3 +281,35 @@ def test_get_share_files_uses_reported_total_when_page_is_short_and_keeps_all_47
     assert "_fetch_total=1" in first_url
     assert "_sort=file_type:asc,file_name:asc" in first_url
     assert "&p=1&num=200" not in first_url
+
+
+def test_get_share_files_continues_after_short_page_without_total_metadata():
+    response = FakeResponse(200)
+    first_page = [
+        {"fid": f"episode-{number}", "file_name": f"Show.E{number:02d}.mkv"}
+        for number in range(1, 24)
+    ]
+    second_page = [
+        {"fid": f"episode-{number}", "file_name": f"Show.E{number:02d}.mkv"}
+        for number in range(24, 48)
+    ]
+    http = FakeHttp([
+        (response, {"code": 0, "data": {"stoken": "share-token"}}),
+        (response, {"code": 0, "data": {"list": first_page}}),
+        (response, {"code": 0, "data": {"list": second_page}}),
+        (response, {"code": 0, "data": {"list": []}}),
+    ])
+    client = QuarkClient("session=value")
+    client.http = http
+
+    parsed, token, error = client.get_share_files("share123")
+
+    assert error is None
+    assert token == "share-token"
+    assert len(parsed) == 47
+    assert parsed.scan_complete is True
+    assert len(http.calls) == 4
+    assert "_page=1" in http.calls[1][1]
+    assert "_page=2" in http.calls[2][1]
+    assert "_page=3" in http.calls[3][1]
+

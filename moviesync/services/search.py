@@ -614,6 +614,7 @@ class SearchService:
                         {
                             "fid": f.get("fid"),
                             "file_name": f.get("file_name", ""),
+                            "relative_path": str(f.get("relative_path") or ""),
                             "size": f.get("size", 0),
                             "size_text": _format_size(f.get("size", 0)),
                             "resolution": _detect_resolution(f.get("file_name", "")),
