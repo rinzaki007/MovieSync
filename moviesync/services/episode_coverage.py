@@ -35,26 +35,21 @@ def build_episode_coverage(subscription: dict) -> dict:
                 observed.setdefault(season, set()).add(episode)
 
     try:
-        start_episode = max(0, int(subscription.get("start_ep") or 0))
         start_season = max(0, int(subscription.get("start_season") or 0))
     except (TypeError, ValueError, OverflowError):
-        start_episode, start_season = 0, 0
+        start_season = 0
 
     missing = []
     for season, episodes in sorted(observed.items()):
-        if not episodes or (start_season > 0 and season > 0 and season < start_season):
+        if not episodes:
             continue
         if season == 0 and start_season > 0:
-            # Seasonless files cannot safely be compared against a season-aware baseline.
+            # Seasonless files cannot safely be compared against season-aware files.
             continue
-        if season == start_season:
-            lower = start_episode
-        elif start_season == 0 and season > 0:
-            # Without a season-aware starting point, never infer missing episodes before
-            # the first observed file of a season.
-            lower = min(episodes) - 1
-        else:
-            lower = 0
+        # Resource completeness is independent from the follow start episode.
+        # Only inspect the range bounded by episodes actually observed in this scan;
+        # do not infer missing episodes before the first observed file or after the last.
+        lower = min(episodes) - 1
         upper = max(episodes)
         absent = [number for number in range(lower + 1, upper) if number not in episodes]
         if absent:
