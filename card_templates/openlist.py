@@ -6,10 +6,9 @@ normalized file and playback URL methods.
 """
 from __future__ import annotations
 
-from urllib.parse import urljoin, urlparse
-from typing import Any
-
 import requests
+from typing import Any
+from urllib.parse import urljoin, urlparse
 
 from moviesync.cards import CardManifest, PlaybackProviderCard
 from moviesync.errors import ConfigValidationError
