@@ -1,7 +1,7 @@
 diff --git a/service/search_service.go b/service/search_service.go
 --- a/service/search_service.go
 +++ b/service/search_service.go
-@@ -1865,1 +1865,23 @@
+@@ -1865,2 +1865,22 @@
 +// PluginCacheSnapshot 返回当前关键词已写入主缓存的插件结果快照。
 +// 异步插件会在各自完成时更新这份缓存，因此调用方无需等待整个插件批次结束。
 +func (s *SearchService) PluginCacheSnapshot(keyword string, plugins []string, ext map[string]interface{}) ([]model.SearchResult, bool) {
@@ -23,8 +23,7 @@ diff --git a/service/search_service.go b/service/search_service.go
 +	return results, true
 +}
 +
-+// GetPluginManager 获取插件管理器
- func (s *SearchService) GetPluginManager() *plugin.PluginManager {
+ // GetPluginManager 获取插件管理器() *plugin.PluginManager {
  	return s.pluginManager
  }
 diff --git a/api/router.go b/api/router.go
@@ -40,7 +39,7 @@ diff --git a/api/search_first_handler.go b/api/search_first_handler.go
 new file mode 100644
 --- /dev/null
 +++ b/api/search_first_handler.go
-@@ -0,0 +1,142 @@
+@@ -0,0 +1,144 @@
 +package api
 +
 +import (
