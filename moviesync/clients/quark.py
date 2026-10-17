@@ -248,7 +248,7 @@ class QuarkClient:
                 all_files.scan_warnings.append(message)
             all_files.scan_complete = False
 
-        def walk(parent_fid: str, depth: int) -> None:
+        def walk(parent_fid: str, depth: int, relative_path: str = "") -> None:
             nonlocal walk_error
 
             if walk_error or parent_fid in visited:
@@ -356,9 +356,13 @@ class QuarkClient:
                     ):
                         fid = item.get("fid")
                         if fid:
-                            walk(str(fid), depth + 1)
+                            child_name = str(item.get("file_name") or "").strip()
+                            child_path = "/".join(part for part in (relative_path, child_name) if part)
+                            walk(str(fid), depth + 1, child_path)
                     else:
-                        all_files.append(item)
+                        normalized_item = dict(item)
+                        normalized_item["relative_path"] = relative_path
+                        all_files.append(normalized_item)
                         if len(all_files) >= max_files:
                             add_scan_warning(f"已达到分享文件扫描上限（{max_files} 个），列表可能不完整")
                             return
