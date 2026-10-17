@@ -20,6 +20,13 @@ from .errors import ConfigValidationError
 from .regex_safety import has_nested_unbounded_quantifier
 
 CARD_ID_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
+CARD_VERSION_RE = re.compile(
+    r"^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)"
+    r"(?:-([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?"
+    r"(?:\\+([0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*))?$"
+)
+CARD_CAPABILITY_RE = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9*]+)*$")
+CARD_CONFIG_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
 
 CARD_TYPES = {
     "resource_source",
@@ -49,8 +56,32 @@ class CardManifest:
     image_referer: str = ""
 
     def __post_init__(self) -> None:
-        if not CARD_ID_RE.fullmatch(self.id):
+        if not isinstance(self.id, str) or not CARD_ID_RE.fullmatch(self.id):
             raise ValueError(f"卡片 ID 无效: {self.id}")
+        if not isinstance(self.name, str) or not self.name.strip():
+            raise ValueError("卡片名称不能为空")
+        if not isinstance(self.version, str) or not CARD_VERSION_RE.fullmatch(self.version):
+            raise ValueError("卡片版本必须使用语义化版本号，例如 1.0.0")
+        if not isinstance(self.description, str):
+            raise ValueError("卡片描述必须是文本")
+        if not isinstance(self.capabilities, (tuple, list)):
+            raise ValueError("卡片 capabilities 必须是字符串列表")
+        if any(
+            not isinstance(capability, str)
+            or not CARD_CAPABILITY_RE.fullmatch(capability)
+            for capability in self.capabilities
+        ):
+            raise ValueError("卡片 capabilities 包含无效能力标识")
+        if len(self.capabilities) != len(set(self.capabilities)):
+            raise ValueError("卡片 capabilities 不能重复")
+        if not isinstance(self.config_fields, (tuple, list)):
+            raise ValueError("卡片 config_fields 必须是对象列表")
+        if any(not isinstance(field, dict) for field in self.config_fields):
+            raise ValueError("卡片配置字段必须是对象")
+        if not isinstance(self.image_hosts, (tuple, list)):
+            raise ValueError("卡片 image_hosts 必须是域名列表")
+        if not isinstance(self.image_referer, str):
+            raise ValueError("卡片 image_referer 必须是文本")
         if isinstance(self.config_version, bool) or not isinstance(self.config_version, int) or self.config_version < 1:
             raise ValueError("卡片 config_version 必须是正整数")
         if self.type not in CARD_TYPES:
@@ -67,8 +98,17 @@ class CardManifest:
         if self.image_referer and not self.image_referer.startswith("https://"):
             raise ValueError("卡片 image_referer 必须使用 HTTPS")
         keys = [str(field.get("key") or "") for field in self.config_fields]
-        if any(not key for key in keys) or len(keys) != len(set(keys)):
+        if any(
+            not CARD_CONFIG_KEY_RE.fullmatch(key)
+            for key in keys
+        ):
+            raise ValueError("卡片配置字段 key 必须以小写字母开头，且只包含小写字母、数字、下划线或连字符")
+        if len(keys) != len(set(keys)):
             raise ValueError("卡片配置字段必须具有唯一且非空的 key")
+        for field in self.config_fields:
+            for flag in ("required", "secret"):
+                if flag in field and not isinstance(field[flag], bool):
+                    raise ValueError(f"配置字段「{field.get('label') or field.get('key')}」的 {flag} 必须是布尔值")
         allowed_field_types = {"string", "password", "textarea", "boolean", "number", "json"}
         text_field_types = {"string", "password", "textarea"}
         for field in self.config_fields:
