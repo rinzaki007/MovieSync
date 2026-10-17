@@ -49,6 +49,8 @@ def test_get_share_files_walks_nested_directories():
     assert error is None
     assert token == "share-token"
     assert {item["fid"] for item in files} == {"root-video", "nested-video"}
+    paths = {item["fid"]: item.get("relative_path") for item in files}
+    assert paths == {"root-video": "", "nested-video": "Season 1"}
     assert len(http.calls) == 5
     assert all(call[2]["timeout"] == 8 for call in http.calls[1:])
 
