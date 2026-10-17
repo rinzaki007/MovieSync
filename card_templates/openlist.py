@@ -253,7 +253,8 @@ class OpenListPlaybackCard(PlaybackProviderCard):
             replacement = urlparse(playback_base)
             if original.scheme not in {"http", "https"} or not original.hostname:
                 raise RuntimeError("OpenList 返回的播放地址无效")
-            play_url = replacement.scheme + "://" + replacement.netloc + play_url[len(original.scheme + "://" + original.netloc):]
+            original_prefix = original.scheme + "://" + original.netloc
+            play_url = replacement.scheme + "://" + replacement.netloc + play_url[len(original_prefix):]
         return {
             "fid": path,
             "path": path,
