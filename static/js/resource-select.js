@@ -49,6 +49,10 @@ function applyMissingEpisodeTarget() {
         target = null;
     }
     if (!target || !Number.isFinite(Number(target.episode)) || Number(target.episode) < 1) return false;
+    if (target.title && String(target.title) !== String(movie?.title || '')) {
+        sessionStorage.removeItem('moviesync_missing_episode');
+        return false;
+    }
     const wantedSeason = Number(target.season || 0);
     const episode = Number(target.episode);
     const matches = name => {
