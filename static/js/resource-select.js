@@ -78,14 +78,12 @@ function applyMissingEpisodeTarget() {
     for (let i = 0; i < candidates.length; i++) {
         const file = (candidates[i].files || []).find(item => matches(item.file_name));
         if (!file) continue;
-        const input = [...document.querySelectorAll('input[name="resource-file-' + i + '"]')]
-            .find(item => String(item.value) === String(file.fid));
-        if (!input) continue;
-        input.checked = true;
+        selectedSet(i).add(String(file.fid));
+        resourceFolderState[i] = fp(file);
         const fileList = document.getElementById('files-' + i);
-        if (fileList) fileList.classList.remove('hidden');
+        if (fileList) { fileList.classList.remove('hidden'); renderResourceFiles(i); }
         const toggle = document.getElementById('toggle-' + i);
-        if (toggle) toggle.innerHTML = '<i class="fa-solid fa-chevron-up mr-1"></i>收起剧集文件';
+        if (toggle) toggle.innerHTML = '<i class="fa-solid fa-chevron-up mr-1"></i>收起文件夹/文件';
         updateButton(i);
         input.closest('article')?.scrollIntoView({behavior: 'smooth', block: 'center'});
         sessionStorage.removeItem('moviesync_missing_episode');
