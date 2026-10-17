@@ -34,11 +34,11 @@ def test_get_share_files_walks_nested_directories():
             {"fid": "folder-1", "file_name": "Season 1", "dir_file": True},
             {"fid": "root-video", "file_name": "Show.S01E02.mkv"},
         ]}}),
-        # A short root page is not necessarily the last page; terminate with an empty page.
-        (response, {"code": 0, "data": {"list": []}}),
+        # The nested directory is read before pagination resumes in the root directory.
         (response, {"code": 0, "data": {"list": [
             {"fid": "nested-video", "file_name": "Show.S01E01.mkv"},
         ]}}),
+        (response, {"code": 0, "data": {"list": []}}),
         (response, {"code": 0, "data": {"list": []}}),
     ])
     client = QuarkClient("Cookie: session=value")
