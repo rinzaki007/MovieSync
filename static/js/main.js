@@ -16,6 +16,34 @@ const metadataListCache = new Map();
 const metadataListRequests = new Map();
 const METADATA_LIST_CACHE_TTL_MS = 90_000;
 let candidateSearchProgressText = '';
+let candidateSearchProgressTimer = null;
+
+function startCandidateSearchProgress(requestId) {
+    const startedAt = Date.now();
+    const update = () => {
+        if (requestId !== candidateSearchRequestSeq) return;
+        const seconds = Math.floor((Date.now() - startedAt) / 1000);
+        const elapsed = seconds < 1 ? '刚刚开始' : `已等待 ${seconds} 秒`;
+        candidateSearchProgressText = seconds < 4
+            ? `${elapsed}：正在并发查询已启用的资源来源，并筛选可用分享链接。首批结果返回后会立即显示。`
+            : `${elapsed}：首批候选仍在生成中，可能有资源来源正在等待上游响应或解析网盘分享。搜索仍在进行；结果返回后会自动显示，随后继续补充更多资源。`;
+        const progress = document.getElementById('candidate-search-progress');
+        if (progress) progress.textContent = candidateSearchProgressText;
+        const emptyState = document.querySelector('#candidate-content .candidate-search-empty-state');
+        if (emptyState) emptyState.textContent = candidateSearchProgressText;
+    };
+    if (candidateSearchProgressTimer) window.clearInterval(candidateSearchProgressTimer);
+    update();
+    candidateSearchProgressTimer = window.setInterval(update, 1000);
+}
+
+function stopCandidateSearchProgress(requestId) {
+    if (requestId !== candidateSearchRequestSeq) return;
+    if (candidateSearchProgressTimer) {
+        window.clearInterval(candidateSearchProgressTimer);
+        candidateSearchProgressTimer = null;
+    }
+}
 
 function metadataListCacheKey(tag, sort, providerId) {
     return [tag, sort, providerId || ''].join('::');
@@ -536,7 +564,16 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
     let nextOffset = 0;
     let hasMore = false;
     let opened = false;
-    candidateSearchProgressText = canPage ? '正在搜索首批资源…找到结果后会立即显示，并继续搜索更多资源。' : '';
+    candidateSearchProgressText = canPage
+        ? '正在启动资源检索：会并发查询已启用的资源来源，首批可用结果返回后立即显示。'
+        : '';
+    if (canPage && !keepModalOpen) {
+        // 先打开搜索窗口，避免长请求期间页面没有任何反馈，看起来像卡死。
+        openCandidateModal(selectedMovies, {});
+        startCandidateSearchProgress(requestId);
+    } else if (keepModalOpen && canPage) {
+        startCandidateSearchProgress(requestId);
+    }
     if (keepModalOpen) {
         candidateModalState = { movies: selectedMovies, candidatesMap: {} };
         const content = document.getElementById('candidate-content');
@@ -671,9 +708,12 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
     } catch (err) {
         if (requestId !== candidateSearchRequestSeq) return;
         candidateSearchProgressText = opened ? '后续搜索暂时失败，已显示的资源仍可正常选择。' : '';
+        if (opened || keepModalOpen || canPage) stopCandidateSearchProgress(requestId);
         if (opened) refreshModalPreservingSelection();
         else if (keepModalOpen) openCandidateModal(selectedMovies, {});
         showToast(err.message || '资源检索异常', 'error');
+    } finally {
+        stopCandidateSearchProgress(requestId);
     }
 }
 
@@ -822,7 +862,7 @@ function openCandidateModal(movies, candidatesMap) {
                 && !candidateSearchProgressText.includes('搜索完成')
                 && !candidateSearchProgressText.includes('失败');
             html += isStillSearching
-                ? '<div class="rounded-xl border border-sky-900/50 bg-sky-950/20 p-4 text-xs text-sky-300">正在继续检索其他资源来源，找到后会自动显示…</div>'
+                ? '<div class="candidate-search-empty-state rounded-xl border border-sky-900/50 bg-sky-950/20 p-4 text-xs leading-6 text-sky-300"></div>'
                 : '<div class="rounded-xl border border-amber-900/50 bg-amber-950/20 p-4 text-xs text-amber-300">未找到可用资源，或后续检索未能完成。</div>';
         } else {
             html += '<div class="space-y-3">';
