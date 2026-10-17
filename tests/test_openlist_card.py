@@ -96,7 +96,7 @@ def test_openlist_resolves_raw_playback_url_and_enforces_root():
         "base_url": "http://openlist.local:5244",
         "root_path": "/media",
     }
-    card = OpenListPlaybackCard(FakeConfigStore(config))
+    card = OpenListPlaybackCard({"config_store": FakeConfigStore(config)})
     card.session = FakeSession({
         "code": 200,
         "data": {
