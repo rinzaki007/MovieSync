@@ -10,6 +10,7 @@ from __future__ import annotations
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from copy import deepcopy
 from datetime import datetime
 from threading import Event, RLock, Thread, current_thread
 
@@ -319,6 +320,17 @@ class SubscriptionManager:
                 # because normalization removed every unusable key.
                 item["pending_save_uncertain"] = uncertain_pending
                 item["last_check"] = self._now_string() + " (中断)"
+                diagnostics = item.get("last_diagnostics")
+                # Retain an unfinished run's latest checkpoint after restart.
+                if isinstance(diagnostics, dict) and not diagnostics.get("finished_at"):
+                    diagnostics = deepcopy(diagnostics)
+                    diagnostics["success"] = False
+                    diagnostics["interrupted"] = True
+                    diagnostics["phase"] = "interrupted"
+                    diagnostics["finished_at"] = time.time()
+                    diagnostics["updated_at"] = diagnostics["finished_at"]
+                    diagnostics["message"] = str(item["last_error"])[:500]
+                    item["last_diagnostics"] = diagnostics
                 changed = True
             if changed:
                 self.store.write(subscriptions)
@@ -695,6 +707,44 @@ class SubscriptionManager:
             if status == "running":
                 current["last_error"] = ""
             self.store.write(subscriptions)
+        self._persist_diagnostics_snapshot(sub, phase=phase)
+
+    def _persist_diagnostics_snapshot(self, sub: dict, *, phase: str | None = None) -> None:
+        """Persist bounded diagnostics while a run is active."""
+        diagnostics = sub.get("_run_diagnostics")
+        if not isinstance(diagnostics, dict):
+            return
+
+        now = time.time()
+        diagnostics.setdefault("started_at", now)
+        diagnostics["updated_at"] = now
+        if phase:
+            diagnostics["phase"] = str(phase)[:40]
+
+        snapshot = deepcopy(diagnostics)
+        snapshot.pop("finished_at", None)
+        snapshot["success"] = None
+        snapshot["interrupted"] = False
+        current_phase = str(phase or snapshot.get("phase") or "running")
+        phase_labels = {
+            "starting": "准备检查",
+            "searching": "搜刮资源",
+            "resolve": "解析资源与文件列表",
+            "scan": "扫描并识别文件",
+            "transfer": "转存新内容",
+        }
+        snapshot["message"] = "检查进行中：" + phase_labels.get(current_phase, current_phase)
+
+        with self.lock:
+            subscriptions = self._load_subscriptions()
+            current = next(
+                (item for item in subscriptions if item.get("id") == sub.get("id")),
+                None,
+            )
+            if current is None:
+                return
+            current["last_diagnostics"] = snapshot
+            self.store.write(subscriptions)
 
     def _parse_episode_for_subscription(self, sub: dict, file_name: str) -> int | None:
         """优先使用订阅所属资源卡片的集数规则，避免忽略卡片独立配置。"""
@@ -717,6 +767,35 @@ class SubscriptionManager:
                     )
         return _parse_tv_episode(file_name)[1]
 
+    @staticmethod
+    def _new_run_diagnostics() -> dict:
+        """Create a consistent diagnostic shape for every subscription mode."""
+        return {
+            "schema_version": 1,
+            "source_candidates": 0,
+            "unique_shares": 0,
+            "resolved_shares": 0,
+            "resolution_failures": 0,
+            "files_scanned": 0,
+            "video_files": 0,
+            "non_video_files": 0,
+            "missing_file_id": 0,
+            "invalid_file_entries": 0,
+            "invalid_source_entries": 0,
+            "duplicate_source_entries": 0,
+            "source_search_errors": 0,
+            "initial_files_missing": 0,
+            "already_saved": 0,
+            "already_tracked": 0,
+            "unrecognized": 0,
+            "filtered_old": 0,
+            "duplicate_episodes": 0,
+            "queued_files": 0,
+            "transferred_files": 0,
+            "shares": [],
+            "examples": [],
+        }
+
     def _check(
         self,
         sub: dict,
@@ -724,16 +803,8 @@ class SubscriptionManager:
         # Every subscription path must initialize diagnostics before doing work.
         # The channel-based path adds detailed counters; legacy/direct-share
         # subscriptions still need a persisted summary instead of an empty panel.
-        sub["_run_diagnostics"] = {
-            "source_candidates": 0, "unique_shares": 0, "resolved_shares": 0,
-            "resolution_failures": 0, "files_scanned": 0, "video_files": 0,
-            "non_video_files": 0, "missing_file_id": 0, "invalid_file_entries": 0,
-            "invalid_source_entries": 0, "duplicate_source_entries": 0,
-            "source_search_errors": 0, "initial_files_missing": 0,
-            "already_saved": 0, "already_tracked": 0, "unrecognized": 0,
-            "filtered_old": 0, "duplicate_episodes": 0, "queued_files": 0,
-            "transferred_files": 0, "shares": [], "examples": [],
-        }
+        sub["_run_diagnostics"] = self._new_run_diagnostics()
+        self._persist_diagnostics_snapshot(sub, phase="starting")
         # Channel/source metadata is the durable signal for channel-based Smart Follow.
         # Older or migrated records may still carry tracking_mode="all"; letting those
         # records fall through to the generic branch bypasses season/episode filtering
@@ -751,6 +822,7 @@ class SubscriptionManager:
         diagnostics = sub["_run_diagnostics"]
         diagnostics["source_candidates"] = 1
         diagnostics["unique_shares"] = 1
+        self._set_status(sub, "running", "resolve", "正在解析分享与文件列表…")
         try:
             resolved = self.storage_targets.resolve_resource(
                 resource,
@@ -799,8 +871,11 @@ class SubscriptionManager:
             return self._finish(sub, False, f"解析链接失败: {err or '未找到文件'}")
 
         diagnostics["resolved_shares"] = 1
-        diagnostics["files_scanned"] = len(files)
+        diagnostics["files_scanned"] = 0
         for item in files:
+            diagnostics["files_scanned"] += 1
+            if diagnostics["files_scanned"] % 25 == 0:
+                self._persist_diagnostics_snapshot(sub, phase="scan")
             if not isinstance(item, dict):
                 diagnostics["invalid_file_entries"] += 1
                 if len(diagnostics["examples"]) < 20:
@@ -828,6 +903,7 @@ class SubscriptionManager:
                         "reason": "文件条目缺少 fid，无法追踪或转存",
                     })
 
+        self._persist_diagnostics_snapshot(sub, phase="scan")
         tracked_keys = {
             str(key).strip()
             for key in (sub.get("tracked_file_keys", []) or [])
@@ -901,6 +977,10 @@ class SubscriptionManager:
                     continue
                 already_saved = fid in saved_keys
                 if not fid or already_saved or fid in selected_fids:
+                    if already_saved:
+                        diagnostics["already_saved"] += 1
+                    if fid in selected_fids:
+                        diagnostics["already_tracked"] += 1
                     continue
 
                 # The selected initial file is the inclusive baseline: transfer
@@ -926,14 +1006,18 @@ class SubscriptionManager:
                         continue
                     if baseline_season > 0:
                         if (season, episode) <= (baseline_season, baseline_episode):
+                            diagnostics["filtered_old"] += 1
                             continue
                     elif episode <= baseline_episode:
+                        diagnostics["filtered_old"] += 1
                         continue
 
                 if fid not in tracked_keys or is_initial:
                     selected.append({"fid": fid})
                     found_keys.append(fid)
                     selected_fids.add(fid)
+                else:
+                    diagnostics["already_tracked"] += 1
         elif sub.get("files"):
             saved = {
                 item for item in (sub.get("saved_episodes", []) or [])
@@ -988,19 +1072,34 @@ class SubscriptionManager:
                                 "file": file_name,
                                 "reason": "文件名缺少可确认的季数，无法安全判断追剧起点，未自动转存",
                             })
+                        continue
                 else:
                     is_after_baseline = ep_num is not None and ep_num > start_ep
-                if (
-                    fid not in selected_fids
-                    and ep_num is not None
-                    and is_after_baseline
-                    and ep_num not in saved
-                ):
-                    selected.append({"fid": fid})
-                    found_keys.append(ep_num)
-                    selected_fids.add(fid)
+
+                if ep_num is None:
+                    diagnostics["unrecognized"] += 1
+                    if len(diagnostics["examples"]) < 20:
+                        diagnostics["examples"].append({
+                            "file": file_name,
+                            "reason": "无法识别集数，未自动转存",
+                        })
+                    continue
+                if ep_num in saved:
+                    diagnostics["already_saved"] += 1
+                    continue
+                if not is_after_baseline:
+                    diagnostics["filtered_old"] += 1
+                    continue
+                if fid in selected_fids:
+                    diagnostics["already_tracked"] += 1
+                    continue
+
+                selected.append({"fid": fid})
+                found_keys.append(ep_num)
+                selected_fids.add(fid)
 
         diagnostics["queued_files"] = len(selected)
+        self._persist_diagnostics_snapshot(sub, phase="scan")
         if not selected:
             if diagnostics["invalid_file_entries"] or diagnostics["missing_file_id"]:
                 return self._finish(
@@ -1032,6 +1131,7 @@ class SubscriptionManager:
                 current["storage_target_id"] = target_id
                 self.store.write(subscriptions)
 
+        self._set_status(sub, "running", "transfer", "正在转存新内容…")
         ok, msg = self.storage_targets.transfer(
             resource,
             selected,
@@ -1121,17 +1221,12 @@ class SubscriptionManager:
         source_id = str(sub.get("source_id") or "").strip()
         channel = str(sub.get("channel") or "").strip()
         title = str(sub.get("title") or "").strip()
-        diagnostics = {
-            "source_candidates": 0, "unique_shares": 0, "resolved_shares": 0,
-            "resolution_failures": 0, "files_scanned": 0, "video_files": 0,
-            "non_video_files": 0, "missing_file_id": 0, "invalid_file_entries": 0,
-            "invalid_source_entries": 0, "duplicate_source_entries": 0,
-            "source_search_errors": 0, "initial_files_missing": 0,
-            "already_saved": 0, "already_tracked": 0, "unrecognized": 0,
-            "filtered_old": 0, "duplicate_episodes": 0, "queued_files": 0,
-            "transferred_files": 0, "shares": [], "examples": [],
-        }
-        sub["_run_diagnostics"] = diagnostics
+        diagnostics = sub.get("_run_diagnostics")
+        if not isinstance(diagnostics, dict):
+            diagnostics = self._new_run_diagnostics()
+            diagnostics["started_at"] = time.time()
+            sub["_run_diagnostics"] = diagnostics
+            self._persist_diagnostics_snapshot(sub, phase="starting")
         self._set_status(sub, "running", "searching", "正在搜刮频道资源…")
         scan_cursor = None
         scan_complete = False
@@ -1486,6 +1581,8 @@ class SubscriptionManager:
                     )
             for item in files:
                 diagnostics["files_scanned"] += 1
+                if diagnostics["files_scanned"] % 25 == 0:
+                    self._persist_diagnostics_snapshot(sub, phase="scan")
                 if share_diag is not None:
                     share_diag["files_scanned"] += 1
                 if not isinstance(item, dict):
@@ -2088,12 +2185,15 @@ class SubscriptionManager:
             )
             diagnostics = sub.get("_run_diagnostics")
             if isinstance(diagnostics, dict):
-                saved_diagnostics = dict(diagnostics)
-                saved_diagnostics.pop("examples", None)
-                saved_diagnostics["examples"] = list(diagnostics.get("examples") or [])[:50]
-                saved_diagnostics["shares"] = list(diagnostics.get("shares") or [])[:50]
-                saved_diagnostics["finished_at"] = time.time()
+                saved_diagnostics = deepcopy(diagnostics)
+                saved_diagnostics["examples"] = deepcopy(list(diagnostics.get("examples") or [])[:50])
+                saved_diagnostics["shares"] = deepcopy(list(diagnostics.get("shares") or [])[:50])
+                finished_at = time.time()
+                saved_diagnostics["finished_at"] = finished_at
+                saved_diagnostics["updated_at"] = finished_at
+                saved_diagnostics["phase"] = "completed" if success else "failed"
                 saved_diagnostics["success"] = bool(success)
+                saved_diagnostics["interrupted"] = False
                 saved_diagnostics["message"] = str(message)[:500]
                 current["last_diagnostics"] = saved_diagnostics
             history = current.get("run_history", [])
