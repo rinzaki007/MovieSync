@@ -110,7 +110,7 @@ class QuarkClient:
         while page <= 20:
             url = (
                 "https://drive.quark.cn/1/clouddrive/file/sort"
-                f"?pr=ucpro&fr=pc&pdir_fid={quote(str(parent_fid))}&p={page}&num=200"
+                f"?pr=ucpro&fr=pc&pdir_fid={quote(str(parent_fid))}&_page={page}&_size=200&_fetch_total=1"
             )
             try:
                 response, data = self._request_json("GET", url, timeout=6, retries=1)
@@ -172,7 +172,7 @@ class QuarkClient:
         while page <= 20:
             url = (
                 "https://drive.quark.cn/1/clouddrive/file/sort"
-                f"?pr=ucpro&fr=pc&pdir_fid={quote(parent)}&p={page}&num=200"
+                f"?pr=ucpro&fr=pc&pdir_fid={quote(parent)}&_page={page}&_size=200&_fetch_total=1"
             )
             response, data = self._request_json("GET", url, timeout=6, retries=1)
             if response.status_code != 200 or data.get("code") != 0:
@@ -262,17 +262,22 @@ class QuarkClient:
 
             visited.add(parent_fid)
             page = 1
+            page_size = 50
+            seen_children: set[str] = set()
+            reported_total: int | None = None
 
             while (
-                page <= 20
+                page <= 100
                 and len(all_files) < max_files
                 and not walk_error
             ):
                 url = (
-                    "https://drive.quark.cn/1/clouddrive/share/sharepage/detail"
-                    f"?pr=ucpro&fr=pc&pwd_id={quote(pwd_id)}"
+                    "https://drive-pc.quark.cn/1/clouddrive/share/sharepage/detail"
+                    f"?pr=ucpro&fr=pc&uc_param_str=&pwd_id={quote(pwd_id)}"
                     f"&stoken={quote(stoken, safe='')}"
-                    f"&pdir_fid={quote(str(parent_fid))}&p={page}&num=200"
+                    f"&pdir_fid={quote(str(parent_fid))}&force=0"
+                    f"&_page={page}&_size={page_size}&_fetch_total=1"
+                    "&_sort=file_type:asc,file_name:asc"
                 )
 
                 try:
@@ -286,19 +291,65 @@ class QuarkClient:
                     walk_error = f"读取分享文件列表失败: {exc}"
                     return
 
-                if response.status_code != 200 or payload.get("code") != 0:
+                if response.status_code != 200 or not isinstance(payload, dict) or payload.get("code") != 0:
                     walk_error = str(
                         payload.get("message")
                         or f"读取分享文件列表失败（HTTP {response.status_code}）"
                     )
                     return
 
-                batch = (
-                    payload.get("data", {}).get("list", [])
-                    or []
-                )
+                data_payload = payload.get("data")
+                if not isinstance(data_payload, dict):
+                    walk_error = "夸克分享目录返回格式无效"
+                    return
+                batch = data_payload.get("list")
+                if not isinstance(batch, list):
+                    walk_error = "夸克分享目录文件列表格式无效"
+                    return
 
+                metadata = payload.get("metadata")
+                if not isinstance(metadata, dict):
+                    metadata = data_payload.get("metadata")
+                if isinstance(metadata, dict):
+                    raw_total = metadata.get("_total", metadata.get("total"))
+                    try:
+                        if raw_total is not None:
+                            reported_total = max(0, int(raw_total))
+                    except (TypeError, ValueError):
+                        reported_total = None
+                if reported_total is None:
+                    try:
+                        raw_total = data_payload.get("total")
+                        if raw_total is not None:
+                            reported_total = max(0, int(raw_total))
+                    except (TypeError, ValueError):
+                        reported_total = None
+
+                if not batch:
+                    if reported_total is not None and len(seen_children) < reported_total:
+                        add_scan_warning(
+                            f"目录分页提前结束：接口报告 {reported_total} 项，实际只读取到 {len(seen_children)} 项"
+                        )
+                    break
+
+                new_items = []
                 for item in batch:
+                    if not isinstance(item, dict):
+                        continue
+                    child_key = str(item.get("fid") or item.get("file_name") or "").strip()
+                    if child_key and child_key in seen_children:
+                        continue
+                    if child_key:
+                        seen_children.add(child_key)
+                    new_items.append(item)
+
+                if not new_items:
+                    add_scan_warning(
+                        "目录分页没有读取到新文件，可能是上游忽略了分页参数；已停止重复读取"
+                    )
+                    break
+
+                for item in new_items:
                     if (
                         item.get("dir_file") is True
                         or item.get("file_type") == 0
@@ -312,9 +363,13 @@ class QuarkClient:
                             add_scan_warning(f"已达到分享文件扫描上限（{max_files} 个），列表可能不完整")
                             return
 
-                if len(batch) < 200:
+                # Quark may return fewer rows than requested while more rows remain.
+                # Trust the reported total instead of treating a short page as EOF.
+                if reported_total is not None and len(seen_children) >= reported_total:
                     break
-                if page >= 20:
+                if reported_total is None and len(batch) < page_size:
+                    break
+                if page >= 100:
                     add_scan_warning("单个目录超过分页扫描上限，可能还有未读取的文件")
                     break
 
