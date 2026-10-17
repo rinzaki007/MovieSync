@@ -367,8 +367,8 @@ class QuarkClient:
                 # Trust the reported total instead of treating a short page as EOF.
                 if reported_total is not None and len(seen_children) >= reported_total:
                     break
-                if reported_total is None and len(batch) < page_size:
-                    break
+                # Without total metadata, keep requesting pages until an empty or repeated page.
+                # A short page is not proof that the share directory is complete.
                 if page >= 100:
                     add_scan_warning("单个目录超过分页扫描上限，可能还有未读取的文件")
                     break
