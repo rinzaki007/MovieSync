@@ -104,7 +104,7 @@ new file mode 100644
 +		ext["refresh"] = true
 +	}
 +
-+	jobKey := fmt.Sprintf("%s|%s|%s|%s|%s|%t", keyword, sourceType, strings.Join(channels, ","), strings.Join(plugins, ","), util.ExtDigest(ext), forceRefresh)
++	jobKey := fmt.Sprintf("%s|%s|%s|%s|%s|%s|%t", keyword, sourceType, strings.Join(channels, ","), strings.Join(plugins, ","), strings.Join(cloudTypes, ","), util.ExtDigest(ext), forceRefresh)
 +	firstSearchJobsMu.Lock()
 +	job := firstSearchJobs[jobKey]
 +	if job == nil {
