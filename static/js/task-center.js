@@ -460,7 +460,7 @@ function renderSubscriptionDiagnostics(task) {
             const episodeLabel = (item.season ? 'S' + String(item.season).padStart(2, '0') : '') + 'E' + String(item.episode).padStart(2, '0');
             return '<button type="button" onclick="searchMissingEpisode(decodeURIComponent(\'' + encodedTitle + '\'), decodeURIComponent(\'' + encodedTag + '\'), decodeURIComponent(\'' + encodedType + '\'), ' + Number(item.season || 0) + ', ' + item.episode + ')" class="rounded-lg border border-amber-700/60 px-2.5 py-1.5 text-[10px] text-amber-200 hover:bg-amber-900/30">补搜 ' + episodeLabel + '</button>';
         }).join('') + '</div></section>'
-        : '';
+        : '<section class="mt-3 rounded-xl border border-slate-800 bg-slate-900/40 p-3"><div class="text-xs font-semibold text-slate-300">暂未发现可补搜的缺集</div><p class="mt-1 text-[10px] leading-5 text-slate-500">' + escapeTask(coverage.notice || '当前已扫描到的集数范围内没有明确缺口；这不代表整部剧已经齐全。') + '</p></section>';
     const diagnosticTimestamp = d.finished_at || d.updated_at || d.started_at;
     const diagnosticTimeLabel = d.finished_at ? '完成于 ' : (d.interrupted ? '中断于 ' : '最后更新 ');
     const finished = diagnosticTimestamp
