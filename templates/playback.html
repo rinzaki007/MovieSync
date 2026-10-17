@@ -153,6 +153,7 @@
       backButton.disabled = history.length === 0;
       status.textContent = '目录读取成功';
       status.className = 'text-[11px] text-emerald-300';
+      if (providerBadge) providerBadge.innerHTML = '<i class="fa-solid fa-circle text-[7px] text-emerald-400"></i>播放卡片已连接';
       renderItems();
     } catch (error) {
       currentItems = [];
