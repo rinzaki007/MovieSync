@@ -483,6 +483,29 @@ function renderSubscriptionDiagnostics(task) {
         '</section>';
 }
 
+function renderExecutionLog(task) {
+    const events = Array.isArray(task.events) ? task.events.filter(item => item && typeof item === 'object') : [];
+    const history = Array.isArray(task.run_history) ? task.run_history.filter(item => item && typeof item === 'object') : [];
+    const rows = events.length
+        ? events.map(item => ({at: item.at, level: item.level || 'info', message: item.message || ''}))
+        : history.map(item => ({
+            at: item.at,
+            level: item.success ? 'success' : 'error',
+            message: (item.message || (item.success ? '本次检查完成' : '本次检查失败'))
+                + ' · 成功 ' + Number(item.success_count || 0)
+                + ' · 失败 ' + Number(item.failed_count || 0)
+        }));
+    if (!rows.length) {
+        return '<div class="rounded-lg border border-dashed border-slate-800 px-3 py-4 text-[11px] leading-5 text-slate-500">目前还没有已保存的执行记录。点击“立即检查”后，这里会显示本次结果；资源扫描细节请查看上方“最近一次追剧诊断”。</div>';
+    }
+    return '<div class="max-h-72 space-y-2 overflow-y-auto">' + rows.slice().reverse().map(item =>
+        '<div class="flex gap-3 rounded-lg border border-slate-800/70 bg-slate-900/50 px-3 py-2 text-[11px]"><span class="shrink-0 font-mono text-slate-600">' +
+        (item.at ? escapeTask(new Date(Number(item.at) * 1000).toLocaleString()) : '时间未知') +
+        '</span><span class="' + (item.level === 'error' ? 'text-rose-400' : item.level === 'success' ? 'text-emerald-400' : 'text-slate-300') + '">' +
+        escapeTask(item.message) + '</span></div>'
+    ).join('') + '</div>';
+}
+
 function renderTaskDetail(task) {
     const title = document.getElementById('detail-title');
     const body = document.getElementById('detail-body');
@@ -527,10 +550,12 @@ function renderTaskDetail(task) {
         '</div>' +
         '<div class="rounded-xl border border-slate-800 bg-slate-950 p-4"><div class="text-xs font-semibold text-slate-200">当前状态</div><div class="mt-2 text-[11px] leading-5 ' + (task.status === 'failed' ? 'text-rose-400' : 'text-slate-400') + '">' + escapeTask(task.message || '') + '</div></div>' +
         renderSubscriptionDiagnostics(task) +
+        (task.type === 'subscription' ? '<section class="rounded-xl border border-slate-800 bg-slate-950 p-4"><div class="text-xs font-semibold text-slate-200">追剧任务参数</div><div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">' +
+            [['资源来源卡片', task.source_id], ['来源频道', task.channel_name || task.channel], ['原分享 ID', task.resource_id], ['分享类型', task.resource_type], ['存储卡片', task.storage_target_id], ['保存目录 FID', task.target_fid || '0'], ['追更模式', task.tracking_mode === 'all' ? '从选中集开始追更后续集数' : (task.tracking_mode || '旧版模式')], ['起始季 / 集', (Number(task.start_season || 0) ? '第 ' + Number(task.start_season) + ' 季 · ' : '') + (Number(task.start_ep || 0) ? '第 ' + Number(task.start_ep) + ' 集' : '未指定')], ['检查频率', '每 ' + Number(task.interval_hours || 6) + ' 小时'], ['下次检查', task.next_run_at ? new Date(Number(task.next_run_at) * 1000).toLocaleString() : '等待调度']]
+                .map(([label, value]) => '<div class="rounded-lg border border-slate-800 bg-slate-900/60 p-2.5"><div class="text-[10px] text-slate-500">' + label + '</div><div class="mt-1 break-all text-[11px] text-slate-200">' + escapeTask(value || '—') + '</div></div>').join('') +
+            '</div></section>' : '') +
         (task.type === 'transfer' && task.storage_target_id && (task.status === 'success' || task.recovery_uncertain) ? '<section id="task-destination-files" class="rounded-xl border border-emerald-900/60 bg-slate-950 p-4"><div class="flex flex-wrap items-center justify-between gap-2"><div><div class="text-xs font-semibold text-slate-200"><i class="fa-solid fa-folder-open mr-1 text-emerald-400"></i>目标网盘目录核对</div><div class="mt-1 text-[10px] text-slate-500">' + (task.recovery_uncertain ? '转存结果尚不确定；请先核对目标网盘，确认文件未转入前不要重复提交。' : '以下列表来自目标网盘，可用于核对转存结果。') + '</div></div><div class="flex gap-2"><button type="button" onclick="loadTaskDestinationFiles()" class="rounded-lg border border-slate-700 px-3 py-2 text-[10px] text-slate-300 hover:bg-slate-800"><i class="fa-solid fa-rotate mr-1"></i>刷新</button></div></div><div id="task-destination-files-body" class="mt-3 text-[11px] text-slate-500">正在读取网盘目录…</div></section>' : '') +
-        '<details class="rounded-xl border border-slate-800 bg-slate-950 p-4"><summary class="cursor-pointer text-xs font-semibold text-slate-300">执行日志</summary><div class="mt-3 space-y-2">' +
-        (task.events || []).map(e => '<div class="flex gap-3 text-[11px]"><span class="shrink-0 font-mono text-slate-600">' + new Date(Number(e.at || 0)*1000).toLocaleTimeString() + '</span><span class="' + (e.level === 'error' ? 'text-rose-400' : e.level === 'success' ? 'text-emerald-400' : 'text-slate-400') + '">' + escapeTask(e.message) + '</span></div>').join('') +
-        '</div></details>' +
+        '<details open class="rounded-xl border border-slate-800 bg-slate-950 p-4"><summary class="cursor-pointer text-xs font-semibold text-slate-300">执行日志 / 最近执行记录</summary><div class="mt-3">' + renderExecutionLog(task) + '</div></details>' +
         (task.status === 'failed' && task.type === 'transfer' && !task.recovery_uncertain ? '<button onclick="retryTask(\'' + escapeTask(task.id) + '\'); closeTaskDetail()" class="w-full rounded-xl bg-amber-600 px-4 py-3 text-xs font-medium text-white hover:bg-amber-500"><i class="fa-solid fa-rotate-right mr-1"></i>失败重试</button>' : '');
     if (task.type === 'transfer' && task.storage_target_id && (task.status === 'success' || task.recovery_uncertain)) {
         window.currentDestinationTask = {targetId: task.storage_target_id, parentFid: task.target_fid || '0'};

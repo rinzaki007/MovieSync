@@ -28,13 +28,13 @@
     </div>
 </header>
 
-<main class="mx-auto max-w-screen-2xl px-3 py-5 sm:px-4 lg:py-7">
+<main class="mx-auto max-w-screen-2xl px-2 py-4 sm:px-4 sm:py-5 lg:py-7">
     <section class="mb-6">
         <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
             <div>
                 <p class="text-xs font-medium uppercase tracking-wider text-purple-400">任务中心</p>
-                <h1 class="mt-1 text-xl font-semibold text-white">任务中心</h1>
-                <p class="mt-1 text-xs text-slate-500">这里可以查看手动转存和自动追剧任务。任务状态会自动更新。</p>
+                <h1 class="mt-1 text-2xl font-semibold tracking-tight text-white">任务与追剧</h1>
+                <p class="mt-1 text-xs text-slate-500">统一查看普通转存、智能追剧的状态、执行参数与最近结果。任务运行期间会自动刷新。</p>
             </div>
             <button onclick="loadTasks()" class="self-start rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 sm:self-auto"><i class="fa-solid fa-rotate mr-1"></i>刷新状态</button>
         </div>
@@ -60,7 +60,7 @@
         <div id="task-list" class="divide-y divide-slate-800/80"><div class="p-10 text-center text-xs text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-1"></i>正在加载任务…</div></div>
     </section>
 
-    <section class="mt-6 glass-panel rounded-2xl shadow-[0_18px_55px_rgba(0,0,0,.18)]">
+    <section class="mt-4 glass-panel rounded-2xl shadow-[0_18px_55px_rgba(0,0,0,.18)]">
         <div class="border-b border-slate-800 p-4">
             <h2 class="text-sm font-semibold text-white">智能追剧</h2>
             <p class="mt-1 text-[11px] text-slate-500">系统会定期检查已选的资源来源；发现符合条件的新集后，会自动保存。</p>
@@ -68,7 +68,7 @@
         <div id="smart-task-list" class="divide-y divide-slate-800/80"></div>
     </section>
 
-    <section class="mt-6 rounded-2xl border border-slate-700/60 bg-slate-900/55 backdrop-blur-xl">
+    <section class="mt-4 rounded-2xl border border-slate-700/60 bg-slate-900/55 backdrop-blur-xl">
         <div class="border-b border-slate-800 p-4">
             <h2 class="text-sm font-semibold text-white">最近执行记录</h2>
             <p class="mt-1 text-[11px] text-slate-500">保留最近的普通转存与智能追剧执行结果，方便定位失败和重复转存。</p>
