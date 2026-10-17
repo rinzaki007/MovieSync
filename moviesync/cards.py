@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass
 from threading import RLock
@@ -27,6 +28,66 @@ CARD_VERSION_RE = re.compile(
 )
 CARD_CAPABILITY_RE = re.compile(r"^[a-z][a-z0-9]*(?:[._-][a-z0-9*]+)*$")
 CARD_CONFIG_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{0,63}$")
+
+
+
+class _FrozenDict(dict):
+    """JSON-serializable dictionary that rejects mutation."""
+
+    def _immutable(self, *args, **kwargs):
+        raise TypeError("卡片 Manifest 配置字段不可修改")
+
+    __setitem__ = _immutable
+    __delitem__ = _immutable
+    clear = _immutable
+    pop = _immutable
+    popitem = _immutable
+    setdefault = _immutable
+    update = _immutable
+    __ior__ = _immutable
+
+
+class _FrozenList(list):
+    """JSON-serializable list that rejects mutation."""
+
+    def _immutable(self, *args, **kwargs):
+        raise TypeError("卡片 Manifest 配置字段不可修改")
+
+    __setitem__ = _immutable
+    __delitem__ = _immutable
+    __iadd__ = _immutable
+    __imul__ = _immutable
+    append = _immutable
+    clear = _immutable
+    extend = _immutable
+    insert = _immutable
+    pop = _immutable
+    remove = _immutable
+    reverse = _immutable
+    sort = _immutable
+
+
+def _freeze_manifest_value(value: Any) -> Any:
+    """Recursively freeze manifest metadata while preserving JSON container types."""
+    if isinstance(value, dict):
+        return _FrozenDict({key: _freeze_manifest_value(item) for key, item in value.items()})
+    if isinstance(value, (list, tuple)):
+        return _FrozenList(_freeze_manifest_value(item) for item in value)
+    if isinstance(value, (set, frozenset)):
+        return _FrozenList(_freeze_manifest_value(item) for item in value)
+    return value
+
+
+def _thaw_manifest_value(value: Any) -> Any:
+    """Return JSON-friendly copies of recursively frozen manifest metadata."""
+    if isinstance(value, Mapping):
+        return {key: _thaw_manifest_value(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list)):
+        return [_thaw_manifest_value(item) for item in value]
+    if isinstance(value, (set, frozenset)):
+        return [_thaw_manifest_value(item) for item in value]
+    return deepcopy(value)
+
 
 CARD_TYPES = {
     "resource_source",
@@ -76,7 +137,7 @@ class CardManifest:
             raise ValueError("卡片 capabilities 不能重复")
         if not isinstance(self.config_fields, (tuple, list)):
             raise ValueError("卡片 config_fields 必须是对象列表")
-        if any(not isinstance(field, dict) for field in self.config_fields):
+        if any(not isinstance(field, Mapping) for field in self.config_fields):
             raise ValueError("卡片配置字段必须是对象")
         if not isinstance(self.image_hosts, (tuple, list)):
             raise ValueError("卡片 image_hosts 必须是域名列表")
@@ -154,7 +215,11 @@ class CardManifest:
         # Detach the validated manifest from caller-owned mutable containers.
         # A frozen dataclass does not freeze lists or dictionaries nested inside it.
         object.__setattr__(self, "capabilities", tuple(self.capabilities))
-        object.__setattr__(self, "config_fields", tuple(deepcopy(dict(field)) for field in self.config_fields))
+        object.__setattr__(
+            self,
+            "config_fields",
+            tuple(_freeze_manifest_value(dict(field)) for field in self.config_fields),
+        )
         object.__setattr__(self, "image_hosts", tuple(self.image_hosts))
 
     def to_dict(self) -> dict[str, Any]:
@@ -166,7 +231,7 @@ class CardManifest:
             "description": self.description,
             "capabilities": list(self.capabilities),
             "config_version": self.config_version,
-            "config_fields": deepcopy(list(self.config_fields)),
+            "config_fields": [_thaw_manifest_value(field) for field in self.config_fields],
             "image_hosts": list(self.image_hosts),
             "image_referer": self.image_referer,
         }
