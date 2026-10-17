@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>播放中心 - MovieSync</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="min-h-screen text-slate-100">
+  <header class="sticky top-0 z-20 border-b border-slate-800/80 bg-slate-950/90 px-3 py-3 backdrop-blur-xl">
+    <div class="mx-auto flex max-w-6xl items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <a href="/" class="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800" aria-label="返回首页"><i class="fa-solid fa-arrow-left"></i></a>
+        <div><h1 class="text-base font-semibold">播放中心</h1><p class="text-xs text-slate-400">通过已安装的播放卡片浏览和播放视频</p></div>
+      </div>
+      <a href="/admin" class="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800"><i class="fa-solid fa-gear mr-1"></i>卡片设置</a>
+    </div>
+  </header>
+  <main class="mx-auto grid max-w-6xl gap-4 p-3 sm:p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)]">
+    <section class="min-w-0 rounded-2xl border border-slate-800 bg-slate-900/70 p-3 sm:p-4">
+      <div class="mb-3 flex items-center justify-between gap-2">
+        <div class="min-w-0"><h2 class="text-sm font-semibold">媒体文件</h2><p id="path-label" class="mt-1 break-all text-xs text-slate-500">正在读取目录…</p></div>
+        <button id="back-btn" class="shrink-0 rounded-lg border border-slate-700 px-3 py-2 text-xs disabled:opacity-40" disabled><i class="fa-solid fa-arrow-left mr-1"></i>上一级</button>
+      </div>
+      <div id="status" class="mb-3 rounded-xl border border-slate-800 bg-slate-950/60 p-3 text-xs leading-5 text-slate-400">正在连接播放卡片…</div>
+      <div id="file-list" class="space-y-1"></div>
+    </section>
+    <section class="min-w-0 rounded-2xl border border-slate-800 bg-slate-900/70 p-3 sm:p-4">
+      <div class="mb-3"><h2 id="player-title" class="truncate text-sm font-semibold">选择一个视频开始播放</h2><p class="mt-1 text-xs text-slate-500">播放地址由卡片解析，视频流由浏览器直接请求</p></div>
+      <div class="overflow-hidden rounded-xl bg-black">
+        <video id="video-player" class="aspect-video w-full" controls playsinline preload="metadata"></video>
+      </div>
+      <div id="player-status" class="mt-3 text-xs leading-5 text-slate-500">如果无法播放或拖动进度条，请检查 OpenList 的浏览器可访问地址及视频格式。</div>
+    </section>
+  </main>
+<script>
+(() => {
+  const list = document.getElementById('file-list');
+  const status = document.getElementById('status');
+  const pathLabel = document.getElementById('path-label');
+  const backButton = document.getElementById('back-btn');
+  const player = document.getElementById('video-player');
+  const playerTitle = document.getElementById('player-title');
+  const playerStatus = document.getElementById('player-status');
+  const history = [];
+  let currentPath = '';
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[char]));
+  }
+
+  function renderItems(items) {
+    list.replaceChildren();
+    if (!items.length) {
+      list.innerHTML = '<div class="rounded-xl border border-dashed border-slate-800 p-6 text-center text-xs text-slate-500">这个目录里暂时没有文件</div>';
+      return;
+    }
+    for (const item of items) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'flex w-full items-center gap-3 rounded-xl border border-transparent px-3 py-3 text-left hover:border-slate-700 hover:bg-slate-800/70';
+      const icon = item.is_dir ? 'fa-folder text-amber-300' : (item.is_video ? 'fa-circle-play text-emerald-300' : 'fa-file text-slate-500');
+      const size = typeof item.size === 'number' && !item.is_dir ? ' · ' + formatSize(item.size) : '';
+      button.innerHTML = '<i class="fa-solid ' + icon + ' w-5 text-center"></i><span class="min-w-0 flex-1"><span class="block break-words text-sm text-slate-200">' + escapeHtml(item.name) + '</span><span class="mt-1 block text-[11px] text-slate-500">' + (item.is_dir ? '文件夹' : (item.is_video ? '视频' : '文件')) + escapeHtml(size) + '</span></span>' + (item.is_dir ? '<i class="fa-solid fa-chevron-right text-xs text-slate-600"></i>' : '');
+      button.addEventListener('click', () => {
+        if (item.is_dir) loadDirectory(item.path, true);
+        else if (item.is_video) playFile(item);
+      });
+      list.appendChild(button);
+    }
+  }
+
+  function formatSize(bytes) {
+    if (!Number.isFinite(bytes) || bytes < 0) return '';
+    if (bytes < 1024) return bytes + ' B';
+    const units = ['KB', 'MB', 'GB', 'TB'];
+    let value = bytes / 1024, index = 0;
+    while (value >= 1024 && index < units.length - 1) { value /= 1024; index++; }
+    return value.toFixed(1) + ' ' + units[index];
+  }
+
+  async function loadDirectory(path = '', pushHistory = false) {
+    status.textContent = '正在读取目录…';
+    list.replaceChildren();
+    try {
+      const query = path ? '?path=' + encodeURIComponent(path) : '';
+      const response = await fetch('/api/playback/files' + query, { credentials: 'same-origin' });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || '读取目录失败');
+      if (pushHistory) history.push(currentPath);
+      currentPath = path;
+      pathLabel.textContent = path || '媒体根目录';
+      backButton.disabled = history.length === 0;
+      status.textContent = '已读取 ' + result.items.length + ' 个条目';
+      renderItems(result.items || []);
+    } catch (error) {
+      status.textContent = error.message || '读取目录失败';
+      list.innerHTML = '<div class="rounded-xl border border-dashed border-rose-900/70 p-5 text-xs leading-5 text-rose-300">' + escapeHtml(status.textContent) + '<p class="mt-2 text-slate-500">请到卡片管理安装并启用 OpenList 播放卡片，填写地址、Token 和媒体根目录后再试。</p></div>';
+      pathLabel.textContent = path || '媒体根目录';
+    }
+  }
+
+  async function playFile(item) {
+    playerStatus.textContent = '正在获取播放地址…';
+    playerTitle.textContent = item.name;
+    try {
+      const response = await fetch('/api/playback/resolve?path=' + encodeURIComponent(item.path), { credentials: 'same-origin' });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || '获取播放地址失败');
+      player.src = result.url;
+      player.load();
+      player.play().catch(() => {});
+      playerStatus.textContent = '播放地址已获取。如果视频未开始，请尝试点击播放按钮。';
+    } catch (error) {
+      playerStatus.textContent = error.message || '获取播放地址失败';
+    }
+  }
+
+  backButton.addEventListener('click', () => {
+    if (!history.length) return;
+    loadDirectory(history.pop());
+  });
+  player.addEventListener('error', () => {
+    if (player.currentSrc) playerStatus.textContent = '浏览器无法播放此视频。可能是播放链接不可达、格式不受支持，或上游不支持 Range 请求。';
+  });
+  loadDirectory();
+})();
+</script>
+</body>
+</html>

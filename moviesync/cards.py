@@ -448,7 +448,7 @@ class ResourceSourceCard(Card):
 
 
 class PlaybackProviderCard(Card):
-    """兼容旧版/第三方插件的播放能力接口；MovieSync 当前不注册在线播放页面或 API。"""
+    """播放提供方接口；播放中心通过统一的目录与播放地址方法调用可选卡片。"""
 
     manifest = CardManifest(
         id="unknown.playback",
