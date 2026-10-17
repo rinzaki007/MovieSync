@@ -49,16 +49,18 @@ async function loadMetadataList(tag, sort, providerId = '') {
     }
 }
 
-function preloadMetadataCategories(activeTag) {
-    // 豆瓣仍是主要数据源。首屏显示后在后台预热其他分类，切换分类时优先秒开缓存。
+async function preloadMetadataCategories(activeTag) {
+    // 豆瓣仍是主要数据源。首屏显示后在后台顺序预热其他分类，避免同时压满同一 HTTP 客户端。
     for (const tag of ['电影', '电视剧', '综艺', '动漫']) {
         if (tag === activeTag) continue;
         const key = metadataListCacheKey(tag, currentSort, currentMetadataProviderId);
         const cached = metadataListCache.get(key);
         if (cached && Date.now() - cached.savedAt < METADATA_LIST_CACHE_TTL_MS) continue;
-        loadMetadataList(tag, currentSort, currentMetadataProviderId).catch(err => {
+        try {
+            await loadMetadataList(tag, currentSort, currentMetadataProviderId);
+        } catch (err) {
             console.debug('后台预热影视分类失败:', tag, err);
-        });
+        }
     }
 }
 
