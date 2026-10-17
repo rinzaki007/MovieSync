@@ -21,6 +21,7 @@ from flask import (
     session,
 )
 
+from ..services.episode_coverage import build_episode_coverage
 from ..services.filename_rules import parse_media_filename, parse_tv_episode
 from ..services.media_classification import classify_metadata_item, normalize_media_category
 
@@ -1496,6 +1497,7 @@ def get_task_detail(task_id):
             "updated_at": sub.get("last_check_at") or 0,
             "run_history": (sub.get("run_history", []) or [])[-20:],
             "last_diagnostics": sub.get("last_diagnostics", {}),
+            "episode_coverage": build_episode_coverage(sub),
             "subscription_id": sub_id,
             "pending_save_keys": sub.get("pending_save_keys", []) or [],
             "cover": sub.get("cover", ""),
