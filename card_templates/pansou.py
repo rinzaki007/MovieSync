@@ -285,7 +285,7 @@ class PanSouResourceSource(ResourceSourceCard):
         search_params = {
             "kw": title,
             "res": "all",
-            "src": "all",
+            "src": "plugin",
             "cloud_types": ",".join(cloud_types),
             "wait_ms": 1800,
         }
