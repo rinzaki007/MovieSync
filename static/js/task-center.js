@@ -4,6 +4,13 @@ let selectedCandidate = null;
 let taskRefreshTimer = null;
 let taskLoadSequence = 0;
 let candidateSearchSequence = 0;
+let taskCandidateTitle = '';
+let taskCandidateOffset = 0;
+let taskCandidateHasMore = false;
+let taskCandidateLoadingMore = false;
+let taskCandidateRenderedCount = 0;
+const taskCandidateKeys = new Set();
+const TASK_CANDIDATE_SCAN_LIMIT = 10;
 let taskCategorySequence = 0;
 let taskDestinationSequence = 0;
 let taskStorageTargets = [];
@@ -719,6 +726,12 @@ function renderHistory() {
 
 function openAddTask() {
     candidateSearchSequence++;
+    taskCandidateTitle = '';
+    taskCandidateOffset = 0;
+    taskCandidateHasMore = false;
+    taskCandidateLoadingMore = false;
+    taskCandidateRenderedCount = 0;
+    taskCandidateKeys.clear();
     selectedCandidate = null;
     document.getElementById('task-submit').disabled = true;
     document.getElementById('task-submit').classList.add('opacity-40');
@@ -746,55 +759,107 @@ function formatTaskSize(bytes) {
     return (value >= 10 || index === 0 ? value.toFixed(0) : value.toFixed(1)) + ' ' + units[index];
 }
 
-async function searchTaskCandidates() {
-    const requestId = ++candidateSearchSequence;
-    const title = document.getElementById('task-title').value.trim();
-    if (!title) return taskToast('请输入剧名');
+async function searchTaskCandidates(loadMore = false) {
     const box = document.getElementById('task-candidate-list');
-    document.getElementById('task-candidates').classList.remove('hidden');
-    box.innerHTML = '<div class="rounded-xl border border-slate-800 bg-slate-950 p-6 text-center text-xs text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-1"></i>正在同时搜索多个资源来源…</div>';
-    selectedCandidate = null;
-    document.getElementById('task-submit').disabled = true;
-    document.getElementById('task-submit').classList.add('opacity-40');
+    let requestId;
+    let title;
+    let offset;
+
+    if (loadMore) {
+        if (taskCandidateLoadingMore || !taskCandidateHasMore || !taskCandidateTitle) return;
+        requestId = candidateSearchSequence;
+        title = taskCandidateTitle;
+        offset = taskCandidateOffset;
+        taskCandidateLoadingMore = true;
+        const moreButton = box.querySelector('[data-task-candidate-more]');
+        if (moreButton) {
+            moreButton.disabled = true;
+            moreButton.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i>正在查询更多资源…';
+        }
+        document.getElementById('candidate-hint').textContent =
+            '已加载 ' + taskCandidateRenderedCount + ' 个可用源，正在继续查询…';
+    } else {
+        requestId = ++candidateSearchSequence;
+        title = document.getElementById('task-title').value.trim();
+        if (!title) return taskToast('请输入剧名');
+        taskCandidateTitle = title;
+        taskCandidateOffset = 0;
+        taskCandidateHasMore = false;
+        taskCandidateLoadingMore = false;
+        taskCandidateRenderedCount = 0;
+        taskCandidateKeys.clear();
+        offset = 0;
+        selectedCandidate = null;
+        document.getElementById('task-candidates').classList.remove('hidden');
+        box.innerHTML = '<div class="rounded-xl border border-slate-800 bg-slate-950 p-6 text-center text-xs text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-1"></i>先搜索一批资源，结果会逐步显示；还可以继续查询更多。</div>';
+        document.getElementById('task-submit').disabled = true;
+        document.getElementById('task-submit').classList.add('opacity-40');
+    }
+
     try {
-        const resp = await apiFetchTask('/api/search-candidates', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({movies:[{title:title,tag:'电视剧'}]})});
+        const storageTargetId = document.getElementById('task-storage-target')?.value || '';
+        const resp = await apiFetchTask('/api/search-candidates', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+                movies: [{title: title, tag: '电视剧'}],
+                offset: offset,
+                scan_limit: TASK_CANDIDATE_SCAN_LIMIT,
+                storage_target_id: storageTargetId
+            })
+        });
         const res = await resp.json();
         if (requestId !== candidateSearchSequence) return;
-        if (!res.success) throw new Error(res.message || '搜索失败');
-        const candidates = (res.candidates_map || {})[title] || [];
-        if (!candidates.length) {
+        if (!res.success) throw new Error(res.message || (loadMore ? '继续搜索失败' : '搜索失败'));
+
+        const page = (res.candidate_pages || {})[title] || {};
+        const incoming = (res.candidates_map || {})[title] || [];
+        taskCandidateOffset = Number(page.next_offset ?? (offset + TASK_CANDIDATE_SCAN_LIMIT));
+        taskCandidateHasMore = Boolean(page.has_more);
+
+        const candidates = [];
+        incoming.forEach(candidate => {
+            const resourceId = String(candidate.resource_id || candidate.share_id || candidate.pwd_id || '').trim();
+            const key = String(candidate.resource_type || '') + '|' + resourceId;
+            if (!resourceId || taskCandidateKeys.has(key)) return;
+            taskCandidateKeys.add(key);
+            candidates.push(candidate);
+        });
+
+        if (!loadMore) {
+            box.innerHTML = '';
+            const candidateRows = document.createElement('div');
+            candidateRows.className = 'space-y-3';
+            candidateRows.dataset.taskCandidateRows = 'true';
+            box.appendChild(candidateRows);
+        }
+
+        let candidateRows = box.querySelector('[data-task-candidate-rows]');
+        if (!candidateRows) {
+            candidateRows = document.createElement('div');
+            candidateRows.className = 'space-y-3';
+            candidateRows.dataset.taskCandidateRows = 'true';
+            box.prepend(candidateRows);
+        }
+
+        const emptyMessage = box.querySelector('[data-task-candidate-empty]');
+        if (candidates.length && emptyMessage) emptyMessage.remove();
+
+        if (!candidates.length && taskCandidateRenderedCount === 0 && !taskCandidateHasMore) {
             box.innerHTML = '<div class="rounded-xl border border-amber-900/50 bg-amber-950/20 p-5 text-center text-xs text-amber-300">没有找到匹配资源，请换个剧名，或检查已启用的资源来源。</div>';
+            document.getElementById('candidate-hint').textContent = '没有找到可用资源';
             return;
         }
-        const initiallyVisibleCandidates = 5;
-        document.getElementById('candidate-hint').textContent =
-            '找到 ' + candidates.length + ' 个可用源；默认展示前 ' +
-            Math.min(candidates.length, initiallyVisibleCandidates) +
-            ' 个，其余可展开查看（按搜索顺序展示，不代表推荐排名）';
-        box.innerHTML = '';
-
-        const candidateRows = document.createElement('div');
-        candidateRows.className = 'space-y-3';
-        if (candidates.length > initiallyVisibleCandidates) {
-            const toggle = document.createElement('button');
-            toggle.type = 'button';
-            toggle.className = 'w-full rounded-xl border border-slate-700 bg-slate-900/70 px-4 py-3 text-xs font-medium text-slate-300 transition hover:border-purple-700 hover:text-white';
-            toggle.setAttribute('aria-expanded', 'false');
-            toggle.textContent = '展开其余 ' + (candidates.length - initiallyVisibleCandidates) + ' 个资源';
-            toggle.onclick = () => {
-                const expanded = toggle.getAttribute('aria-expanded') === 'true';
-                candidateRows.querySelectorAll('.smart-follow-candidate-extra').forEach(row => {
-                    row.classList.toggle('hidden', expanded);
-                });
-                toggle.setAttribute('aria-expanded', String(!expanded));
-                toggle.textContent = expanded
-                    ? '展开其余 ' + (candidates.length - initiallyVisibleCandidates) + ' 个资源'
-                    : '收起其余资源';
-            };
-            box.appendChild(toggle);
+        if (!candidates.length && taskCandidateRenderedCount === 0 && taskCandidateHasMore && !emptyMessage) {
+            const empty = document.createElement('div');
+            empty.dataset.taskCandidateEmpty = 'true';
+            empty.className = 'rounded-xl border border-amber-900/50 bg-amber-950/20 p-4 text-center text-xs text-amber-200';
+            empty.textContent = '当前这一批没有找到可用候选，仍有后续资源可以继续查询。';
+            box.prepend(empty);
         }
 
-        candidates.forEach((candidate, index) => {
+        candidates.forEach(candidate => {
+            const index = taskCandidateRenderedCount++;
             const row = document.createElement('div');
             const files = Array.isArray(candidate.files) ? candidate.files : [];
             const resolutions = Object.keys(candidate.resolutions || {});
@@ -816,8 +881,7 @@ async function searchTaskCandidates() {
                     folderCounts.set(path, (folderCounts.get(path) || 0) + 1);
                 }
             });
-            // SearchService always includes relative_path, including an empty string for files in the share root.
-            // Do not treat an all-root share as missing folder metadata; it must still open the root folder first.
+            // SearchService includes relative_path even when a file lives in the share root.
             const hasFolderMetadata = files.some(file => file && typeof file === 'object' && (
                 Object.prototype.hasOwnProperty.call(file, 'relative_path')
                 || Object.prototype.hasOwnProperty.call(file, 'relative_dir')
@@ -829,13 +893,10 @@ async function searchTaskCandidates() {
                 return depthA - depthB || a.localeCompare(b);
             });
             let selectedFolder = null;
-            const folderFiles = [];
-            const validFids = folderFiles.map(file => String(file.fid || '').trim()).filter(Boolean);
-            const selectedFids = new Set(validFids);
+            const validFids = hasFolderMetadata
+                ? []
+                : files.map(file => String(file.fid || '').trim()).filter(Boolean);
             row.className = 'rounded-2xl border border-slate-800 bg-slate-950/80 p-4 transition hover:border-slate-700';
-            if (index >= initiallyVisibleCandidates) {
-                row.classList.add('smart-follow-candidate-extra', 'hidden');
-            }
             row.innerHTML =
                 '<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div class="min-w-0">' +
                 '<div class="flex flex-wrap items-center gap-2"><span class="inline-flex items-center gap-1.5 rounded-lg border border-sky-900/60 bg-sky-950/40 px-2 py-1 text-[11px] font-semibold text-sky-300"><i class="fa-solid fa-puzzle-piece"></i>' + escapeTask(candidate.source_name || candidate.channel || '资源来源') + '</span>' +
@@ -856,13 +917,13 @@ async function searchTaskCandidates() {
                 '<div class="mt-2 max-h-60 overflow-y-auto rounded-xl border border-slate-800 bg-slate-900/80 p-2 space-y-1">' +
                 files.map((file, fileIndex) => {
                     const fid = String(file.fid || '').trim();
-                    const folder = fileFolder(file);
                     const inFolder = !hasFolderMetadata;
                     if (!fid) return '';
                     return '<label data-smart-folder-row="' + fileIndex + '" class="' + (inFolder ? '' : 'hidden ') + 'flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-slate-800/70"><input type="checkbox" data-file-index="' + fileIndex + '" class="task-episode-checkbox h-4 w-4 rounded border-slate-600 bg-slate-950 text-purple-600 focus:ring-purple-500"' + (inFolder ? ' checked' : ' disabled') + '><span class="min-w-0 flex-1 truncate text-xs text-slate-300">' + escapeTask(file.file_name) + '</span><span class="shrink-0 text-[10px] text-slate-500">' + escapeTask(file.resolution || '未知') + ' · ' + escapeTask(file.size_text || formatTaskSize(file.size)) + '</span></label>';
                 }).join('') +
                 '</div>' +
                 '<div class="mt-2 text-[10px] text-slate-500">首次处理仅使用当前文件夹中的勾选集数；后续自动追更也会沿用该文件夹范围。</div>';
+
             const updateSelectionUi = () => {
                 const checked = [...row.querySelectorAll('.task-episode-checkbox:checked')];
                 const selected = new Set(checked.map(input => {
@@ -875,8 +936,7 @@ async function searchTaskCandidates() {
                 if (selectedCandidate?.row === row) {
                     selectedCandidate.selectedFids = selected;
                     refreshTaskSubmitState();
-                    const enabled = selected.size > 0;
-                    document.getElementById('task-form-status').textContent = enabled
+                    document.getElementById('task-form-status').textContent = selected.size
                         ? '已选择 ' + selected.size + ' 集；后续有新集时，系统会继续检查并自动转存。'
                         : '至少选择 1 集作为首次处理基线。';
                 }
@@ -938,24 +998,68 @@ async function searchTaskCandidates() {
                     const file = files[Number(input.dataset.fileIndex)];
                     return String(file?.fid || '').trim();
                 }).filter(Boolean));
-                selectedCandidate = {candidate:candidate,row:row,selectedFids:currentSelected,sourceFolderPath:selectedFolder === null ? "" : selectedFolder,sourceFolderScoped:Boolean(hasFolderMetadata && selectedFolder !== null)};
+                selectedCandidate = {
+                    candidate:candidate,
+                    row:row,
+                    selectedFids:currentSelected,
+                    sourceFolderPath:selectedFolder === null ? '' : selectedFolder,
+                    sourceFolderScoped:Boolean(hasFolderMetadata && selectedFolder !== null)
+                };
                 const hasCompatibleTargets = filterStorageTargetsForCandidate(candidate);
-                document.querySelectorAll('.candidate-select').forEach(b => { b.className='candidate-select shrink-0 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-[11px] text-slate-400'; b.textContent='选择此源'; });
-                this.className='candidate-select shrink-0 rounded-xl bg-emerald-600 px-4 py-2.5 text-[11px] font-medium text-white';
-                this.textContent='已选择';
+                document.querySelectorAll('.candidate-select').forEach(button => {
+                    button.className = 'candidate-select shrink-0 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2.5 text-[11px] text-slate-400';
+                    button.textContent = '选择此源';
+                });
+                this.className = 'candidate-select shrink-0 rounded-xl bg-emerald-600 px-4 py-2.5 text-[11px] font-medium text-white';
+                this.textContent = '已选择';
                 refreshTaskSubmitState();
                 if (!hasCompatibleTargets) return;
-                document.getElementById('task-form-status').textContent = selectedFids.size
-                    ? '已选择 ' + selectedFids.size + ' 集；后续有新集时，系统会继续检查并自动转存。'
+                document.getElementById('task-form-status').textContent = currentSelected.size
+                    ? '已选择 ' + currentSelected.size + ' 集；后续有新集时，系统会继续检查并自动转存。'
                     : '至少选择 1 集作为首次处理基线。';
             };
             candidateRows.appendChild(row);
         });
-        box.appendChild(candidateRows);
 
+        if (candidates.length && emptyMessage) emptyMessage.remove();
+        const moreButton = box.querySelector('[data-task-candidate-more]') || document.createElement('button');
+        moreButton.type = 'button';
+        moreButton.dataset.taskCandidateMore = 'true';
+        moreButton.className = 'w-full rounded-xl border border-slate-700 bg-slate-900/70 px-4 py-3 text-xs font-medium text-slate-300 transition hover:border-purple-700 hover:text-white';
+        moreButton.classList.toggle('hidden', !taskCandidateHasMore);
+        moreButton.disabled = false;
+        moreButton.innerHTML = taskCandidateHasMore
+            ? '<i class="fa-solid fa-magnifying-glass-plus mr-2"></i>查询更多资源'
+            : '<i class="fa-solid fa-check mr-2"></i>当前资源已查询完';
+        moreButton.onclick = () => searchTaskCandidates(true);
+        if (!moreButton.isConnected) box.appendChild(moreButton);
+
+        document.getElementById('candidate-hint').textContent =
+            '已加载 ' + taskCandidateRenderedCount + ' 个可用源' +
+            (taskCandidateHasMore ? '；还有更多资源可查询' : '；当前资源已查询完');
+        if (!taskCandidateRenderedCount && !taskCandidateHasMore) {
+            box.innerHTML = '<div class="rounded-xl border border-amber-900/50 bg-amber-950/20 p-5 text-center text-xs text-amber-300">没有找到匹配资源，请换个剧名，或检查已启用的资源来源。</div>';
+            document.getElementById('candidate-hint').textContent = '没有找到可用资源';
+        }
     } catch (err) {
         if (requestId === candidateSearchSequence) {
-            box.innerHTML = '<div class="rounded-xl border border-rose-900/50 bg-rose-950/20 p-5 text-xs text-rose-300">搜索失败：' + escapeTask(err.message) + '</div>';
+            if (loadMore) {
+                taskToast(err.message || '继续搜索资源失败');
+            } else {
+                box.innerHTML = '<div class="rounded-xl border border-rose-900/50 bg-rose-950/20 p-5 text-xs text-rose-300">搜索失败：' + escapeTask(err.message) + '</div>';
+            }
+        }
+    } finally {
+        if (loadMore && requestId === candidateSearchSequence) {
+            taskCandidateLoadingMore = false;
+            const moreButton = box.querySelector('[data-task-candidate-more]');
+            if (moreButton) {
+                moreButton.disabled = false;
+                moreButton.innerHTML = taskCandidateHasMore
+                    ? '<i class="fa-solid fa-magnifying-glass-plus mr-2"></i>查询更多资源'
+                    : '<i class="fa-solid fa-check mr-2"></i>当前资源已查询完';
+                moreButton.classList.toggle('hidden', !taskCandidateHasMore);
+            }
         }
     }
 }

@@ -34,3 +34,15 @@ def test_async_frontend_lists_ignore_stale_responses():
     assert "requestId !== cardsLoadSequence" in admin_template
     assert "let genericCardRequestSequence = 0;" in admin_template
     assert "requestId !== genericCardRequestSequence" in admin_template
+
+
+def test_smart_follow_search_renders_paginated_candidates_progressively():
+    script = (ROOT / "static" / "js" / "task-center.js").read_text(encoding="utf-8")
+
+    assert "const TASK_CANDIDATE_SCAN_LIMIT = 10;" in script
+    assert "scan_limit: TASK_CANDIDATE_SCAN_LIMIT" in script
+    assert "candidate_pages" in script
+    assert "taskCandidateKeys" in script
+    assert "data-task-candidate-more" in script
+    assert "searchTaskCandidates(true)" in script
+    assert "还有更多资源可查询" in script
