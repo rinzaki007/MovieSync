@@ -829,10 +829,12 @@ class SearchService:
 
         expected = Counter(name.casefold() for name in expected_names)
 
-        # Some storage APIs accept a transfer before the destination listing is
-        # consistent. Recheck briefly instead of reporting an immediate mismatch.
+        # Quark may acknowledge a save before the destination listing catches up.
+        # Poll for up to ~5 seconds; never resubmit the transfer just because the
+        # listing is delayed, since that could create duplicate files.
         last_error = None
-        for attempt in range(3):
+        retry_delays = (0.5, 1.0, 1.5, 2.0)
+        for attempt in range(len(retry_delays) + 1):
             try:
                 destination_files = list_destination_files(folder_fid)
                 if not isinstance(destination_files, list) or any(
@@ -849,17 +851,18 @@ class SearchService:
             except Exception as exc:
                 last_error = exc
                 self.logger.warning(
-                    "转存请求已返回成功，读取目标目录核实失败（第 %s/3 次）",
+                    "转存请求已返回成功，读取目标目录核实失败（第 %s/%s 次）",
                     attempt + 1,
+                    len(retry_delays) + 1,
                     exc_info=True,
                 )
 
-            if attempt < 2:
-                time.sleep(0.3 * (attempt + 1))
+            if attempt < len(retry_delays):
+                time.sleep(retry_delays[attempt])
 
         if last_error is not None:
             self.logger.warning(
-                "转存请求已返回成功，但重试后仍无法读取目标目录进行结果核实"
+                "转存请求已返回成功，但等待重试后仍无法读取目标目录进行结果核实"
             )
         return False
 
