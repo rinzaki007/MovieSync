@@ -28,7 +28,7 @@ def _binary(name: str) -> str | None:
 
 def probe_hdr(url: str, timeout: int = 12) -> bool | None:
     """Return True for HDR, False for confidently SDR, or None when unknown."""
-    if not isinstance(url, str) or urllib.parse.urlparse(url).scheme not in {"http", "https"}:
+    if not isinstance(url, str) or urllib.parse.urllib.parse.urlparse(url).scheme not in {"http", "https"}:
         return None
     ffprobe = _binary("ffprobe")
     if not ffprobe:
@@ -181,7 +181,7 @@ class HDRTranscoder:
                     job.process.kill()
             shutil.rmtree(job.directory, ignore_errors=True)
 
-    def file_path(self, job_id: str, filename: str) -> Path | None:
+    def file_path(self, job_id: str, filename: str) -> pathlib.Path | None:
         # Only serve known HLS assets; never accept arbitrary filesystem paths.
         if not filename or "/" in filename or "\\" in filename or filename.startswith("."):
             return None
