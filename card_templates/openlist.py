@@ -1,8 +1,7 @@
-"""Optional OpenList playback-provider card.
+"""OpenList playback-provider card backed by MovieSync's bundled OpenList runtime.
 
-This card talks to an existing OpenList instance; MovieSync does not install or
-manage the OpenList service. The core playback page/API can consume this card's
-normalized file and playback URL methods.
+Connection details and administrator credentials are managed internally. The only
+optional setting is a browser-reachable playback URL prefix for reverse-proxy setups.
 """
 from __future__ import annotations
 
@@ -62,9 +61,9 @@ class OpenListPlaybackCard(PlaybackProviderCard):
     manifest = CardManifest(
         id="openlist",
         name="OpenList 播放卡片",
-        version="0.2.0",
+        version="0.3.0",
         type="playback_provider",
-        description="连接 MovieSync 内置的 OpenList 服务，或兼容的外部 OpenList；浏览媒体目录并解析视频播放地址。",
+        description="自动连接 MovieSync 内置 OpenList；无需填写服务地址或 Token。",
         capabilities=(
             "playback.check",
             "playback.list_files",
@@ -74,73 +73,23 @@ class OpenListPlaybackCard(PlaybackProviderCard):
         ),
         config_fields=(
             {
-                "key": "base_url",
-                "label": "OpenList 服务地址",
-                "type": "string",
-                "format": "url",
-                "required": True,
-                "default": "http://127.0.0.1:5244",
-                "placeholder": "http://127.0.0.1:5244",
-                "description": (
-                    "默认连接 MovieSync 容器内置服务。外部 OpenList 请填写容器内可访问的地址；"
-                    "不要填写 /api 路径。"
-                ),
-            },
-            {
-                "key": "token",
-                "label": "OpenList API Token",
-                "type": "password",
-                "secret": True,
-                "required": False,
-                "placeholder": "粘贴 OpenList Token；留空表示尝试匿名访问",
-                "description": "仅保存在服务端，不会回显。",
-            },
-            {
-                "key": "admin_token",
-                "label": "OpenList 管理员 Token（挂载管理）",
-                "type": "password",
-                "secret": True,
-                "required": False,
-                "placeholder": "粘贴具备管理员存储管理权限的 Token",
-                "description": (
-                    "仅用于在 MovieSync 卡片中新增、编辑和管理挂载，与播放用 Token 分开保存；"
-                    "只保存在服务端，不会回显。修改后请先保存配置再刷新挂载列表。"
-                ),
-            },
-            {
-                "key": "root_path",
-                "label": "媒体根目录",
-                "type": "string",
-                "required": True,
-                "default": "/",
-                "placeholder": "/",
-                "description": "OpenList 中媒体目录的路径，例如 /夸克/电影。",
-            },
-            {
                 "key": "playback_base_url",
                 "label": "浏览器播放地址前缀（可选）",
                 "type": "string",
                 "format": "url",
                 "required": False,
-                "placeholder": "https://alist.example.com",
+                "placeholder": "例如 http://192.168.1.2:5244",
                 "description": (
-                    "内置引擎建议填写浏览器可访问的 MovieSync 主机地址，例如 "
-                    "http://192.168.1.2:5244；用于替换 OpenList 返回的播放链接主机。"
+                    "通常可留空。仅当播放链接中的容器内部地址无法被浏览器访问时，"
+                    "填写浏览器可访问的 OpenList 地址；不需要填写 /api 路径。"
                 ),
-            },
-            {
-                "key": "verify_tls",
-                "label": "验证 HTTPS 证书",
-                "type": "boolean",
-                "required": False,
-                "default": True,
-                "description": "仅对 HTTPS 地址生效；不建议关闭。",
             },
         ),
     )
 
     def __init__(self, context):
         self.config_store = context["config_store"]
+        self.openlist_admin = context.get("openlist_admin")
         self.session = requests.Session()
         self.session.headers.update({"User-Agent": "MovieSync-OpenList-Card/0.1"})
     
@@ -149,7 +98,22 @@ class OpenListPlaybackCard(PlaybackProviderCard):
         if not callable(getter):
             return {}
         config = getter(self.card_id)
-        return config if isinstance(config, dict) else {}
+        config = dict(config) if isinstance(config, dict) else {}
+        internal_url = str(getattr(self.openlist_admin, "base_url", "") or "").strip()
+        if internal_url:
+            # Ignore legacy editable connection values when the bundled client is
+            # available; credentials and connection details are managed internally.
+            config["base_url"] = internal_url
+            config["root_path"] = "/"
+            config["verify_tls"] = True
+        else:
+            # Keep legacy external-instance behavior for third-party loaders that
+            # instantiate this card without MovieSync's bundled client context.
+            config.setdefault("base_url", "http://127.0.0.1:5244")
+            config.setdefault("root_path", "/")
+            config.setdefault("verify_tls", True)
+        config.setdefault("playback_base_url", "")
+        return config
 
     def validate_config(self, config: dict[str, Any]) -> dict[str, Any]:
         # The generic validator checks URL format whenever a field is present.
@@ -160,21 +124,52 @@ class OpenListPlaybackCard(PlaybackProviderCard):
         if not playback_base:
             incoming.pop("playback_base_url", None)
         normalized = super().validate_config(incoming)
-        normalized["base_url"] = _clean_base_url(normalized.get("base_url"))
-        normalized["root_path"] = _clean_path(normalized.get("root_path", "/"))
+        internal_url = str(getattr(self.openlist_admin, "base_url", "") or "").strip()
+        if internal_url:
+            normalized["base_url"] = _clean_base_url(internal_url)
+            normalized["root_path"] = "/"
+            normalized["token"] = ""
+            normalized["admin_token"] = ""
+            normalized["verify_tls"] = True
+        else:
+            normalized["base_url"] = _clean_base_url(
+                normalized.get("base_url") or "http://127.0.0.1:5244"
+            )
+            normalized["root_path"] = _clean_path(normalized.get("root_path", "/"))
+            normalized["token"] = str(normalized.get("token") or "").strip()
+            normalized["verify_tls"] = normalized.get("verify_tls", True) is not False
         normalized["playback_base_url"] = _clean_base_url(playback_base) if playback_base else ""
-        normalized["token"] = str(normalized.get("token") or "").strip()
-        normalized["verify_tls"] = normalized.get("verify_tls", True) is not False
         return normalized
 
     def is_configured(self, config: dict[str, Any]) -> bool:
-        return bool(str(config.get("base_url") or "").strip())
+        # The bundled engine is part of MovieSync, so the card needs no user-entered
+        # connection settings to be considered configured.
+        return True
+
+    def _auth_token(self, config: dict[str, Any]) -> str:
+        base_url = _clean_base_url(
+            config.get("base_url")
+            or getattr(self.openlist_admin, "base_url", "")
+            or "http://127.0.0.1:5244"
+        )
+        internal_url = _clean_base_url(
+            getattr(self.openlist_admin, "base_url", "") or "http://127.0.0.1:5244"
+        )
+        if self.openlist_admin is not None and base_url == internal_url:
+            token_getter = getattr(self.openlist_admin, "_admin_token", None)
+            if callable(token_getter):
+                return str(token_getter() or "").strip()
+        return str(config.get("token") or "").strip()
 
     def _request(self, endpoint: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         config = self._config()
-        base_url = _clean_base_url(config.get("base_url"))
+        base_url = _clean_base_url(
+            config.get("base_url")
+            or getattr(self.openlist_admin, "base_url", "")
+            or "http://127.0.0.1:5244"
+        )
         headers = {}
-        token = str(config.get("token") or "").strip()
+        token = self._auth_token(config)
         if token:
             headers["Authorization"] = token
         verify_tls = config.get("verify_tls", True) is not False
@@ -212,14 +207,8 @@ class OpenListPlaybackCard(PlaybackProviderCard):
         return body
 
     def check(self, config: dict | None = None) -> dict[str, Any]:
-        if isinstance(config, dict):
-            # Config is normally persisted before the card's check method is called.
-            base_url = str(config.get("base_url") or "").strip()
-            if not base_url:
-                return {"status": "unconfigured", "message": "请先填写 OpenList 服务地址"}
         saved = self._config()
-        if not str(saved.get("base_url") or "").strip():
-            return {"status": "unconfigured", "message": "请先填写 OpenList 服务地址"}
+
         try:
             items = self.list_files()
         except Exception as exc:
@@ -285,9 +274,9 @@ class OpenListPlaybackCard(PlaybackProviderCard):
         if not name or name in {".", ".."}:
             raise ValueError("路径无效")
 
-        if not str(config.get("token") or "").strip():
+        if not self._auth_token(config):
             raise RuntimeError(
-                "删除操作需要配置具备删除权限的 OpenList API Token；匿名访问不允许删除"
+                "无法获取 OpenList 管理凭据；请确认内置 OpenList 已启动"
             )
 
         # Re-read the parent listing and verify both path and type to prevent

@@ -1,8 +1,7 @@
 """MovieSync endpoints for the OpenList mount manager.
 
-Every mutation is protected by the same login and CSRF gates as other MovieSync APIs.
-The OpenList administrator token is read server-side from the OpenList card config and
-is never returned to the browser.
+The shared OpenListAdminClient obtains the bundled engine's admin token server-side.
+The token is never exposed to the browser or stored in playback-card settings.
 """
 from __future__ import annotations
 
@@ -16,7 +15,7 @@ openlist_api = Blueprint("openlist_api", __name__, url_prefix="/api/openlist")
 
 def _manager():
     services = current_app.extensions["moviesync"]
-    return OpenListManager(services["config"])
+    return OpenListManager(services.get("openlist_admin"))
 
 
 def _error(exc):

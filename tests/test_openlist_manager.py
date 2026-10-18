@@ -1,89 +1,78 @@
 import pytest
-import requests
 
 from moviesync.services.openlist_manager import OpenListManager
 
 
-class ConfigStore:
-    def __init__(self, config):
-        self.config = config
+class BundledAdminClient:
+    base_url = "http://127.0.0.1:5244"
 
-    def get_card_config(self, card_id):
-        assert card_id == "openlist"
-        return dict(self.config)
-
-
-class Response:
-    def __init__(self, body, status=200):
-        self.body = body
-        self.status_code = status
-
-    def raise_for_status(self):
-        if self.status_code >= 400:
-            raise requests.HTTPError(response=self)
-
-    def json(self):
-        return self.body
-
-
-class Session:
-    def __init__(self, body, status=200):
-        self.body = body
-        self.status = status
+    def __init__(self):
         self.calls = []
 
-    def request(self, method, url, **kwargs):
-        self.calls.append((method, url, kwargs))
-        return Response(self.body, self.status)
+    def _admin_token(self):
+        return "generated-by-openlist-cli"
+
+    def driver_map(self):
+        return {"Quark": {"additional": []}, "115": {"additional": []}}
+
+    def _request(self, method, endpoint, *, payload=None, params=None):
+        self.calls.append((method, endpoint, payload, params, self._admin_token()))
+        if endpoint == "/api/admin/driver/info":
+            return {"code": 200, "data": {"common": [], "additional": [{"name": "refresh_token"}]}}
+        if endpoint == "/api/admin/storage/list":
+            return {"code": 200, "data": {"content": [], "total": 0}}
+        return {"code": 200, "data": {"id": 12}}
 
 
-def test_driver_info_uses_openlist_admin_api_and_server_side_token():
-    session = Session({"code": 200, "data": [{"name": "refresh_token"}]})
-    manager = OpenListManager(
-        ConfigStore({"base_url": "http://127.0.0.1:5244", "admin_token": "private-token"}),
-        session=session,
-    )
+def test_driver_info_uses_shared_bundled_admin_client():
+    client = BundledAdminClient()
+    manager = OpenListManager(client)
 
-    assert manager.driver_info("Quark") == [{"name": "refresh_token"}]
-    method, url, kwargs = session.calls[0]
+    assert manager.drivers() == client.driver_map()
+    assert manager.driver_names() == ["Quark", "115"]
+    assert manager.driver_info("Quark") == {
+        "common": [],
+        "additional": [{"name": "refresh_token"}],
+    }
+    method, endpoint, payload, params, token = client.calls[0]
     assert method == "GET"
-    assert url == "http://127.0.0.1:5244/api/admin/driver/info"
-    assert kwargs["params"] == {"driver": "Quark"}
-    assert kwargs["headers"]["Authorization"] == "private-token"
+    assert endpoint == "/api/admin/driver/info"
+    assert params == {"driver": "Quark"}
+    assert token == "generated-by-openlist-cli"
 
 
 def test_storage_create_and_update_validate_payloads():
-    session = Session({"code": 200, "data": {"id": 12}})
-    manager = OpenListManager(
-        ConfigStore({"admin_token": "private-token"}),
-        session=session,
-    )
+    client = BundledAdminClient()
+    manager = OpenListManager(client)
 
     assert manager.create_storage({"mount_path": "/quark", "driver": "Quark"}) == {"id": 12}
     with pytest.raises(ValueError, match="ID"):
         manager.update_storage({"mount_path": "/quark"})
-    assert len(session.calls) == 1
-    assert session.calls[0][0] == "POST"
-    assert session.calls[0][1].endswith("/api/admin/storage/create")
+    assert len(client.calls) == 1
+    assert client.calls[0][0:3] == (
+        "POST",
+        "/api/admin/storage/create",
+        {"mount_path": "/quark", "driver": "Quark"},
+    )
 
 
 def test_storage_id_validation_blocks_bad_ids():
-    manager = OpenListManager(ConfigStore({"admin_token": "private-token"}), session=Session({"code": 200}))
+    manager = OpenListManager(BundledAdminClient())
     with pytest.raises(ValueError, match="ID"):
         manager.delete_storage("../1")
     with pytest.raises(ValueError, match="ID"):
         manager.set_storage_enabled("0", True)
 
 
-def test_management_requires_token():
-    manager = OpenListManager(ConfigStore({"base_url": "http://127.0.0.1:5244"}), session=Session({}))
-    with pytest.raises(PermissionError, match="Token"):
-        manager.storages()
+def test_storage_list_uses_bundled_client_without_user_supplied_token():
+    client = BundledAdminClient()
+    manager = OpenListManager(client)
 
-def test_playback_token_is_not_used_for_admin_management():
-    session = Session({})
-    manager = OpenListManager(ConfigStore({"token": "playback-only-token"}), session=session)
+    assert manager.storages() == {"content": [], "total": 0}
+    assert client.calls[0][1] == "/api/admin/storage/list"
+    assert client.calls[0][4] == "generated-by-openlist-cli"
 
-    with pytest.raises(PermissionError, match="管理员 Token"):
-        manager.drivers()
-    assert session.calls == []
+
+def test_manager_requires_initialized_bundled_client():
+    with pytest.raises(RuntimeError, match="尚未初始化"):
+        OpenListManager(None)
