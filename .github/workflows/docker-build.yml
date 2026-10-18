@@ -79,7 +79,10 @@ jobs:
             moviesync-openlist-smoke:pr
 
           cleanup() {
-            docker logs moviesync-openlist-smoke || true
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              docker logs moviesync-openlist-smoke || true
+            fi
             docker rm -f moviesync-openlist-smoke >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
