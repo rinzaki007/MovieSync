@@ -67,6 +67,49 @@ jobs:
         with:
           context: .
           push: false
+          load: true
+          tags: moviesync-openlist-smoke:pr
+
+      - name: Smoke-test bundled OpenList and MovieSync
+        run: |
+          set -eu
+          docker run -d --name moviesync-openlist-smoke \
+            -p 127.0.0.1:18090:5000 \
+            -p 127.0.0.1:18245:5244 \
+            moviesync-openlist-smoke:pr
+
+          cleanup() {
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              docker logs moviesync-openlist-smoke || true
+            fi
+            docker rm -f moviesync-openlist-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:18245/ping >/dev/null; then
+              echo "Bundled OpenList is healthy"
+              break
+            fi
+            if [ "$attempt" -eq 45 ]; then
+              echo "Bundled OpenList did not become ready" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+
+          for attempt in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:18090/healthz >/dev/null; then
+              echo "MovieSync is healthy"
+              break
+            fi
+            if [ "$attempt" -eq 45 ]; then
+              echo "MovieSync did not become ready" >&2
+              exit 1
+            fi
+            sleep 2
+          done
 
   publish:
     name: Publish Docker image (manual only)

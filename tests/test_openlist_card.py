@@ -261,3 +261,19 @@ def test_openlist_delete_requires_configured_token():
     with pytest.raises(RuntimeError, match="需要配置"):
         card.delete_file("/media/film.mp4")
     assert card.session.calls == []
+
+
+
+def test_openlist_card_defaults_to_bundled_runtime():
+    field = next(
+        item for item in OpenListPlaybackCard.manifest.config_fields
+        if item["key"] == "base_url"
+    )
+    assert field["default"] == "http://127.0.0.1:5244"
+    assert "内置服务" in field["description"]
+
+
+def test_openlist_manifest_describes_embedded_and_external_modes():
+    assert OpenListPlaybackCard.manifest.version == "0.2.0"
+    assert "内置" in OpenListPlaybackCard.manifest.description
+    assert "外部" in OpenListPlaybackCard.manifest.description
