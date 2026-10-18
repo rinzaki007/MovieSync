@@ -156,8 +156,8 @@
   }
   async function deleteFile(item, button) {
     const confirmed = window.confirm(
-      '确定要通过 OpenList 删除这个文件吗？\\n\\n' + item.path +
-      '\\n\\n这会删除映射存储中的实际文件，无法由 MovieSync 撤销。'
+      '确定要通过 OpenList 删除这个文件吗？\n\n' + item.path +
+      '\n\n这会删除映射存储中的实际文件，无法由 MovieSync 撤销。'
     );
     if (!confirmed) return;
 
