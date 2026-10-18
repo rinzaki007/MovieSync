@@ -14,9 +14,9 @@ import tempfile
 import threading
 import time
 
-from dataclasses import dataclass
-from pathlib import Path
-from urllib.parse import urlparse
+import dataclasses
+import pathlib
+import urllib.parse
 
 
 HDR_TRANSFERS = {"smpte2084", "arib-std-b67"}
@@ -29,7 +29,7 @@ def _binary(name: str) -> str | None:
 
 def probe_hdr(url: str, timeout: int = 12) -> bool | None:
     """Return True for HDR, False for confidently SDR, or None when unknown."""
-    if not isinstance(url, str) or urlparse(url).scheme not in {"http", "https"}:
+    if not isinstance(url, str) or urllib.parse.urlparse(url).scheme not in {"http", "https"}:
         return None
     ffprobe = _binary("ffprobe")
     if not ffprobe:
@@ -69,10 +69,10 @@ def tonemap_filter() -> str:
     )
 
 
-@dataclass
+@dataclasses.dataclass
 class _Job:
     job_id: str
-    directory: Path
+    directory: pathlib.Path
     process: subprocess.Popen
     created_at: float
     url_hash: str
@@ -81,8 +81,8 @@ class _Job:
 class HDRTranscoder:
     """Small in-memory job registry for temporary HLS transcodes."""
 
-    def __init__(self, root: str | Path | None = None, max_jobs: int = 1, ttl: int = 3 * 3600):
-        self.root = Path(root or os.environ.get("MOVIESYNC_HDR_CACHE_DIR", "/app/data/hdr-cache"))
+    def __init__(self, root: str | pathlib.Path | None = None, max_jobs: int = 1, ttl: int = 3 * 3600):
+        self.root = pathlib.Path(root or os.environ.get("MOVIESYNC_HDR_CACHE_DIR", "/app/data/hdr-cache"))
         self.max_jobs = max(1, min(int(max_jobs), 2))
         self.ttl = max(300, int(ttl))
         self._jobs: dict[str, _Job] = {}
@@ -129,7 +129,7 @@ class HDRTranscoder:
             if active >= self.max_jobs:
                 return None
             job_id = hashlib.sha256(f"{digest}:{time.time_ns()}".encode()).hexdigest()[:32]
-            directory = Path(tempfile.mkdtemp(prefix=f"{job_id}-", dir=self.root))
+            directory = pathlib.Path(tempfile.mkdtemp(prefix=f"{job_id}-", dir=self.root))
             playlist = directory / "index.m3u8"
             segment_pattern = directory / "segment_%05d.ts"
             command = [
