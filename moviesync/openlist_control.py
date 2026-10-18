@@ -430,7 +430,12 @@ class OpenListAdminClient:
             raise ValueError("要编辑的挂载已不存在，请刷新列表后重试")
         if by_id and str(by_id.get("mount_path") or "").rstrip("/") != path.rstrip("/"):
             conflict = next(
-                (item for item in storages if item.get("id") != requested_id and str(item.get("mount_path") or "").rstrip("/") == path.rstrip("/")),
+                (
+                    item
+                    for item in storages
+                    if item.get("id") != requested_id
+                    and str(item.get("mount_path") or "").rstrip("/") == path.rstrip("/")
+                ),
                 None,
             )
             if conflict:
@@ -515,14 +520,26 @@ class OpenListAdminClient:
                 if key in existing:
                     existing_payload[key] = existing[key]
             self._request("POST", "/api/admin/storage/update", payload=existing_payload)
-            return {"id": existing.get("id"), "created": False, "driver": driver_name, "mount_path": path, "display_name": display}
+            return {
+                "id": existing.get("id"),
+                "created": False,
+                "driver": driver_name,
+                "mount_path": path,
+                "display_name": display,
+            }
 
         if by_path:
             raise ValueError(f"挂载路径「{path}」已存在，请点击该挂载的编辑按钮进行修改")
         body = self._request("POST", "/api/admin/storage/create", payload=payload)
         created_data = self._response_data(body)
         created_id = created_data.get("id") if isinstance(created_data, dict) else None
-        return {"id": created_id, "created": True, "driver": driver_name, "mount_path": path, "display_name": display}
+        return {
+            "id": created_id,
+            "created": True,
+            "driver": driver_name,
+            "mount_path": path,
+            "display_name": display,
+        }
 
     def delete_storage(self, storage_id: object) -> None:
         try:
