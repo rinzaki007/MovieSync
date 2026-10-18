@@ -32,10 +32,17 @@ class OpenListManager:
         driver = str(driver or "").strip()
         if not driver or len(driver) > 128:
             raise ValueError("驱动名称无效")
-        return self.request(
-            "/api/admin/driver/info",
-            params={"driver": driver},
-        )["data"]
+        drivers = self.client.driver_map()
+        info = drivers.get(driver)
+        if info is None:
+            match = next(
+                (name for name in drivers if name.casefold() == driver.casefold()),
+                None,
+            )
+            if match is None:
+                raise ValueError(f"OpenList 官方驱动列表中没有「{driver}」")
+            info = drivers[match]
+        return info
 
     def storages(self, *, page=1, per_page=0):
         page = max(1, int(page))
