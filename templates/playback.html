@@ -177,9 +177,11 @@
       if (!response.ok || !result.success) throw new Error(result.message || '删除失败');
       status.textContent = '已删除：' + item.name;
       status.className = 'text-[11px] text-emerald-300';
-      await loadDirectory(currentPath, false, true);
-      status.textContent = '已删除：' + item.name;
-      status.className = 'text-[11px] text-emerald-300';
+      const refreshed = await loadDirectory(currentPath, false, true);
+      status.textContent = refreshed
+        ? '已删除：' + item.name
+        : '文件已删除，但目录刷新失败；请点击“刷新目录”重试。';
+      status.className = refreshed ? 'text-[11px] text-emerald-300' : 'text-[11px] text-amber-300';
     } catch (error) {
       status.textContent = error.message || '删除失败，请稍后重试';
       status.className = 'text-[11px] text-rose-300';
@@ -211,6 +213,7 @@
       status.className = 'text-[11px] text-emerald-300';
       if (providerBadge) providerBadge.innerHTML = '<i class="fa-solid fa-circle text-[7px] text-emerald-400"></i>播放卡片已连接';
       renderItems();
+      return true;
     } catch (error) {
       currentItems = [];
       status.textContent = error.message || '读取目录失败';
@@ -218,6 +221,7 @@
       fileCount.textContent = '';
       list.innerHTML = '<div class="m-2 rounded-xl border border-dashed border-rose-900/70 p-5 text-center"><i class="fa-solid fa-triangle-exclamation mb-2 text-rose-300"></i><p class="text-xs leading-5 text-rose-200">' + escapeHtml(status.textContent) + '</p><p class="mt-2 text-[10px] leading-5 text-slate-500">请在卡片管理中安装并启用 OpenList 播放卡片，填写服务地址、Token 和媒体根目录。</p></div>';
       pathLabel.textContent = path || '媒体根目录';
+      return false;
     } finally {
       refreshButton.disabled = false;
       refreshButton.classList.remove('opacity-60', 'cursor-wait');
