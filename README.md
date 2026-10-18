@@ -7,6 +7,8 @@
 
 MovieSync 面向 Docker、NAS 和家庭服务器。它把影视信息、资源搜索、网盘转存和自动追剧整合在一个 Web 界面中，并通过卡片扩展资源来源和存储目标。
 
+**部署边界：** MovieSync 镜像不再内置 OpenList。MovieSync 可独立运行；需要使用 OpenList 播放卡片或 OpenList 网盘入口时，再单独部署 OpenList 并在 MovieSync 中配置连接。
+
 **基本流程：** 搜索影视 → 选择资源 → 选择兼容的存储卡片 → 查看任务结果。转存完成后，可以从任务卡片直接进入在线播放中心；也可以创建自动追剧任务，持续跟进后续内容。
 
 ## 主要功能
@@ -42,7 +44,9 @@ OpenList 播放卡片属于可选扩展：不使用播放中心的用户无需�
 
 ## Docker 部署
 
-创建 `compose.yaml`：
+### 只部署 MovieSync
+
+创建 `compose.yaml`。默认配置只启动 MovieSync，不会安装或启动 OpenList：
 
 ```yaml
 services:
@@ -57,12 +61,25 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - MOVIESYNC_COOKIE_SECURE=0
+```
 
-  # 可选服务：只有显式启用 openlist profile 时才会启动
+启动 MovieSync：
+
+```bash
+docker compose up -d
+```
+
+浏览器访问 `http://服务器IP:8099`，按页面提示创建管理员账号。
+
+### 可选：单独部署 OpenList
+
+OpenList 不属于 MovieSync 镜像的一部分。只有需要 OpenList 相关功能时，才在同一目录额外创建 `compose.openlist.yaml`：
+
+```yaml
+services:
   openlist:
     image: openlistteam/openlist:latest
     container_name: OpenList
-    profiles: ["openlist"]
     restart: unless-stopped
     ports:
       - "5244:5244"
@@ -72,19 +89,15 @@ services:
       - TZ=Asia/Shanghai
 ```
 
-只部署 MovieSync（默认不安装 OpenList）：
+在两个文件所在目录运行以下命令，即可让两个独立容器加入同一个 Compose 网络：
 
 ```bash
-docker compose up -d
+docker compose -f compose.yaml -f compose.openlist.yaml up -d
 ```
 
-如需独立 OpenList 容器，再显式启用它：
+OpenList 管理界面可通过浏览器访问 `http://服务器IP:5244`。在 MovieSync 的 OpenList 播放卡片中，服务地址填写容器间通信地址 `http://openlist:5244`，并配置自己的 API Token 和媒体根目录；「浏览器播放地址前缀」填写浏览器可访问的地址，例如 `http://服务器IP:5244`。
 
-```bash
-docker compose --profile openlist up -d
-```
-
-浏览器访问 `http://服务器IP:8099`，按页面提示创建管理员账号。启用 OpenList 后，可通过 `http://服务器IP:5244` 打开其管理界面。
+如果 OpenList 已经由其他 Compose 项目或其他设备独立运行，不必重复部署；只需把 MovieSync 卡片的服务地址设置为 MovieSync 容器能够访问的 OpenList 地址。不要把管理端口直接暴露到不可信的公网。
 
 ### iStoreOS / NAS
 

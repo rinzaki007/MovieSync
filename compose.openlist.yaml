@@ -1,0 +1,11 @@
+services:
+  openlist:
+    image: openlistteam/openlist:latest
+    container_name: OpenList
+    restart: unless-stopped
+    ports:
+      - "5244:5244"
+    volumes:
+      - ./openlist-data:/opt/openlist/data
+    environment:
+      - TZ=Asia/Shanghai
