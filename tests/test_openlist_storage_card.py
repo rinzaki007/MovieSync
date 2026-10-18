@@ -1,8 +1,12 @@
 import json
+import logging
+from pathlib import Path
 
 import pytest
 
 from card_templates.openlist_storage import OpenListStorageManagerCard
+from moviesync.card_plugins import CardFilePluginManager
+from moviesync.cards import CardRegistry
 from moviesync.openlist_control import (
     OpenListAdminClient,
     is_sensitive_parameter,
@@ -40,6 +44,24 @@ class FakeSession:
     def close(self):
         return None
 
+
+
+def test_openlist_storage_card_loads_through_standard_card_plugin_manager(tmp_path):
+    repo_root = Path(__file__).resolve().parents[1]
+    template = repo_root / "card_templates" / "openlist_storage.py"
+    plugin_dir = tmp_path / "cards"
+    plugin_dir.mkdir()
+    (plugin_dir / "openlist_storage.py").write_bytes(template.read_bytes())
+
+    registry = CardRegistry()
+    manager = CardFilePluginManager(plugin_dir, registry, logging.getLogger("test-openlist-storage"))
+    loaded = manager.load_all({"openlist_admin": None})
+
+    assert loaded == ["openlist_storage"]
+    card = registry.get("openlist_storage")
+    assert card is not None
+    assert card.card_type == "storage_manager"
+    registry.close_all()
 
 def test_openlist_storage_manager_card_uses_native_card_type():
     card = OpenListStorageManagerCard({"openlist_admin": None})
