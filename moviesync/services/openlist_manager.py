@@ -21,12 +21,12 @@ class OpenListManager:
         if not isinstance(config, dict):
             config = {}
         base_url = str(config.get("base_url") or "http://127.0.0.1:5244").strip().rstrip("/")
-        token = str(config.get("token") or "").strip()
+        token = str(config.get("admin_token") or "").strip()
         parsed = urlparse(base_url)
         if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password:
             raise ValueError("OpenList 服务地址无效")
         if not token:
-            raise PermissionError("请先在 OpenList 卡片中配置具有存储管理权限的 Token")
+            raise PermissionError("请先在 OpenList 卡片中配置“管理员 Token（挂载管理）”")
         return base_url, token, config.get("verify_tls", True) is not False
 
     def request(self, endpoint, *, method="GET", params=None, payload=None):
