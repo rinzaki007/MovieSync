@@ -65,7 +65,13 @@ class OpenListPlaybackCard(PlaybackProviderCard):
         version="0.1.0",
         type="playback_provider",
         description="连接已有的 OpenList，浏览媒体目录并解析视频播放地址；OpenList 服务需自行部署。",
-        capabilities=("playback.check", "playback.list_files", "playback.resolve", "playback.delete_files", "playback.delete_items"),
+        capabilities=(
+            "playback.check",
+            "playback.list_files",
+            "playback.resolve",
+            "playback.delete_files",
+            "playback.delete_items",
+        ),
         config_fields=(
             {
                 "key": "base_url",
