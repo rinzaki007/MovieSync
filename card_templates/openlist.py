@@ -99,13 +99,14 @@ class OpenListPlaybackCard(PlaybackProviderCard):
             return {}
         config = getter(self.card_id)
         config = dict(config) if isinstance(config, dict) else {}
-        config.setdefault(
-            "base_url",
-            str(getattr(self.openlist_admin, "base_url", "") or "http://127.0.0.1:5244"),
+        # Ignore legacy editable connection values: this card now always targets
+        # the bundled engine, whose auth token is resolved server-side.
+        config["base_url"] = str(
+            getattr(self.openlist_admin, "base_url", "") or "http://127.0.0.1:5244"
         )
-        config.setdefault("root_path", "/")
+        config["root_path"] = "/"
         config.setdefault("playback_base_url", "")
-        config.setdefault("verify_tls", True)
+        config["verify_tls"] = True
         return config
 
     def validate_config(self, config: dict[str, Any]) -> dict[str, Any]:
@@ -118,14 +119,12 @@ class OpenListPlaybackCard(PlaybackProviderCard):
             incoming.pop("playback_base_url", None)
         normalized = super().validate_config(incoming)
         normalized["base_url"] = _clean_base_url(
-            normalized.get("base_url")
-            or getattr(self.openlist_admin, "base_url", "")
-            or "http://127.0.0.1:5244"
+            getattr(self.openlist_admin, "base_url", "") or "http://127.0.0.1:5244"
         )
-        normalized["root_path"] = _clean_path(normalized.get("root_path", "/"))
+        normalized["root_path"] = "/"
         normalized["playback_base_url"] = _clean_base_url(playback_base) if playback_base else ""
         normalized["token"] = str(normalized.get("token") or "").strip()
-        normalized["verify_tls"] = normalized.get("verify_tls", True) is not False
+        normalized["verify_tls"] = True
         return normalized
 
     def is_configured(self, config: dict[str, Any]) -> bool:
