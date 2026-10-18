@@ -12,7 +12,6 @@ from threading import Lock
 
 from flask import jsonify, redirect, request, session
 
-from .openlist import openlist_api
 from .playback import playback_api, playback_pages
 from .routes import api, pages
 
@@ -56,7 +55,10 @@ class LoginRateLimiter:
                 queue.popleft()
             if len(queue) < self.max_attempts:
                 return True, 0
-            return False, max(1, int(self.window_seconds - (now - queue[0])))
+            return False, max(
+                1,
+                int(self.window_seconds - (now - queue[0])),
+            )
 
     def record_failure(self, key: str) -> None:
         now = time.time()
@@ -74,7 +76,6 @@ def register_web(app, services):
     app.register_blueprint(api)
     app.register_blueprint(playback_pages)
     app.register_blueprint(playback_api)
-    app.register_blueprint(openlist_api)
 
     @app.before_request
     def protect_requests():
@@ -83,43 +84,73 @@ def register_web(app, services):
         auth = services["auth"]
         if not auth.is_initialized():
             public_paths = {
-                "/setup", "/api/setup", "/login", "/api/login",
-                "/api/login-backdrop", "/api/proxy-img", "/favicon.ico", "/healthz",
+                "/setup",
+                "/api/setup",
+                "/login",
+                "/api/login",
+                "/api/login-backdrop",
+                "/api/proxy-img",
+                "/favicon.ico",
+                "/healthz",
             }
             if request.path not in public_paths:
                 if request.path.startswith("/api/"):
-                    return jsonify({
-                        "success": False,
-                        "message": "需要先完成初始化",
-                        "need_setup": True,
-                    }), 401
+                    return jsonify(
+                        {
+                            "success": False,
+                            "message": "需要先完成初始化",
+                            "need_setup": True,
+                        }
+                    ), 401
                 return redirect("/setup")
             return None
         if request.path in {"/setup", "/api/setup"}:
             return redirect("/login")
         if request.path not in {"/login", "/api/login"} and not session.get("logged_in"):
             if request.path.startswith("/api/"):
-                return jsonify({
-                    "success": False,
-                    "message": "未登录",
-                    "need_login": True,
-                }), 401
+                return jsonify(
+                    {
+                        "success": False,
+                        "message": "未登录",
+                        "need_login": True,
+                    }
+                ), 401
             return redirect("/login")
         if request.method in {"POST", "PUT", "PATCH", "DELETE"} and request.path not in {
-            "/api/login", "/api/setup",
+            "/api/login",
+            "/api/setup",
         }:
-            if not session.get("csrf_token"):
+            # Routes also validate this decorator; this early check keeps accidental mutation endpoints protected.
+            token = session.get("csrf_token")
+            if not token:
                 session["csrf_token"] = secrets.token_urlsafe(32)
         return None
 
     @app.after_request
     def security_headers(response):
-        response.headers.setdefault("X-Content-Type-Options", "nosniff")
-        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
-        response.headers.setdefault("Referrer-Policy", "same-origin")
-        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        response.headers.setdefault(
+            "X-Content-Type-Options",
+            "nosniff",
+        )
+        response.headers.setdefault(
+            "X-Frame-Options",
+            "SAMEORIGIN",
+        )
+        response.headers.setdefault(
+            "Referrer-Policy",
+            "same-origin",
+        )
+        response.headers.setdefault(
+            "Permissions-Policy",
+            "camera=(), microphone=(), geolocation=()",
+        )
+
         if request.path.startswith("/api/") or request.path == "/admin":
-            response.headers.setdefault("Cache-Control", "no-store")
+            response.headers.setdefault(
+                "Cache-Control",
+                "no-store",
+            )
+
         return response
 
     @app.errorhandler(404)

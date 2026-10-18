@@ -1,10 +1,6 @@
 # MovieSync production image with the PanSou search API bundled in the same container.
 # PanSou source is pinned to a reviewed upstream commit for reproducible builds.
 ARG PANSOU_REF=7a73fbc3f62c6647183f33931477e055ee3d6847
-ARG OPENLIST_VERSION=v4.2.7
-# SHA-256 digests published by GitHub for the v4.2.7 release assets.
-ARG OPENLIST_AMD64_SHA256=7236d408038dfc9f9d4be9bc6f225d79c317f32e0381a55e761feb4fefb3b356
-ARG OPENLIST_ARM64_SHA256=4b00de91b072667adcdff467458ce85048a6d599d52a85da9b2bc5e64627985f
 FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS pansou-builder
 ARG TARGETARCH
 ARG PANSOU_REF
@@ -23,30 +19,6 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w -extldflags '-static'" -o /out/pansou .
 RUN mkdir -p /out/licenses && cp LICENSE /out/licenses/PanSou-LICENSE
 
-# Pin the OpenList release and verify the official release archive before bundling it.
-FROM --platform=$BUILDPLATFORM alpine:3.22 AS openlist-builder
-ARG TARGETARCH
-ARG OPENLIST_VERSION
-ARG OPENLIST_AMD64_SHA256
-ARG OPENLIST_ARM64_SHA256
-COPY third_party/openlist/LICENSE /tmp/openlist-upstream/LICENSE
-RUN apk add --no-cache ca-certificates coreutils curl tar \
-    && case "${TARGETARCH}" in \
-       amd64) OPENLIST_SHA256="${OPENLIST_AMD64_SHA256}" ;; \
-       arm64) OPENLIST_SHA256="${OPENLIST_ARM64_SHA256}" ;; \
-       *) echo "OpenList bundled runtime currently supports amd64 and arm64 (got: ${TARGETARCH})" >&2; exit 1 ;; \
-       esac \
-    && mkdir -p /tmp/openlist /out \
-    && cd /tmp/openlist \
-    && curl -fsSL --retry 3 \
-       "https://github.com/OpenListTeam/OpenList/releases/download/${OPENLIST_VERSION}/openlist-linux-musl-${TARGETARCH}.tar.gz" \
-       -o "openlist-linux-musl-${TARGETARCH}.tar.gz" \
-    && printf '%s  %s\n' "${OPENLIST_SHA256}" "openlist-linux-musl-${TARGETARCH}.tar.gz" | sha256sum -c - \
-    && tar -xzf "openlist-linux-musl-${TARGETARCH}.tar.gz" \
-    && install -m 0755 openlist /out/openlist \
-    && cp /tmp/openlist-upstream/LICENSE /out/OpenList-LICENSE \
-    && printf 'OpenList %s\nSource: https://github.com/OpenListTeam/OpenList/tree/%s\nSource archive: https://github.com/OpenListTeam/OpenList/archive/refs/tags/%s.tar.gz\nLicense: AGPL-3.0\n' \
-       "${OPENLIST_VERSION}" "${OPENLIST_VERSION}" "${OPENLIST_VERSION}" > /out/OpenList-SOURCE.txt
 FROM python:3.12-slim
 
 RUN apt-get update \
@@ -58,10 +30,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     MOVIESYNC_DATA_DIR=/app/data \
     MOVIESYNC_PANSOU_URL=http://127.0.0.1:8888 \
     MOVIESYNC_BUNDLED_PANSOU_ENABLED=true \
-    MOVIESYNC_BUNDLED_OPENLIST_ENABLED=true \
-    OPENLIST_SCHEME_ADDR=0.0.0.0 \
-    OPENLIST_SCHEME_HTTP_PORT=5244 \
-    OPENLIST_SCHEME_HTTPS_PORT=-1 \
     PORT=8888 \
     CACHE_PATH=/app/data/pansou/cache \
     CACHE_ENABLED=true \
@@ -83,15 +51,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 COPY --from=pansou-builder /out/pansou /usr/local/bin/pansou
 COPY --from=pansou-builder /out/licenses/PanSou-LICENSE /usr/share/licenses/moviesync/PanSou-LICENSE
-COPY --from=openlist-builder /out/openlist /usr/local/bin/openlist
-COPY --from=openlist-builder /out/OpenList-LICENSE /usr/share/licenses/moviesync/OpenList-LICENSE
-COPY --from=openlist-builder /out/OpenList-SOURCE.txt /usr/share/licenses/moviesync/OpenList-SOURCE.txt
 
 RUN mkdir -p /app/data /app/data/logs /app/data/pansou/cache \
     && chmod +x /app/docker-entrypoint.sh
 
 VOLUME ["/app/data"]
-EXPOSE 5000 5244
+EXPOSE 5000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz', timeout=3).close()"

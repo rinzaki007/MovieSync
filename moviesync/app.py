@@ -19,7 +19,6 @@ from .clients.compat import LazyTelegramClient
 from .clients.http import HttpClient
 from .config_store import ConfigStore
 from .logging_setup import configure_logging, recent_logs
-from .openlist_control import OpenListAdminClient
 from .services.metadata import MetadataProviderManager
 from .services.notifications import NotificationManager
 from .services.resource_sources import ResourceSourceManager
@@ -82,7 +81,6 @@ def create_app(
         settings.config_file,
         PROJECT_ROOT,
     )
-    openlist_admin = OpenListAdminClient(data_dir=settings.data_dir)
 
     # Compatibility shim for older third-party cards; creates the legacy client only on first use.
     telegram = LazyTelegramClient()
@@ -101,8 +99,6 @@ def create_app(
         "telegram": telegram,
         "config_store": config_store,
         "logger": logger,
-        "data_dir": settings.data_dir,
-        "openlist_admin": openlist_admin,
     }
     _load_optional_cards(
         logger,
@@ -205,11 +201,6 @@ def create_app(
         except Exception:
             logger.exception("关闭旧版 Telegram 兼容客户端失败")
 
-        try:
-            openlist_admin.close()
-        except Exception:
-            logger.exception("关闭 OpenList 管理 API 客户端失败")
-
     services = {
         "logger": logger,
         "logs": recent_logs,
@@ -221,7 +212,6 @@ def create_app(
         "resource_sources": resource_sources,
         "card_registry": card_registry,
         "file_card_plugins": file_card_plugins,
-        "openlist_admin": openlist_admin,
         "storage_targets": storage_targets,
         "http": http,
         "subscriptions": subscriptions,
