@@ -55,3 +55,12 @@ def test_transcoder_only_serves_known_hls_files(tmp_path: Path):
     assert transcoder.file_path(job.job_id, "segment_00000.ts") == segment
     assert transcoder.file_path(job.job_id, "../index.m3u8") is None
     assert transcoder.file_path(job.job_id, "secrets.txt") is None
+
+
+def test_probe_hdr_returns_unknown_when_ffprobe_times_out():
+    from subprocess import TimeoutExpired
+
+    with patch("moviesync.web.hdr._binary", return_value="/usr/bin/ffprobe"), patch(
+        "moviesync.web.hdr.subprocess.run", side_effect=TimeoutExpired(cmd="ffprobe", timeout=1)
+    ):
+        assert probe_hdr("https://media.example/video.mp4", timeout=1) is None
