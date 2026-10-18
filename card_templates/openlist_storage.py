@@ -42,6 +42,11 @@ class OpenListStorageManagerCard(Card):
         self.context = dict(context or {})
         self.openlist_admin = self.context.get("openlist_admin")
 
+    def is_configured(self, config: dict[str, Any] | None = None) -> bool:
+        # The card is a management surface, not a saved-credentials form. Its
+        # state is discovered from the internal OpenList service on demand.
+        return True
+
     def check(self, config: dict[str, Any] | None = None) -> dict[str, Any]:
         """Report engine availability without changing any mount or credential."""
         client = self.openlist_admin
