@@ -513,6 +513,28 @@ function renderExecutionLog(task) {
     ).join('') + '</div>';
 }
 
+function renderTransferActions(task) {
+    if (task.type !== 'transfer' || task.status !== 'success') return '';
+    const target = taskStorageTargets.find(item => item && item.id === task.storage_target_id);
+    const driveUrl = target && typeof target.web_url === 'string' ? target.web_url.trim() : '';
+    let safeDriveUrl = '';
+    try {
+        const parsed = new URL(driveUrl);
+        if (['https:', 'http:'].includes(parsed.protocol) && !parsed.username && !parsed.password) {
+            safeDriveUrl = parsed.href;
+        }
+    } catch (_) {
+        // Cards without a valid browser URL simply omit the external-drive action.
+    }
+    return '<section class="rounded-xl border border-emerald-900/60 bg-emerald-950/20 p-4">' +
+        '<div class="text-xs font-semibold text-slate-100">转存完成，接下来</div>' +
+        '<p class="mt-1 text-[11px] leading-5 text-slate-400">播放能力与网盘访问相互独立；如果浏览器无法播放，可直接打开对应网盘查看文件。</p>' +
+        '<div class="mt-3 flex flex-wrap gap-2">' +
+        '<a href="/playback" class="rounded-lg border border-emerald-800/70 bg-emerald-950/50 px-3 py-2 text-[11px] font-medium text-emerald-300 hover:bg-emerald-900/60"><i class="fa-solid fa-circle-play mr-1"></i>打开播放中心</a>' +
+        (safeDriveUrl ? '<a href="' + escapeTask(safeDriveUrl) + '" target="_blank" rel="noopener noreferrer" class="rounded-lg border border-sky-800/70 bg-sky-950/40 px-3 py-2 text-[11px] font-medium text-sky-300 hover:bg-sky-900/50"><i class="fa-solid fa-arrow-up-right-from-square mr-1"></i>打开 ' + escapeTask(target.name || target.id) + '</a>' : '') +
+        '</div></section>';
+}
+
 function renderTaskDetail(task) {
     const title = document.getElementById('detail-title');
     const body = document.getElementById('detail-body');
@@ -556,6 +578,7 @@ function renderTaskDetail(task) {
         '<div class="rounded-xl border border-slate-800 bg-slate-950 p-4"><div class="text-[10px] text-slate-500">执行统计</div><div class="mt-2 space-y-1 text-[11px] text-slate-300"><div>成功：' + Number(task.success_count || 0) + '</div><div>跳过：' + Number(task.skipped_count || 0) + '</div><div>失败：' + Number(task.failed_count || 0) + '</div></div></div>' +
         '</div>' +
         '<div class="rounded-xl border border-slate-800 bg-slate-950 p-4"><div class="text-xs font-semibold text-slate-200">当前状态</div><div class="mt-2 text-[11px] leading-5 ' + (task.status === 'failed' ? 'text-rose-400' : 'text-slate-400') + '">' + escapeTask(task.message || '') + '</div></div>' +
+        renderTransferActions(task) +
         renderSubscriptionDiagnostics(task) +
         (task.type === 'subscription' ? '<section class="rounded-xl border border-slate-800 bg-slate-950 p-4"><div class="text-xs font-semibold text-slate-200">追剧任务参数</div><div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">' +
             [['资源来源卡片', task.source_id], ['来源频道', task.channel_name || task.channel], ['原分享 ID', task.resource_id], ['分享类型', task.resource_type], ['存储卡片', task.storage_target_id], ['保存目录 FID', task.target_fid || '0'], ['追更模式', task.tracking_mode === 'all' ? '从选中集开始追更后续集数' : (task.tracking_mode || '旧版模式')], ['起始季 / 集', (Number(task.start_season || 0) ? '第 ' + Number(task.start_season) + ' 季 · ' : '') + (Number(task.start_ep || 0) ? '第 ' + Number(task.start_ep) + ' 集' : '未指定')], ['检查频率', '每 ' + Number(task.interval_hours || 6) + ' 小时'], ['下次检查', task.next_run_at ? new Date(Number(task.next_run_at) * 1000).toLocaleString() : '等待调度']]
