@@ -79,3 +79,11 @@ def test_management_requires_token():
     manager = OpenListManager(ConfigStore({"base_url": "http://127.0.0.1:5244"}), session=Session({}))
     with pytest.raises(PermissionError, match="Token"):
         manager.storages()
+
+def test_playback_token_is_not_used_for_admin_management():
+    session = Session({})
+    manager = OpenListManager(ConfigStore({"token": "playback-only-token"}), session=session)
+
+    with pytest.raises(PermissionError, match="管理员 Token"):
+        manager.drivers()
+    assert session.calls == []
