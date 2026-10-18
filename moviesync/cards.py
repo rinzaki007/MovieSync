@@ -92,6 +92,7 @@ def _thaw_manifest_value(value: Any) -> Any:
 CARD_TYPES = {
     "resource_source",
     "storage_target",
+    "storage_manager",
     "playback_provider",
     "metadata_provider",
     "notification",
