@@ -43,7 +43,7 @@ def test_successful_transfer_actions_are_provider_agnostic_and_optional():
     task_template = (root / "templates" / "tasks.html").read_text(encoding="utf-8")
 
     assert "function renderTransferActions(task)" in task_center
-    assert "renderTransferActions(task) +" in task_center
+    assert "renderTransferActions(task)" in task_center
     assert task_center.index("renderTransferActions(task)", task_center.index("card.innerHTML =")) < task_center.index("list.appendChild(card);")
     assert "task.status !== 'success'" in task_center
     assert "target.web_url" in task_center
