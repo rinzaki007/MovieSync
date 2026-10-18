@@ -3,8 +3,6 @@
 The original provider URL is kept in memory only. Transcodes are temporary,
 limited to one active software encode by default, and expire automatically.
 """
-from __future__ import annotations
-
 import dataclasses
 import hashlib
 import json
