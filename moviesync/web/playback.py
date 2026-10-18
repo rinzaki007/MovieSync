@@ -1,6 +1,8 @@
 """Optional in-app playback page backed by playback-provider cards."""
 from __future__ import annotations
 
+import inspect
+
 from flask import Blueprint, current_app, jsonify, render_template, request
 
 from ..cards import PlaybackProviderCard
@@ -38,6 +40,33 @@ def _provider():
     return None, "尚未安装并配置可用的播放卡片。请在「设置 → 卡片管理」安装 OpenList 播放卡片并完成配置。"
 
 
+def _list_provider_files(card, path: str, force_refresh: bool) -> list[dict]:
+    """Call the card's directory API while keeping older installed cards compatible.
+
+    Card files are user-managed and may survive application image updates. Newer
+    OpenList cards accept refresh=True; older installed copies may only expose
+    list_files(path). Only pass the optional keyword when the method declares
+    support for it, so a stale card cannot break directory browsing entirely.
+    """
+    if force_refresh:
+        try:
+            parameters = inspect.signature(card.list_files).parameters.values()
+        except (TypeError, ValueError):
+            parameters = ()
+        supports_refresh = any(
+            parameter.name == "refresh"
+            or parameter.kind is inspect.Parameter.VAR_KEYWORD
+            for parameter in parameters
+        )
+        if supports_refresh:
+            return card.list_files(path, refresh=True)
+        current_app.logger.debug(
+            "播放卡片 %s 尚不支持强制刷新参数，使用兼容目录读取接口",
+            card.card_id,
+        )
+    return card.list_files(path)
+
+
 @playback_pages.get("/playback")
 def playback_page():
     return render_template("playback.html")
@@ -72,10 +101,7 @@ def playback_files():
     path = str(request.args.get("path") or "").strip()
     try:
         force_refresh = "_refresh" in request.args
-        if force_refresh and card.card_id == "openlist":
-            items = card.list_files(path, refresh=True)
-        else:
-            items = card.list_files(path)
+        items = _list_provider_files(card, path, force_refresh)
     except (ValueError, RuntimeError) as exc:
         return jsonify({"success": False, "message": str(exc)[:240], "items": []}), 502
     except Exception:
@@ -108,7 +134,6 @@ def playback_resolve():
         "url": url,
         "mime_type": result.get("mime_type") or "",
     })
-
 
 
 @playback_api.post("/remove")

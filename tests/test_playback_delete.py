@@ -8,14 +8,25 @@ class FakePlaybackCard:
     def __init__(self, error=None, capabilities=None):
         self.deleted = []
         self.error = error
+        self.list_calls = []
         if capabilities is not None:
             self.capabilities = capabilities
+
+    def list_files(self, path=""):
+        self.list_calls.append(("legacy", path))
+        return []
 
     def delete_file(self, path):
         if self.error:
             raise RuntimeError(self.error)
         self.deleted.append(path)
         return {"path": path, "name": path.rsplit("/", 1)[-1]}
+
+
+class RefreshPlaybackCard(FakePlaybackCard):
+    def list_files(self, path="", refresh=False):
+        self.list_calls.append(("refresh", path, refresh))
+        return []
 
 
 def make_logged_in_client(tmp_path):
@@ -29,6 +40,30 @@ def make_logged_in_client(tmp_path):
     with client.session_transaction() as session:
         csrf_token = session["csrf_token"]
     return app, client, csrf_token
+
+
+def test_playback_refresh_supports_legacy_card_signature(tmp_path, monkeypatch):
+    app, client, _ = make_logged_in_client(tmp_path)
+    card = FakePlaybackCard()
+    monkeypatch.setattr("moviesync.web.playback._provider", lambda: (card, ""))
+
+    response = client.get("/api/playback/files?path=%2Fmedia&_refresh=1")
+
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+    assert card.list_calls == [("legacy", "/media")]
+
+
+def test_playback_refresh_flag_reaches_cards_that_support_it(tmp_path, monkeypatch):
+    app, client, _ = make_logged_in_client(tmp_path)
+    card = RefreshPlaybackCard()
+    monkeypatch.setattr("moviesync.web.playback._provider", lambda: (card, ""))
+
+    response = client.get("/api/playback/files?path=%2Fmedia&_refresh=1")
+
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+    assert card.list_calls == [("refresh", "/media", True)]
 
 
 def test_playback_remove_requires_csrf_and_explicit_confirmation(tmp_path, monkeypatch):
