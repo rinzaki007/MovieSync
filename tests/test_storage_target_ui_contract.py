@@ -44,7 +44,7 @@ def test_successful_transfer_actions_are_provider_agnostic_and_optional():
 
     assert "function renderTransferActions(task)" in task_center
     assert "renderTransferActions(task) +" in task_center
-    assert task_center.index("renderTransferActions(task) +") < task_center.index("data-action=\"detail\"")
+    assert task_center.index("renderTransferActions(task)", task_center.index("card.innerHTML =")) < task_center.index("list.appendChild(card);")
     assert "task.status !== 'success'" in task_center
     assert "target.web_url" in task_center
     assert 'target="_blank" rel="noopener noreferrer"' in task_center
