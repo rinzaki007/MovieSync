@@ -1065,6 +1065,7 @@
         const CARD_TYPE_LABELS = {
             resource_source: '资源来源',
             storage_target: '存储目标',
+            storage_manager: '存储管理',
             playback_provider: '在线播放',
             metadata_provider: '元数据',
             notification: '通知',
@@ -1083,6 +1084,11 @@
                 title: "转存位置",
                 description: "负责选择网盘、创建目录并保存文件。",
                 icon: "fa-hard-drive",
+            },
+            storage_manager: {
+                title: "网盘存储管理",
+                description: "通过 MovieSync 配置 OpenList 官方驱动并管理挂载，无需进入 OpenList 后台。",
+                icon: "fa-database",
             },
             playback_provider: {
                 title: "在线播放",
@@ -1190,7 +1196,7 @@
                 (groups[type] ||= []).push(card);
             });
 
-            const order = ["resource_source", "storage_target", "playback_provider", "metadata_provider", "notification", "automation", "filename_processor", "custom"];
+            const order = ["resource_source", "storage_target", "storage_manager", "playback_provider", "metadata_provider", "notification", "automation", "filename_processor", "custom"];
             summary.textContent = "已加载 " + cards.length + " 张卡片 · " + Object.keys(groups).length + " 个能力分类";
 
             container.innerHTML = order.filter(type => groups[type]?.length).map(type => {
@@ -1402,6 +1408,306 @@
             ).join("") + '</div><p class="mt-2 text-[10px] text-slate-500">这是浏览器快速预览，不会保存配置；最终结果以服务端解析为准。</p>';
         }
 
+        async function openListApi(url, options = {}) {
+            const response = await apiFetch(url, options);
+            let result = {};
+            try { result = await response.json(); } catch (_) {}
+            if (!response.ok || !result.success) {
+                const error = new Error(result.message || "OpenList 请求失败");
+                error.data = result;
+                error.status = response.status;
+                throw error;
+            }
+            return result;
+        }
+
+        async function initOpenListMountManager(root) {
+            if (!root) return;
+            root.innerHTML = '<div class="rounded-xl border border-slate-800 p-4 text-xs text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>正在读取 OpenList 官方驱动和挂载列表…</div>';
+            root.onclick = async event => {
+                const button = event.target.closest("[data-openlist-action]");
+                if (!button || !root.contains(button)) return;
+                const action = button.dataset.openlistAction;
+                try {
+                    if (action === "refresh") {
+                        await refreshOpenListMountManager(root);
+                    } else if (action === "add") {
+                        showOpenListMountForm(root, root._openListDrivers || [], null);
+                    } else if (action === "edit") {
+                        const id = Number(button.dataset.mountId);
+                        const mount = (root._openListMounts || []).find(item => Number(item.id) === id);
+                        if (mount) showOpenListMountForm(root, root._openListDrivers || [], mount);
+                    } else if (action === "cancel") {
+                        await refreshOpenListMountManager(root);
+                    } else if (action === "toggle") {
+                        const id = Number(button.dataset.mountId);
+                        const enabled = button.dataset.enabled !== "true";
+                        await openListApi("/api/openlist-storage/mounts/" + id + "/enabled", {
+                            method: "POST",
+                            headers: {"Content-Type": "application/json"},
+                            body: JSON.stringify({enabled})
+                        });
+                        await refreshOpenListMountManager(root);
+                    } else if (action === "delete") {
+                        const id = Number(button.dataset.mountId);
+                        const mount = (root._openListMounts || []).find(item => Number(item.id) === id);
+                        if (!mount || !window.confirm("确定删除挂载「" + (mount.display_name || mount.mount_path) + "」？这只会删除 OpenList 中的挂载配置，不会删除网盘里的文件。")) return;
+                        await openListApi("/api/openlist-storage/mounts/" + id, {method: "DELETE"});
+                        await refreshOpenListMountManager(root);
+                    } else if (action === "save-mount") {
+                        await submitOpenListMountForm(root, button);
+                    }
+                } catch (error) {
+                    const message = root.querySelector("[data-openlist-manager-message]");
+                    if (message) {
+                        message.classList.remove("hidden", "text-emerald-300");
+                        message.classList.add("text-rose-300");
+                        message.textContent = error.message || "操作失败";
+                    } else {
+                        alert(error.message || "OpenList 操作失败");
+                    }
+                }
+            };
+            root.onchange = event => {
+                if (!event.target.matches("[data-openlist-driver]")) return;
+                const nextDriver = event.target.value;
+                const previousDriver = root.dataset.currentDriver || "";
+                root._openListParamDrafts = root._openListParamDrafts || {};
+                root._openListParamHasValueDrafts = root._openListParamHasValueDrafts || {};
+                if (previousDriver) {
+                    root._openListParamDrafts[previousDriver] = collectOpenListParams(root);
+                }
+                const driverSelector = event.target;
+                const oldDefaults = openListDefaultMount(previousDriver);
+                const newDefaults = openListDefaultMount(nextDriver);
+                const displayName = root.querySelector("[data-openlist-display-name]");
+                const mountPath = root.querySelector("[data-openlist-mount-path]");
+                if (displayName && (!displayName.value.trim() || displayName.value === oldDefaults.display_name)) displayName.value = newDefaults.display_name;
+                if (mountPath && (!mountPath.value.trim() || mountPath.value === oldDefaults.mount_path)) mountPath.value = newDefaults.mount_path;
+                root.dataset.currentDriver = nextDriver;
+                loadOpenListDriverFields(
+                    root,
+                    nextDriver,
+                    root._openListParamDrafts[nextDriver] || {},
+                    root._openListParamHasValueDrafts[nextDriver] || {}
+                );
+            };
+            await refreshOpenListMountManager(root);
+        }
+
+        function preferredOpenListDriver(drivers) {
+            return (drivers || []).find(item => /quark/i.test(String(item.name || "")) || /夸克/.test(String(item.label || ""))) || (drivers || [])[0] || null;
+        }
+
+        function openListDefaultMount(driver) {
+            const item = (window._openListDriverOptions || []).find(option => option.name === driver);
+            const isQuark = /quark/i.test(String(driver || "")) || /夸克/.test(String(item?.label || ""));
+            const name = isQuark ? "夸克网盘" : String(item?.label || driver || "网盘");
+            const path = isQuark ? "/夸克网盘" : "/" + name.replace(/[\\\/:*?"<>|]/g, "_");
+            return {display_name: name, mount_path: path};
+        }
+
+        async function refreshOpenListMountManager(root) {
+            const result = await Promise.all([
+                openListApi("/api/openlist-storage/drivers"),
+                openListApi("/api/openlist-storage/mounts")
+            ]);
+            root._openListDrivers = result[0].drivers || [];
+            window._openListDriverOptions = root._openListDrivers;
+            root._openListMounts = result[1].mounts || [];
+            const drivers = root._openListDrivers;
+            const mounts = root._openListMounts;
+            const mountRows = mounts.map(mount => {
+                const isRoot = String(mount.mount_path || "") === "/";
+                const state = mount.disabled ? "已停用" : (String(mount.status || "状态未知").slice(0, 100));
+                const stateClass = mount.disabled ? "text-slate-400" : (/work|正常|ready/i.test(state) ? "text-emerald-300" : "text-amber-300");
+                const actions = isRoot
+                    ? '<span class="text-[10px] text-slate-500">系统根挂载，已保护</span>'
+                    : '<div class="flex flex-wrap gap-1.5">' +
+                        '<button type="button" data-openlist-action="edit" data-mount-id="' + escapeHtml(mount.id) + '" class="rounded-md border border-slate-700 px-2 py-1.5 text-[10px] text-slate-200 hover:bg-slate-800">编辑</button>' +
+                        '<button type="button" data-openlist-action="toggle" data-mount-id="' + escapeHtml(mount.id) + '" data-enabled="' + String(!mount.disabled) + '" class="rounded-md border border-slate-700 px-2 py-1.5 text-[10px] text-slate-200 hover:bg-slate-800">' + (mount.disabled ? "启用" : "停用") + '</button>' +
+                        '<button type="button" data-openlist-action="delete" data-mount-id="' + escapeHtml(mount.id) + '" class="rounded-md border border-rose-400/20 px-2 py-1.5 text-[10px] text-rose-300 hover:bg-rose-400/10">删除挂载</button></div>';
+                return '<article class="rounded-xl border border-slate-800 bg-slate-950/40 p-3">' +
+                    '<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">' +
+                    '<div class="min-w-0"><div class="text-xs font-semibold text-slate-100">' + escapeHtml(mount.display_name || mount.mount_path || "未命名网盘") + '</div>' +
+                    '<div class="mt-1 break-all text-[10px] text-slate-400">' + escapeHtml(mount.driver || "未知驱动") + ' · ' + escapeHtml(mount.mount_path || "/") + ' · 根目录 ' + escapeHtml(mount.root_path || "/") + '</div>' +
+                    '<div class="mt-1 text-[10px] ' + stateClass + '">状态：' + escapeHtml(state) + '</div></div>' +
+                    '<div class="shrink-0">' + actions + '</div></div></article>';
+            }).join("");
+            root.innerHTML =
+                '<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">' +
+                '<div><div class="text-sm font-semibold text-slate-100">OpenList 官方存储驱动</div>' +
+                '<p class="mt-1 text-[10px] leading-4 text-slate-500">在 MovieSync 内创建和维护挂载。授权参数由 OpenList 官方驱动定义并保存在内置 OpenList 数据库中；不会把 Cookie 回传到浏览器。</p></div>' +
+                '<div class="flex shrink-0 gap-2"><button type="button" data-openlist-action="refresh" class="rounded-lg border border-slate-700 px-3 py-2 text-[11px] text-slate-300 hover:bg-slate-800"><i class="fa-solid fa-arrows-rotate mr-1"></i>刷新</button>' +
+                '<button type="button" data-openlist-action="add" class="rounded-lg bg-blue-600 px-3 py-2 text-[11px] font-semibold text-white hover:bg-blue-500"><i class="fa-solid fa-plus mr-1"></i>添加网盘</button></div></div>' +
+                '<div class="mt-3 space-y-2">' + (mountRows || '<div class="rounded-xl border border-dashed border-slate-700 p-5 text-center text-xs text-slate-500">OpenList 当前没有挂载。点“添加网盘”开始配置；未填写真实授权参数前，不会创建挂载。</div>') + '</div>' +
+                '<div data-openlist-manager-message class="hidden mt-3 rounded-lg border border-slate-800 bg-slate-950/40 p-3 text-xs"></div>' +
+                '<div class="mt-3 text-[10px] leading-4 text-slate-500">说明：删除挂载只移除 OpenList 的挂载配置，不会删除网盘中的文件。若某个挂载无法初始化，请编辑授权参数并重新保存。</div>';
+        }
+
+        function showOpenListMountForm(root, drivers, mount) {
+            window._openListDriverOptions = drivers;
+            const preferred = preferredOpenListDriver(drivers);
+            const defaults = openListDefaultMount(mount ? mount.driver : ((preferred || {}).name || "Quark"));
+            const selectedDriver = mount ? mount.driver : ((preferred || {}).name || "Quark");
+            const name = mount ? mount.display_name : defaults.display_name;
+            const path = mount ? mount.mount_path : defaults.mount_path;
+            const rootPath = mount ? (mount.root_path || "/") : "/";
+            root.dataset.currentDriver = selectedDriver;
+            root.dataset.openlistEditId = mount && mount.id != null ? String(mount.id) : "";
+            root._openListParamDrafts = {};
+            root._openListParamHasValueDrafts = {};
+            root._openListParamDrafts[selectedDriver] = mount ? (mount.authorization_parameters || {}) : {};
+            root._openListParamHasValueDrafts[selectedDriver] = mount ? (mount.has_value || {}) : {};
+            root.innerHTML =
+                '<div class="flex items-center justify-between gap-3"><div><div class="text-sm font-semibold text-slate-100">' + (mount ? "编辑存储挂载" : "添加存储挂载") + '</div>' +
+                '<p class="mt-1 text-[10px] leading-4 text-slate-500">表单参数来自当前 OpenList 引擎提供的驱动定义。首次配置请粘贴真实授权信息；原型示例值不会自动代表已登录网盘。</p></div>' +
+                '<button type="button" data-openlist-action="cancel" class="shrink-0 rounded-lg border border-slate-700 px-3 py-2 text-[11px] text-slate-300 hover:bg-slate-800">返回列表</button></div>' +
+                '<div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">' +
+                '<label class="block text-[11px] font-semibold text-slate-300">存储类型 <span class="text-rose-300">*</span><select data-openlist-driver class="glass-input mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-200">' +
+                drivers.map(item => '<option value="' + escapeHtml(item.name) + '"' + (item.name === selectedDriver ? " selected" : "") + '>' + escapeHtml(item.label || item.name) + '</option>').join("") +
+                '</select></label>' +
+                '<label class="block text-[11px] font-semibold text-slate-300">显示名称 <span class="text-rose-300">*</span><input data-openlist-display-name value="' + escapeHtml(name || "") + '" maxlength="160" class="glass-input mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-200" placeholder="夸克网盘"></label>' +
+                '<label class="block text-[11px] font-semibold text-slate-300">挂载路径 <span class="text-rose-300">*</span><input data-openlist-mount-path value="' + escapeHtml(path || "") + '" maxlength="240" class="glass-input mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-200" placeholder="/夸克网盘"><span class="mt-1 block text-[10px] font-normal text-slate-500">OpenList 目录中显示的挂载入口，必须以 / 开头且不能与其他挂载重名。</span></label>' +
+                '<label class="block text-[11px] font-semibold text-slate-300">根目录<input data-openlist-root-path value="' + escapeHtml(rootPath || "/") + '" maxlength="1024" class="glass-input mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-200" placeholder="/"><span class="mt-1 block text-[10px] font-normal text-slate-500">默认 / 表示网盘根目录；对要求目录 ID 的驱动，其他值会作为目录 ID 传给官方驱动。</span></label>' +
+                '</div><div class="mt-4 rounded-xl border border-slate-800 bg-slate-950/30 p-3"><div class="text-xs font-semibold text-slate-200">授权参数说明</div>' +
+                '<p class="mt-1 text-[10px] leading-4 text-slate-500">以下字段由 OpenList 官方驱动动态提供。带锁字段为凭据；编辑时留空会保留已保存的原凭据。新建挂载必须填写官方驱动标记的必填字段。</p>' +
+                '<div data-openlist-driver-fields class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2"><div class="text-xs text-slate-500">正在读取驱动参数…</div></div></div>' +
+                '<div data-openlist-form-message class="hidden mt-3 rounded-lg border border-slate-800 bg-slate-950/40 p-3 text-xs"></div>' +
+                '<div class="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-slate-800 pt-4"><button type="button" data-openlist-action="cancel" class="rounded-lg border border-slate-700 px-4 py-2 text-xs text-slate-300 hover:bg-slate-800">取消</button>' +
+                '<button type="button" data-openlist-action="save-mount" class="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500"><i class="fa-solid fa-cloud-arrow-up mr-1"></i>' + (mount ? "保存并重新应用挂载" : "保存并创建挂载") + '</button></div>';
+            loadOpenListDriverFields(
+                root,
+                selectedDriver,
+                root._openListParamDrafts[selectedDriver],
+                root._openListParamHasValueDrafts[selectedDriver]
+            );
+        }
+
+        async function loadOpenListDriverFields(root, driver, values, hasValue) {
+            const container = root.querySelector("[data-openlist-driver-fields]");
+            if (!container) return;
+            container.innerHTML = '<div class="text-xs text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-1"></i>正在读取 ' + escapeHtml(driver) + ' 驱动参数…</div>';
+            try {
+                const result = await openListApi("/api/openlist-storage/drivers/" + encodeURIComponent(driver));
+                if (root.dataset.currentDriver !== driver) return;
+                const info = result.driver || {};
+                const fields = Array.isArray(info.fields) ? info.fields : [];
+                const valueMap = values && typeof values === "object" ? values : {};
+                const savedMap = hasValue && typeof hasValue === "object" ? hasValue : {};
+                root.dataset.currentRootMode = info.root_mode || "driver";
+                container.innerHTML = fields.map(field => {
+                    const key = String(field.name || "");
+                    const kind = String(field.type || "string").toLowerCase();
+                    const secret = Boolean(field.secret);
+                    const required = Boolean(field.required);
+                    const current = valueMap[key] !== undefined ? valueMap[key] : (field.default ?? "");
+                    const savedSecret = secret && Boolean(savedMap[key]);
+                    const marker = 'data-openlist-param="' + escapeHtml(key) + '" data-openlist-param-type="' + (["bool", "boolean"].includes(kind) ? "boolean" : (["number", "integer", "int", "int64", "float32", "float64"].includes(kind) ? "number" : "string")) + '"';
+                    let control = "";
+                    if (["bool", "boolean"].includes(kind)) {
+                        const checked = String(current).toLowerCase() === "true" || current === true;
+                        control = '<label class="mt-2 flex items-center gap-2 text-xs text-slate-300"><input type="checkbox" ' + marker + (checked ? " checked" : "") + ' class="h-4 w-4 accent-blue-500">启用</label>';
+                    } else if (kind === "select") {
+                        const options = String(field.options || "").split(",").map(item => item.trim()).filter(Boolean);
+                        control = '<select ' + marker + ' class="glass-input mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-200">' +
+                            options.map(option => '<option value="' + escapeHtml(option) + '"' + (String(current) === option ? " selected" : "") + '>' + escapeHtml(option) + '</option>').join("") + '</select>';
+                    } else {
+                        const numeric = ["number", "integer", "int", "int64", "float32", "float64"].includes(kind);
+                        const textArea = kind === "text" || kind === "textarea";
+                        const inputType = secret ? "password" : (numeric ? "number" : "text");
+                        const placeholder = savedSecret ? "已保存；留空保留原凭据" : (required ? "必填" : "");
+                        const value = savedSecret ? "" : String(current == null ? "" : current);
+                        control = textArea
+                            ? '<textarea ' + marker + ' rows="3" placeholder="' + escapeHtml(placeholder) + '" class="glass-input mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-200">' + escapeHtml(value) + '</textarea>'
+                            : '<input ' + marker + ' type="' + inputType + '" value="' + escapeHtml(value) + '" placeholder="' + escapeHtml(placeholder) + '" class="glass-input mt-1 w-full rounded-lg border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-slate-200">';
+                    }
+                    return '<label class="block min-w-0 rounded-lg border border-slate-800/80 bg-slate-950/30 p-2.5"><span class="text-[11px] font-semibold text-slate-300">' + escapeHtml(key.replace(/_/g, " ")) +
+                        (required ? '<span class="ml-1 text-rose-300">*</span>' : "") +
+                        (secret ? '<span class="ml-2 text-[9px] text-amber-300"><i class="fa-solid fa-lock mr-1"></i>敏感字段</span>' : "") +
+                        (savedSecret ? '<span class="ml-2 text-[9px] text-emerald-300">已保存</span>' : "") + '</span>' +
+                        (field.help ? '<span class="mt-1 block text-[10px] font-normal leading-4 text-slate-500">' + escapeHtml(field.help) + '</span>' : "") +
+                        control + '</label>';
+                }).join("") || '<div class="md:col-span-2 rounded-lg border border-dashed border-slate-700 p-3 text-[11px] text-slate-500">该驱动没有额外授权字段，可以直接创建挂载。</div>';
+            } catch (error) {
+                if (root.dataset.currentDriver !== driver) return;
+                container.innerHTML = '<div class="md:col-span-2 rounded-lg border border-rose-400/20 bg-rose-400/5 p-3 text-xs text-rose-200">' + escapeHtml(error.message || "读取驱动参数失败") + '</div>';
+            }
+        }
+
+        function collectOpenListParams(root) {
+            const values = {};
+            const container = root.querySelector("[data-openlist-driver-fields]");
+            if (!container) return values;
+            container.querySelectorAll("[data-openlist-param]").forEach(control => {
+                const key = control.dataset.openlistParam;
+                const kind = control.dataset.openlistParamType || "string";
+                if (kind === "boolean") {
+                    values[key] = control.checked;
+                } else if (kind === "number") {
+                    const raw = String(control.value || "").trim();
+                    values[key] = raw ? Number(raw) : "";
+                } else {
+                    values[key] = String(control.value || "").trim();
+                }
+            });
+            return values;
+        }
+
+        async function submitOpenListMountForm(root, button) {
+            const displayName = String(root.querySelector("[data-openlist-display-name]")?.value || "").trim();
+            const mountPath = String(root.querySelector("[data-openlist-mount-path]")?.value || "").trim();
+            const rootPath = String(root.querySelector("[data-openlist-root-path]")?.value || "/").trim() || "/";
+            const driver = String(root.querySelector("[data-openlist-driver]")?.value || "").trim();
+            const message = root.querySelector("[data-openlist-form-message]");
+            const params = collectOpenListParams(root);
+            if (!displayName) throw new Error("请填写显示名称");
+            if (!mountPath) throw new Error("请填写挂载路径");
+            if (!driver) throw new Error("请先选择存储类型");
+            if (Object.values(params).some(value => typeof value === "number" && !Number.isFinite(value))) throw new Error("驱动参数中存在无效数字");
+            if (message) {
+                message.classList.remove("hidden", "text-rose-300", "text-emerald-300");
+                message.classList.add("text-slate-300");
+                message.textContent = "正在向 OpenList 官方驱动提交配置并尝试初始化挂载…";
+            }
+            button.disabled = true;
+            try {
+                const payload = {
+                    driver,
+                    display_name: displayName,
+                    mount_path: mountPath,
+                    root_path: rootPath,
+                    authorization_parameters: params
+                };
+                if (root.dataset.openlistEditId) payload.id = Number(root.dataset.openlistEditId);
+                const result = await openListApi("/api/openlist-storage/mounts", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify(payload)
+                });
+                alert(result.message || "挂载配置已保存");
+                await refreshOpenListMountManager(root);
+            } catch (error) {
+                if (error.data && error.data.mount && error.data.mount.id != null) {
+                    root.dataset.openlistEditId = String(error.data.mount.id);
+                    const mount = error.data.mount;
+                    root._openListParamDrafts = root._openListParamDrafts || {};
+                    root._openListParamDrafts[driver] = params;
+                    const saveButton = root.querySelector('[data-openlist-action="save-mount"]');
+                    if (saveButton) saveButton.innerHTML = '<i class="fa-solid fa-cloud-arrow-up mr-1"></i>保存并重新应用挂载';
+                }
+                if (message) {
+                    message.classList.remove("hidden", "text-slate-300", "text-emerald-300");
+                    message.classList.add("text-rose-300");
+                    message.textContent = error.message || "保存挂载失败";
+                } else {
+                    alert(error.message || "保存挂载失败");
+                }
+            } finally {
+                button.disabled = false;
+            }
+        }
+
         function renderGenericCardFields(fields, config, hasValue) {
             const container = document.getElementById("generic-card-fields");
             const noFields = document.getElementById("generic-card-no-fields");
@@ -1416,7 +1722,9 @@
                 const controlType = field.editor === "fid_lines" ? "textarea" : type;
                 const common = 'data-card-field="' + escapeHtml(key) + '" data-card-type="' + escapeHtml(controlType) + '"';
                 let control = "";
-                if (controlType === "boolean") {
+                if (field.editor === "openlist_mount_manager") {
+                    control = '<div data-openlist-mount-manager class="mt-2 space-y-3"><div class="rounded-xl border border-slate-800 p-4 text-xs text-slate-500">正在初始化 OpenList 存储管理…</div></div>';
+                } else if (controlType === "boolean") {
                     control = '<label class="flex items-center gap-2 mt-2 text-xs text-slate-300"><input type="checkbox" ' + common + (value ? ' checked' : '') + ' class="h-4 w-4 accent-blue-500">启用</label>';
                 } else if (field.editor === "fid_lines") {
                     control = '<textarea ' + common + ' rows="4" class="glass-input mt-1 w-full rounded-lg border border-slate-800 px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500" placeholder="' + escapeHtml(field.placeholder || "") + '">' + escapeHtml(value) + '</textarea>';
@@ -1507,7 +1815,7 @@
                 const requiredMark = field.required ? '<span class="ml-1 text-rose-300">*</span>' : '';
                 const savedMark = secret && hasValue[key] ? '<span class="ml-2 text-[10px] text-emerald-300">已保存</span>' : '';
                 const wrapper = document.createElement("div");
-                wrapper.className = "min-w-0 rounded-xl border border-slate-800 bg-slate-900/30 p-3" + (field.editor === "channel_chips" ? " md:col-span-2" : "");
+                wrapper.className = "min-w-0 rounded-xl border border-slate-800 bg-slate-900/30 p-3" + (field.editor === "channel_chips" ? " md:col-span-2" : "") + (field.editor === "openlist_mount_manager" ? " md:col-span-2" : "");
                 wrapper.innerHTML = '<label class="block text-[11px] font-semibold text-slate-300">' + escapeHtml(field.label || key) + requiredMark + sensitiveMark + savedMark + '</label>' +
                     (field.description ? '<p class="mt-1 text-[10px] leading-4 text-slate-500">' + escapeHtml(field.description) + '</p>' : '') + control;
                 const addChannel = () => {
@@ -1646,6 +1954,7 @@
                     }
                 });
                 container.appendChild(wrapper);
+                if (field.editor === "openlist_mount_manager") initOpenListMountManager(wrapper.querySelector("[data-openlist-mount-manager]"));
             });
         }
 
@@ -1665,10 +1974,14 @@
                 document.getElementById("generic-card-subtitle").textContent = cardId + " · v" + (card.version || "1.0.0") + " · " + (CARD_TYPE_LABELS[card.type] || card.type || "卡片");
                 document.getElementById("generic-card-enabled").checked = result.enabled !== false;
                 renderGenericCardFields(currentGenericCard.fields, result.config || {}, result.has_value || {});
+                const managerMode = card.type === "storage_manager";
+                document.getElementById("generic-card-enabled").parentElement.classList.toggle("hidden", managerMode);
+                document.getElementById("generic-card-save").classList.toggle("hidden", managerMode);
                 const canCheck = (card.capabilities || []).some(cap => cap.endsWith(".health_check") || cap.endsWith(".check"));
-                document.getElementById("generic-card-check").classList.toggle("hidden", !canCheck);
+                document.getElementById("generic-card-check").classList.toggle("hidden", managerMode || !canCheck);
                 document.getElementById("generic-card-health").classList.add("hidden");
                 document.getElementById("generic-card-dialog").classList.toggle("generic-card-dialog-wide", cardId === "telegram");
+                if (cardId === "openlist_storage") document.getElementById("generic-card-dialog").classList.add("generic-card-dialog-wide");
                 document.getElementById("generic-card-modal").classList.remove("hidden");
             } catch (error) {
                 if (requestId === genericCardRequestSequence) alert(error.message || "读取卡片配置失败");

@@ -1060,6 +1060,166 @@ def check_card_connection(card_id):
     return jsonify({**result, "success": True})
 
 
+def _openlist_admin_client():
+    client = _services().get("openlist_admin")
+    if client is None:
+        raise RuntimeError("MovieSync 内置 OpenList 管理服务尚未初始化")
+    return client
+
+
+@api.get("/openlist-storage/drivers")
+def openlist_storage_drivers():
+    """Expose OpenList's own driver registry to the native storage-card form."""
+    try:
+        drivers = _openlist_admin_client().driver_map()
+        items = []
+        for name, info in sorted(drivers.items(), key=lambda item: item[0].casefold()):
+            config = info.get("config") if isinstance(info, dict) else {}
+            label = str(config.get("name") or name) if isinstance(config, dict) else name
+            items.append({"name": name, "label": label})
+        return jsonify({"success": True, "drivers": items})
+    except ValueError as exc:
+        return _json_error(str(exc), 400)
+    except Exception:
+        _services()["logger"].exception("获取 OpenList 官方驱动列表失败")
+        return _json_error("无法读取内置 OpenList 官方驱动列表，请检查服务是否已启动", 503)
+
+
+@api.get("/openlist-storage/drivers/<driver_name>")
+def openlist_storage_driver_schema(driver_name):
+    """Return one official driver's addition-field schema, without any stored secrets."""
+    try:
+        schema = _openlist_admin_client().driver_schema(driver_name)
+        return jsonify({"success": True, "driver": schema})
+    except ValueError as exc:
+        return _json_error(str(exc), 400)
+    except Exception:
+        _services()["logger"].exception("读取 OpenList 驱动参数定义失败: %s", driver_name)
+        return _json_error("无法读取该 OpenList 驱动的参数定义，请刷新后重试", 503)
+
+
+@api.get("/openlist-storage/mounts")
+def openlist_storage_mounts():
+    """List native OpenList mounts without ever returning provider credentials."""
+    try:
+        mounts = _openlist_admin_client().list_public_storages()
+        return jsonify({"success": True, "mounts": mounts})
+    except Exception:
+        _services()["logger"].exception("读取 OpenList 存储挂载失败")
+        return _json_error("无法读取 OpenList 挂载列表，请检查内置服务状态", 503)
+
+
+@api.post("/openlist-storage/mounts")
+@require_csrf
+def save_openlist_storage_mount():
+    """Create or update a storage mount via the official OpenList admin API."""
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return _json_error("提交的数据格式不正确")
+    params = data.get("authorization_parameters", {})
+    if not isinstance(params, dict):
+        return _json_error("授权参数必须是对象")
+    if len(params) > 120:
+        return _json_error("驱动参数数量过多")
+
+    try:
+        saved = _openlist_admin_client().save_storage(
+            storage_id=data.get("id"),
+            driver=data.get("driver"),
+            display_name=data.get("display_name"),
+            mount_path=data.get("mount_path"),
+            root_path=data.get("root_path", "/"),
+            authorization_parameters=params,
+        )
+        message = (
+            f"已更新挂载「{saved['display_name']}」"
+            if not saved.get("created")
+            else f"已创建挂载「{saved['display_name']}」"
+        )
+        if saved.get("initialized") is False:
+            message = f"挂载已保存，但驱动初始化仍有问题：{saved.get('status') or '请检查授权参数'}"
+        return jsonify({"success": True, "mount": saved, "message": message})
+    except ValueError as exc:
+        return _json_error(str(exc))
+    except Exception:
+        _services()["logger"].exception("创建或更新 OpenList 挂载失败")
+        # OpenList stores a mount before initializing its driver. If initialization
+        # returns an API error with an ID, the mount can still exist with an error
+        # status. Refresh the UI so the user can correct the credentials in MovieSync.
+        try:
+            path = str(data.get("mount_path") or "").strip()
+            found = next(
+                (
+                    item for item in _openlist_admin_client().list_public_storages()
+                    if str(item.get("mount_path") or "").rstrip("/") == path.rstrip("/")
+                ),
+                None,
+            )
+        except Exception:
+            found = None
+        if found:
+            return jsonify({
+                "success": False,
+                "mount": found,
+                "message": (
+                    "OpenList 已保存该挂载，但网盘驱动初始化失败。"
+                    "请在 MovieSync 卡片中修改授权参数后重试；无需进入 OpenList 后台。"
+                ),
+            }), 422
+        return _json_error("OpenList 未能创建挂载，请检查授权参数及服务日志", 502)
+
+
+@api.delete("/openlist-storage/mounts/<int:mount_id>")
+@require_csrf
+def delete_openlist_storage_mount(mount_id):
+    """Delete one explicit mount; protect OpenList's root mount."""
+    try:
+        client = _openlist_admin_client()
+        mount = next(
+            (item for item in client.list_storages() if int(item.get("id") or 0) == mount_id),
+            None,
+        )
+        if mount is None:
+            return _json_error("该挂载已不存在，请刷新列表", 404)
+        if str(mount.get("mount_path") or "") == "/":
+            return _json_error("不能从 MovieSync 删除 OpenList 的根挂载", 409)
+        client.delete_storage(mount_id)
+        return jsonify({"success": True, "message": "挂载已删除"})
+    except ValueError as exc:
+        return _json_error(str(exc))
+    except Exception:
+        _services()["logger"].exception("删除 OpenList 挂载失败: %s", mount_id)
+        return _json_error("删除挂载失败；请确认它没有被 OpenList 其他任务占用", 502)
+
+
+@api.post("/openlist-storage/mounts/<int:mount_id>/enabled")
+@require_csrf
+def set_openlist_storage_mount_enabled(mount_id):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get("enabled"), bool):
+        return _json_error("enabled 必须是布尔值")
+    try:
+        client = _openlist_admin_client()
+        mount = next(
+            (item for item in client.list_storages() if int(item.get("id") or 0) == mount_id),
+            None,
+        )
+        if mount is None:
+            return _json_error("该挂载已不存在，请刷新列表", 404)
+        if str(mount.get("mount_path") or "") == "/" and not data["enabled"]:
+            return _json_error("不能从 MovieSync 停用 OpenList 的根挂载", 409)
+        client.set_storage_enabled(mount_id, data["enabled"])
+        return jsonify({
+            "success": True,
+            "message": "挂载已启用" if data["enabled"] else "挂载已停用",
+        })
+    except ValueError as exc:
+        return _json_error(str(exc))
+    except Exception:
+        _services()["logger"].exception("切换 OpenList 挂载状态失败: %s", mount_id)
+        return _json_error("更改挂载状态失败，请检查 OpenList 服务日志", 502)
+
+
 # Card configuration is served exclusively by /api/cards/<card_id>/config.
 
 
