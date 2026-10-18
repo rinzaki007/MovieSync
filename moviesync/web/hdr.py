@@ -28,7 +28,7 @@ def _binary(name: str) -> str | None:
 
 def probe_hdr(url: str, timeout: int = 12) -> bool | None:
     """Return True for HDR, False for confidently SDR, or None when unknown."""
-    if not isinstance(url, str) or urllib.parse.urllib.parse.urlparse(url).scheme not in {"http", "https"}:
+    if not isinstance(url, str) or urllib.parse.urlparse(url).scheme not in {"http", "https"}:
         return None
     ffprobe = _binary("ffprobe")
     if not ffprobe:
@@ -111,7 +111,7 @@ class HDRTranscoder:
 
     def start(self, url: str) -> str | None:
         """Start or reuse an HLS transcode; None means safely fall back to source."""
-        if not isinstance(url, str) or urlparse(url).scheme not in {"http", "https"}:
+        if not isinstance(url, str) or urllib.parse.urlparse(url).scheme not in {"http", "https"}:
             return None
         ffmpeg = _binary("ffmpeg")
         if not ffmpeg:
