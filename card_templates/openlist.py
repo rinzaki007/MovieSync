@@ -64,7 +64,7 @@ class OpenListPlaybackCard(PlaybackProviderCard):
         name="OpenList 播放卡片",
         version="0.1.0",
         type="playback_provider",
-        description="连接已有的 OpenList，浏览媒体目录并解析视频播放地址；OpenList 服务需自行部署。",
+        description="连接 MovieSync 内置的 OpenList 服务，或兼容的外部 OpenList；浏览媒体目录并解析视频播放地址。",
         capabilities=(
             "playback.check",
             "playback.list_files",
@@ -79,8 +79,9 @@ class OpenListPlaybackCard(PlaybackProviderCard):
                 "type": "string",
                 "format": "url",
                 "required": True,
-                "placeholder": "http://192.168.1.2:5244",
-                "description": "填写 MovieSync 容器可访问的 OpenList 地址，不要填写 /api 路径。",
+                "default": "http://127.0.0.1:5244",
+                "placeholder": "http://127.0.0.1:5244",
+                "description": "默认连接 MovieSync 容器内置服务。外部 OpenList 请填写容器内可访问的地址；不要填写 /api 路径。",
             },
             {
                 "key": "token",
@@ -107,7 +108,7 @@ class OpenListPlaybackCard(PlaybackProviderCard):
                 "format": "url",
                 "required": False,
                 "placeholder": "https://alist.example.com",
-                "description": "仅当 OpenList 返回的播放链接无法被浏览器访问时填写；用于替换链接的主机前缀。",
+                "description": "内置引擎建议填写浏览器可访问的 MovieSync 主机地址，例如 http://192.168.1.2:5244；用于替换 OpenList 返回的播放链接主机。",
             },
             {
                 "key": "verify_tls",
