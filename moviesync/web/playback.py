@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import inspect
 
-from flask import Blueprint, current_app, jsonify, render_template, request
+from flask import Blueprint, current_app, jsonify, render_template, request, send_file
 
 from ..cards import PlaybackProviderCard
+from .hdr import probe_hdr, transcoder
 from .routes import require_csrf
 
 playback_pages = Blueprint("playback_pages", __name__)
@@ -128,6 +129,21 @@ def playback_resolve():
     url = str(result.get("play_url") or result.get("url") or "").strip()
     if not url.startswith(("http://", "https://")):
         return jsonify({"success": False, "message": "播放卡片没有返回有效的 HTTP/HTTPS 地址"}), 502
+    # Automatic HDR -> SDR conversion is opportunistic. If FFmpeg/filters are
+    # unavailable or the server is at its transcode limit, preserve direct playback.
+    hdr_detected = None
+    tone_mapped = False
+    hdr_mode = __import__("os").environ.get("MOVIESYNC_HDR_TONEMAP", "auto").strip().lower()
+    if hdr_mode not in {"off", "false", "0", "direct"}:
+        hdr_detected = probe_hdr(url)
+        if hdr_detected is True:
+            job_id = transcoder.start(url)
+            if job_id and transcoder.ready(job_id, wait_seconds=6):
+                url = f"/api/playback/hdr/{job_id}/index.m3u8"
+                tone_mapped = True
+            elif job_id:
+                transcoder.discard(job_id)
+
     # Subtitle metadata is optional: providers that expose tracks may return
     # a list of {src, srclang, label, kind, default} entries. Existing providers
     # remain compatible and simply produce an empty list.
@@ -155,9 +171,24 @@ def playback_resolve():
         "success": True,
         "name": result.get("name") or path.rsplit("/", 1)[-1],
         "url": url,
-        "mime_type": result.get("mime_type") or "",
+        "mime_type": "application/vnd.apple.mpegurl" if tone_mapped else (result.get("mime_type") or ""),
+        "hdr_detected": hdr_detected,
+        "tone_mapped": tone_mapped,
         "subtitles": valid_subtitles,
     })
+
+
+@playback_api.get("/hdr/<job_id>/<filename>")
+def playback_hdr_stream(job_id: str, filename: str):
+    """Serve only generated HLS playlists/segments for an active conversion job."""
+    path = transcoder.file_path(job_id, filename)
+    if path is None:
+        return jsonify({"success": False, "message": "转码片段不存在或已过期"}), 404
+    mimetype = "application/vnd.apple.mpegurl" if filename.endswith(".m3u8") else "video/mp2t"
+    response = send_file(path, mimetype=mimetype, conditional=False, max_age=0)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 @playback_api.post("/remove")
