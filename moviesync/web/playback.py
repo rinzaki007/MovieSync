@@ -131,6 +131,7 @@ def playback_resolve():
         return jsonify({"success": False, "message": "播放卡片没有返回有效的 HTTP/HTTPS 地址"}), 502
     # Automatic HDR -> SDR conversion is opportunistic. If FFmpeg/filters are
     # unavailable or the server is at its transcode limit, preserve direct playback.
+    source_url = url
     hdr_detected = None
     tone_mapped = False
     hdr_mode = __import__("os").environ.get("MOVIESYNC_HDR_TONEMAP", "auto").strip().lower()
@@ -171,6 +172,7 @@ def playback_resolve():
         "success": True,
         "name": result.get("name") or path.rsplit("/", 1)[-1],
         "url": url,
+        "source_url": source_url,
         "mime_type": "application/vnd.apple.mpegurl" if tone_mapped else (result.get("mime_type") or ""),
         "hdr_detected": hdr_detected,
         "tone_mapped": tone_mapped,
