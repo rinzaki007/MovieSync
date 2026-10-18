@@ -96,6 +96,18 @@ class OpenListPlaybackCard(PlaybackProviderCard):
                 "description": "仅保存在服务端，不会回显。",
             },
             {
+                "key": "admin_token",
+                "label": "OpenList 管理员 Token（挂载管理）",
+                "type": "password",
+                "secret": True,
+                "required": False,
+                "placeholder": "粘贴具备管理员存储管理权限的 Token",
+                "description": (
+                    "仅用于在 MovieSync 卡片中新增、编辑和管理挂载，与播放用 Token 分开保存；"
+                    "只保存在服务端，不会回显。修改后请先保存配置再刷新挂载列表。"
+                ),
+            },
+            {
                 "key": "root_path",
                 "label": "媒体根目录",
                 "type": "string",
