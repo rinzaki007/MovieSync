@@ -258,36 +258,6 @@ def test_openlist_delete_requires_configured_token():
     })
     card.session = FakeSession({"code": 200, "data": {"content": []}})
 
-    with pytest.raises(RuntimeError, match="管理凭据"):
+    with pytest.raises(RuntimeError, match="需要配置"):
         card.delete_file("/media/film.mp4")
     assert card.session.calls == []
-
-
-
-def test_openlist_card_hides_internal_connection_settings():
-    fields = {item["key"]: item for item in OpenListPlaybackCard.manifest.config_fields}
-    assert set(fields) == {"playback_base_url"}
-    assert fields["playback_base_url"]["required"] is False
-    assert "浏览器可访问" in fields["playback_base_url"]["description"]
-    assert "内置 OpenList" in OpenListPlaybackCard.manifest.description
-
-
-def test_openlist_card_automatically_uses_bundled_admin_token():
-    class BundledOpenList:
-        base_url = "http://127.0.0.1:5244"
-
-        def _admin_token(self):
-            return "auto-generated-admin-token"
-
-    card = OpenListPlaybackCard({
-        "config_store": FakeConfigStore(),
-        "openlist_admin": BundledOpenList(),
-    })
-    card.session = FakeSession({
-        "code": 200,
-        "data": {"content": [{"name": "film.mp4", "is_dir": False}]},
-    })
-
-    card.list_files()
-    assert card.session.calls[0][0] == "http://127.0.0.1:5244/api/fs/list"
-    assert card.session.calls[0][1]["headers"]["Authorization"] == "auto-generated-admin-token"

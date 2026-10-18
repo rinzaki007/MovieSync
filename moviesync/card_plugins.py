@@ -441,7 +441,7 @@ class CardFilePluginManager:
         if base is not None and not isinstance(card, base):
             raise TypeError(f"{card.card_type} 类型卡片必须继承 {base.__name__}")
         if card.card_type not in {
-            "resource_source", "storage_target", "storage_manager", "playback_provider", "metadata_provider",
+            "resource_source", "storage_target", "playback_provider", "metadata_provider",
             "notification", "automation", "filename_processor", "custom",
         }:
             raise ValueError("卡片声明了不支持的类型")
