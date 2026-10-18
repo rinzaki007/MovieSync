@@ -1495,9 +1495,15 @@
             await refreshOpenListMountManager(root);
         }
 
+        function preferredOpenListDriver(drivers) {
+            return (drivers || []).find(item => /quark/i.test(String(item.name || "")) || /夸克/.test(String(item.label || ""))) || (drivers || [])[0] || null;
+        }
+
         function openListDefaultMount(driver) {
-            const name = driver === "Quark" ? "夸克网盘" : String(driver || "网盘");
-            const path = driver === "Quark" ? "/夸克网盘" : "/" + name.replace(/[\\/:*?"<>|]/g, "_");
+            const item = (window._openListDriverOptions || []).find(option => option.name === driver);
+            const isQuark = /quark/i.test(String(driver || "")) || /夸克/.test(String(item?.label || ""));
+            const name = isQuark ? "夸克网盘" : String(item?.label || driver || "网盘");
+            const path = isQuark ? "/夸克网盘" : "/" + name.replace(/[\\\/:*?"<>|]/g, "_");
             return {display_name: name, mount_path: path};
         }
 
@@ -1507,6 +1513,7 @@
                 openListApi("/api/openlist-storage/mounts")
             ]);
             root._openListDrivers = result[0].drivers || [];
+            window._openListDriverOptions = root._openListDrivers;
             root._openListMounts = result[1].mounts || [];
             const drivers = root._openListDrivers;
             const mounts = root._openListMounts;
@@ -1539,8 +1546,10 @@
         }
 
         function showOpenListMountForm(root, drivers, mount) {
-            const defaults = openListDefaultMount(mount ? mount.driver : ((drivers.find(item => item.name === "Quark") || drivers[0] || {}).name || "Quark"));
-            const selectedDriver = mount ? mount.driver : ((drivers.find(item => item.name === "Quark") || drivers[0] || {}).name || "Quark");
+            window._openListDriverOptions = drivers;
+            const preferred = preferredOpenListDriver(drivers);
+            const defaults = openListDefaultMount(mount ? mount.driver : ((preferred || {}).name || "Quark"));
+            const selectedDriver = mount ? mount.driver : ((preferred || {}).name || "Quark");
             const name = mount ? mount.display_name : defaults.display_name;
             const path = mount ? mount.mount_path : defaults.mount_path;
             const rootPath = mount ? (mount.root_path || "/") : "/";
