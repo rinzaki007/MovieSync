@@ -827,6 +827,15 @@
 
     
 
+<div id="openlist-mount-editor" class="hidden fixed inset-0 z-[70] overflow-y-auto bg-black/80 p-3 sm:p-6">
+  <div class="mx-auto my-3 max-w-4xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+    <div class="flex items-center justify-between gap-3 border-b border-slate-800 p-4 sm:p-5"><div><h3 id="openlist-mount-editor-title" class="text-base font-bold text-white">新增 OpenList 挂载</h3><p class="mt-1 text-[11px] text-slate-500">字段由所选驱动的实际配置定义动态生成。</p></div><button type="button" onclick="closeOpenListMountEditor()" class="text-xl text-slate-400 hover:text-white">×</button></div>
+    <div class="space-y-4 p-4 sm:p-5"><div class="max-w-xl"><label for="openlist-mount-driver" class="mb-1 block text-xs font-semibold text-slate-300">网盘驱动</label><select id="openlist-mount-driver" class="glass-input w-full rounded-lg border px-3 py-2 text-sm"></select></div>
+      <div id="openlist-mount-fields" class="grid grid-cols-1 gap-3 md:grid-cols-2"></div><div id="openlist-mount-editor-message" class="hidden rounded-lg border p-3 text-xs"></div>
+      <div class="flex flex-wrap justify-end gap-2 border-t border-slate-800 pt-4"><button type="button" onclick="closeOpenListMountEditor()" class="rounded-lg bg-slate-800 px-4 py-2 text-xs text-slate-200">取消</button><button type="button" id="openlist-mount-save" onclick="saveOpenListMount()" class="rounded-lg bg-sky-600 px-5 py-2 text-xs font-semibold text-white">保存挂载</button></div>
+    </div>
+  </div>
+</div>
     <!-- ==========================================================
          JavaScript
          ========================================================== -->
@@ -1674,6 +1683,8 @@
                 const canCheck = (card.capabilities || []).some(cap => cap.endsWith(".health_check") || cap.endsWith(".check"));
                 document.getElementById("generic-card-check").classList.toggle("hidden", !canCheck);
                 document.getElementById("generic-card-health").classList.add("hidden");
+                document.getElementById("openlist-mount-panel")?.classList.toggle("hidden", cardId !== "openlist");
+                if (cardId === "openlist") loadOpenListMounts();
                 document.getElementById("generic-card-dialog").classList.toggle("generic-card-dialog-wide", cardId === "telegram");
                 document.getElementById("generic-card-modal").classList.remove("hidden");
             } catch (error) {
@@ -2384,6 +2395,7 @@
         }
 
     </script>
+    <script src="{{ url_for('static', filename='js/openlist-manager.js') }}"></script>
 
 </body>
 </html>     
