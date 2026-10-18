@@ -25,6 +25,42 @@
     .playback-player .plyr__control:hover,.playback-player .plyr__control[aria-expanded="true"]{background:rgba(52,211,153,.16)}
     .playback-player .plyr__menu__container{border:1px solid rgba(148,163,184,.18);border-radius:10px;box-shadow:0 16px 40px rgba(0,0,0,.45)}
     @media(max-width:767px){ #video-player{max-height:42vh}.playback-main{padding:.75rem}.playback-shell{border-radius:1rem}.playback-header{align-items:flex-start}.playback-header-actions{flex-wrap:wrap;justify-content:flex-end}.playback-player{border-radius:10px}.playback-player .plyr__controls{padding:8px}}
+    /* Keep Plyr's ratio-based wrapper from constraining the video in fullscreen. */
+    .playback-player .plyr.plyr--fullscreen-active{
+      width:100%;
+      height:100%;
+      max-height:none;
+      border-radius:0;
+    }
+    .playback-player .plyr.plyr--fullscreen-active .plyr__video-wrapper{
+      width:100%;
+      height:100%;
+      padding-bottom:0 !important;
+      background:#000;
+    }
+    .playback-player .plyr.plyr--fullscreen-active video#video-player{
+      width:100%;
+      height:100%;
+      max-height:none;
+      object-fit:contain;
+    }
+    /* Plyr's CSS fallback fullscreen mode. */
+    .playback-player.plyr--fullscreen-fallback,
+    .playback-player.plyr--fullscreen-fallback .plyr,
+    .playback-player.plyr--fullscreen-fallback .plyr__video-wrapper{
+      width:100%;
+      height:100%;
+      max-height:none;
+    }
+    .playback-player.plyr--fullscreen-fallback .plyr__video-wrapper{
+      padding-bottom:0 !important;
+    }
+    .playback-player.plyr--fullscreen-fallback video#video-player{
+      width:100%;
+      height:100%;
+      max-height:none;
+      object-fit:contain;
+    }
   </style>
 </head>
 <body class="min-h-screen text-slate-100">
