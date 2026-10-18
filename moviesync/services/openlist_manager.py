@@ -5,8 +5,6 @@ OpenList runtime. This adapter intentionally never asks users to paste it.
 """
 from __future__ import annotations
 
-from typing import Any
-
 
 class OpenListManager:
     """Expose the legacy mount-manager UI API over MovieSync's shared client."""
