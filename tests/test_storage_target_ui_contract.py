@@ -32,3 +32,20 @@ def test_task_center_offers_destination_check_for_uncertain_transfers_without_qu
     assert "不要重复提交" in task_center
     assert "storage.list_destination_files" in task_center
     assert "https://pan.quark.cn/" not in task_center
+
+
+def test_successful_transfer_actions_are_provider_agnostic_and_optional():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    task_center = (root / "static" / "js" / "task-center.js").read_text(encoding="utf-8")
+    manager = (root / "moviesync" / "services" / "storage_targets.py").read_text(encoding="utf-8")
+    task_template = (root / "templates" / "tasks.html").read_text(encoding="utf-8")
+
+    assert "function renderTransferActions(task)" in task_center
+    assert "task.status !== 'success'" in task_center
+    assert "target.web_url" in task_center
+    assert 'target="_blank" rel="noopener noreferrer"' in task_center
+    assert 'getattr(card, "web_url", "")' in manager
+    assert "https://pan.quark.cn/" not in task_center
+    assert task_template.count(">播放中心</a>") == 1
