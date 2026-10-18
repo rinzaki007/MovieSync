@@ -99,14 +99,20 @@ class OpenListPlaybackCard(PlaybackProviderCard):
             return {}
         config = getter(self.card_id)
         config = dict(config) if isinstance(config, dict) else {}
-        # Ignore legacy editable connection values: this card now always targets
-        # the bundled engine, whose auth token is resolved server-side.
-        config["base_url"] = str(
-            getattr(self.openlist_admin, "base_url", "") or "http://127.0.0.1:5244"
-        )
-        config["root_path"] = "/"
+        internal_url = str(getattr(self.openlist_admin, "base_url", "") or "").strip()
+        if internal_url:
+            # Ignore legacy editable connection values when the bundled client is
+            # available; credentials and connection details are managed internally.
+            config["base_url"] = internal_url
+            config["root_path"] = "/"
+            config["verify_tls"] = True
+        else:
+            # Keep legacy external-instance behavior for third-party loaders that
+            # instantiate this card without MovieSync's bundled client context.
+            config.setdefault("base_url", "http://127.0.0.1:5244")
+            config.setdefault("root_path", "/")
+            config.setdefault("verify_tls", True)
         config.setdefault("playback_base_url", "")
-        config["verify_tls"] = True
         return config
 
     def validate_config(self, config: dict[str, Any]) -> dict[str, Any]:
@@ -118,13 +124,21 @@ class OpenListPlaybackCard(PlaybackProviderCard):
         if not playback_base:
             incoming.pop("playback_base_url", None)
         normalized = super().validate_config(incoming)
-        normalized["base_url"] = _clean_base_url(
-            getattr(self.openlist_admin, "base_url", "") or "http://127.0.0.1:5244"
-        )
-        normalized["root_path"] = "/"
+        internal_url = str(getattr(self.openlist_admin, "base_url", "") or "").strip()
+        if internal_url:
+            normalized["base_url"] = _clean_base_url(internal_url)
+            normalized["root_path"] = "/"
+            normalized["token"] = ""
+            normalized["admin_token"] = ""
+            normalized["verify_tls"] = True
+        else:
+            normalized["base_url"] = _clean_base_url(
+                normalized.get("base_url") or "http://127.0.0.1:5244"
+            )
+            normalized["root_path"] = _clean_path(normalized.get("root_path", "/"))
+            normalized["token"] = str(normalized.get("token") or "").strip()
+            normalized["verify_tls"] = normalized.get("verify_tls", True) is not False
         normalized["playback_base_url"] = _clean_base_url(playback_base) if playback_base else ""
-        normalized["token"] = str(normalized.get("token") or "").strip()
-        normalized["verify_tls"] = True
         return normalized
 
     def is_configured(self, config: dict[str, Any]) -> bool:
