@@ -5,17 +5,16 @@ limited to one active software encode by default, and expire automatically.
 """
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
+import pathlib
 import shutil
 import subprocess
 import tempfile
 import threading
 import time
-
-import dataclasses
-import pathlib
 import urllib.parse
 
 
