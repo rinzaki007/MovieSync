@@ -104,6 +104,7 @@ MovieSync 的运行数据保存在 `/app/data/`，包括管理员信息、配置
 ## 文档
 
 - [架构说明](ARCHITECTURE.md)：核心模块与卡片边界
+- [内置 OpenList 引擎](OPENLIST_INTEGRATION.md)：单容器运行、端口、卡片配置与排障
 - [卡片开发规范](CARD_DEVELOPMENT.md)：开发、配置、安全和测试要求
 - [卡片接口约定](CARD_CONTRACT.md)：卡片与核心之间的契约
 - [智能追剧规则](SMART_FOLLOW_RULES.md)：起追集数、去重与回归测试约定
