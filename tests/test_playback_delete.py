@@ -36,6 +36,14 @@ def test_playback_remove_requires_csrf_and_explicit_confirmation(tmp_path, monke
     card = FakePlaybackCard()
     monkeypatch.setattr("moviesync.web.playback._provider", lambda: (card, ""))
 
+    anonymous_client = app.test_client()
+    response = anonymous_client.post(
+        "/api/playback/remove",
+        json={"path": "/media/film.mp4", "confirmed": True},
+    )
+    assert response.status_code == 401
+    assert card.deleted == []
+
     response = client.post(
         "/api/playback/remove",
         json={"path": "/media/film.mp4", "confirmed": True},
