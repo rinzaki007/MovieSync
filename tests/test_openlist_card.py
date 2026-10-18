@@ -198,7 +198,7 @@ def test_openlist_delete_rejects_missing_file_and_reports_permission_denial():
     }
     card = OpenListPlaybackCard({"config_store": FakeConfigStore(config)})
     card.session = FakeSession({"code": 200, "data": {"content": []}})
-    with pytest.raises(ValueError, match="文件不存在"):
+    with pytest.raises(ValueError, match="不存在"):
         card.delete_file("/media/missing.mp4")
 
     card.session = FakeSession({"message": "forbidden"}, status_code=403)

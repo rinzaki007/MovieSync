@@ -282,7 +282,8 @@ class OpenListPlaybackCard(PlaybackProviderCard):
 
     def delete_file(self, file_path: str) -> dict[str, Any]:
         """Backward-compatible file-only delete API."""
-        return self.delete_item(file_path, expected_is_dir=False)
+        result = self.delete_item(file_path, expected_is_dir=False)
+        return {"path": result["path"], "name": result["name"]}
 
     def resolve_playback(self, fid: str) -> dict[str, Any]:
         path = _clean_path(fid)

@@ -3,7 +3,7 @@ from moviesync.app import create_app
 
 class FakePlaybackCard:
     card_id = "openlist"
-    capabilities = ("playback.list_files", "playback.resolve", "playback.delete_files")
+    capabilities = ("playback.list_files", "playback.resolve", "playback.delete_files", "playback.delete_items")
 
     def __init__(self, error=None, capabilities=None):
         self.deleted = []
