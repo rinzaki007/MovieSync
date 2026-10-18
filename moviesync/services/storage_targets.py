@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from importlib.metadata import entry_points
 from typing import Any
+from urllib.parse import urlsplit
 
 from ..cards import Card, CardRegistry, StorageTargetCard
 
@@ -217,9 +218,22 @@ class StorageTargetManager:
             enabled = available and (
                 not isinstance(saved, dict) or bool(saved.get("enabled", True))
             )
+            web_url = str(getattr(card, "web_url", "") or "").strip()
+            try:
+                parsed_web_url = urlsplit(web_url)
+                if (
+                    parsed_web_url.scheme not in {"http", "https"}
+                    or not parsed_web_url.hostname
+                    or parsed_web_url.username
+                    or parsed_web_url.password
+                ):
+                    web_url = ""
+            except ValueError:
+                web_url = ""
             results.append({
                 **card.manifest.to_dict(),
                 "enabled": enabled,
+                **({"web_url": web_url} if web_url else {}),
                 **({"config_error": "无法读取存储目标配置"} if not available else {}),
             })
         return results

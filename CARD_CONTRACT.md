@@ -184,3 +184,8 @@ The built-in Telegram resource source, PanSou resource source, Quark storage tar
 - `douban.py`: Douban metadata lookup and search.
 
 Uninstalling one of these files removes that card from the registry and persistent plugin directory, while other cards and core services continue running. Configuration and history are intentionally retained. Re-upload the same reviewed file to restore it. Shared low-level clients remain platform services injected through the factory context; card-specific behavior stays in the card file.
+
+
+## 存储卡的可选网盘入口
+
+存储卡可通过 `web_url` 属性声明面向浏览器的网盘主页地址。该字段仅用于任务成功后的“打开网盘”快捷入口，不参与转存、认证或目录解析；不应包含 Cookie、Token、用户名、密码或其他凭据。核心只向前端公开格式有效的 HTTP/HTTPS URL，并使用新标签页和 `noopener noreferrer` 打开。未声明该属性的卡片仍完整支持标准存储接口，只是不显示外部跳转按钮。
