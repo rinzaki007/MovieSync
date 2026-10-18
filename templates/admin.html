@@ -1980,7 +1980,7 @@
                 const canCheck = (card.capabilities || []).some(cap => cap.endsWith(".health_check") || cap.endsWith(".check"));
                 document.getElementById("generic-card-check").classList.toggle("hidden", managerMode || !canCheck);
                 document.getElementById("generic-card-health").classList.add("hidden");
-                document.getElementById("generic-card-dialog").classList.toggle("generic-card-dialog-wide", cardId === "telegram");
+                document.getElementById("generic-card-dialog").classList.toggle("generic-card-dialog-wide", ["telegram", "openlist_storage"].includes(cardId));
                 document.getElementById("generic-card-modal").classList.remove("hidden");
             } catch (error) {
                 if (requestId === genericCardRequestSequence) alert(error.message || "读取卡片配置失败");
