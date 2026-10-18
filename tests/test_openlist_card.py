@@ -264,16 +264,30 @@ def test_openlist_delete_requires_configured_token():
 
 
 
-def test_openlist_card_defaults_to_bundled_runtime():
-    field = next(
-        item for item in OpenListPlaybackCard.manifest.config_fields
-        if item["key"] == "base_url"
-    )
-    assert field["default"] == "http://127.0.0.1:5244"
-    assert "内置服务" in field["description"]
+def test_openlist_card_hides_internal_connection_settings():
+    fields = {item["key"]: item for item in OpenListPlaybackCard.manifest.config_fields}
+    assert set(fields) == {"playback_base_url"}
+    assert fields["playback_base_url"]["required"] is False
+    assert "浏览器可访问" in fields["playback_base_url"]["description"]
+    assert "内置 OpenList" in OpenListPlaybackCard.manifest.description
 
 
-def test_openlist_manifest_describes_embedded_and_external_modes():
-    assert OpenListPlaybackCard.manifest.version == "0.2.0"
-    assert "内置" in OpenListPlaybackCard.manifest.description
-    assert "外部" in OpenListPlaybackCard.manifest.description
+def test_openlist_card_automatically_uses_bundled_admin_token():
+    class BundledOpenList:
+        base_url = "http://127.0.0.1:5244"
+
+        def _admin_token(self):
+            return "auto-generated-admin-token"
+
+    card = OpenListPlaybackCard({
+        "config_store": FakeConfigStore(),
+        "openlist_admin": BundledOpenList(),
+    })
+    card.session = FakeSession({
+        "code": 200,
+        "data": {"content": [{"name": "film.mp4", "is_dir": False}]},
+    })
+
+    card.list_files()
+    assert card.session.calls[0][0] == "http://127.0.0.1:5244/api/fs/list"
+    assert card.session.calls[0][1]["headers"]["Authorization"] == "auto-generated-admin-token"
