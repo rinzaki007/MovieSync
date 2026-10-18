@@ -62,7 +62,7 @@ class OpenListPlaybackCard(PlaybackProviderCard):
     manifest = CardManifest(
         id="openlist",
         name="OpenList 播放卡片",
-        version="0.1.0",
+        version="0.2.0",
         type="playback_provider",
         description="连接 MovieSync 内置的 OpenList 服务，或兼容的外部 OpenList；浏览媒体目录并解析视频播放地址。",
         capabilities=(
