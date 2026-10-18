@@ -1815,7 +1815,7 @@
                 const requiredMark = field.required ? '<span class="ml-1 text-rose-300">*</span>' : '';
                 const savedMark = secret && hasValue[key] ? '<span class="ml-2 text-[10px] text-emerald-300">已保存</span>' : '';
                 const wrapper = document.createElement("div");
-                wrapper.className = "min-w-0 rounded-xl border border-slate-800 bg-slate-900/30 p-3" + (field.editor === "channel_chips" ? " md:col-span-2" : (field.editor === "openlist_mount_manager" ? " md:col-span-2" : ""));
+                wrapper.className = "min-w-0 rounded-xl border border-slate-800 bg-slate-900/30 p-3" + (field.editor === "channel_chips" ? " md:col-span-2" : "") + (field.editor === "openlist_mount_manager" ? " md:col-span-2" : "");
                 wrapper.innerHTML = '<label class="block text-[11px] font-semibold text-slate-300">' + escapeHtml(field.label || key) + requiredMark + sensitiveMark + savedMark + '</label>' +
                     (field.description ? '<p class="mt-1 text-[10px] leading-4 text-slate-500">' + escapeHtml(field.description) + '</p>' : '') + control;
                 const addChannel = () => {
