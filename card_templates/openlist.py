@@ -65,7 +65,7 @@ class OpenListPlaybackCard(PlaybackProviderCard):
         version="0.1.0",
         type="playback_provider",
         description="连接已有的 OpenList，浏览媒体目录并解析视频播放地址；OpenList 服务需自行部署。",
-        capabilities=("playback.check", "playback.list_files", "playback.resolve"),
+        capabilities=("playback.check", "playback.list_files", "playback.resolve", "playback.delete_files"),
         config_fields=(
             {
                 "key": "base_url",
@@ -154,6 +154,7 @@ class OpenListPlaybackCard(PlaybackProviderCard):
             headers["Authorization"] = token
         verify_tls = config.get("verify_tls", True) is not False
         url = urljoin(base_url + "/", endpoint.lstrip("/"))
+        response = None
         try:
             response = self.session.post(
                 url,
@@ -165,12 +166,21 @@ class OpenListPlaybackCard(PlaybackProviderCard):
             response.raise_for_status()
             body = response.json()
         except requests.RequestException as exc:
+            status_code = getattr(response, "status_code", None)
+            if status_code in (401, 403):
+                raise RuntimeError(
+                    "OpenList 权限不足或 Token 无效；请检查账号权限及映射存储的删除权限"
+                ) from exc
             raise RuntimeError(f"连接 OpenList 失败：{type(exc).__name__}") from exc
         except ValueError as exc:
             raise RuntimeError("OpenList 返回的不是有效 JSON") from exc
         if not isinstance(body, dict):
             raise RuntimeError("OpenList 返回的数据格式无效")
         code = body.get("code")
+        if code in (401, 403):
+            raise RuntimeError(
+                "OpenList 权限不足或 Token 无效；请检查账号权限及映射存储的删除权限"
+            )
         if code not in (None, 200):
             message = str(body.get("message") or body.get("msg") or "接口请求失败")
             raise RuntimeError(f"OpenList API 错误（{code}）：{message[:180]}")
@@ -195,7 +205,7 @@ class OpenListPlaybackCard(PlaybackProviderCard):
             "details": {"root_path": _clean_path(saved.get("root_path", "/")), "items": len(items)},
         }
 
-    def list_files(self, parent_fid: str = "") -> list[dict[str, Any]]:
+    def list_files(self, parent_fid: str = "", refresh: bool = False) -> list[dict[str, Any]]:
         config = self._config()
         root_path = _clean_path(config.get("root_path", "/"))
         if parent_fid:
@@ -208,7 +218,7 @@ class OpenListPlaybackCard(PlaybackProviderCard):
             path = root_path
         body = self._request(
             "/api/fs/list",
-            {"path": path, "password": "", "page": 1, "per_page": 0, "refresh": False},
+            {"path": path, "password": "", "page": 1, "per_page": 0, "refresh": bool(refresh)},
         )
         data = body.get("data") or {}
         content = data.get("content") or []
@@ -234,6 +244,41 @@ class OpenListPlaybackCard(PlaybackProviderCard):
             })
         items.sort(key=lambda item: (not item["is_dir"], item["name"].casefold()))
         return items
+
+    def delete_file(self, file_path: str) -> dict[str, Any]:
+        """Delete exactly one file inside the configured media root via OpenList."""
+        path = _clean_path(file_path)
+        config = self._config()
+        root_path = _clean_path(config.get("root_path", "/"))
+        root_prefix = root_path.rstrip("/")
+        if path == root_path:
+            raise ValueError("不能删除媒体根目录")
+        if root_prefix and not path.startswith(root_prefix + "/"):
+            raise ValueError("只能删除已配置媒体根目录内的文件")
+        name = path.rsplit("/", 1)[-1]
+        parent_path = path.rsplit("/", 1)[0] or "/"
+        if not name or name in {".", ".."}:
+            raise ValueError("文件路径无效")
+
+        if not str(config.get("token") or "").strip():
+            raise RuntimeError(
+                "删除操作需要配置具备删除权限的 OpenList API Token；匿名访问不允许删除"
+            )
+
+        # Re-read the parent listing to reject directories, stale paths, and names
+        # that were never present in the managed OpenList directory.
+        entries = self.list_files(parent_path, refresh=True)
+        target = next(
+            (item for item in entries if item.get("name") == name and item.get("path") == path),
+            None,
+        )
+        if target is None:
+            raise ValueError("文件不存在或已从当前 OpenList 目录移除，请刷新后重试")
+        if target.get("is_dir"):
+            raise ValueError("为防止误删目录，播放中心只允许删除单个文件")
+
+        self._request("/api/fs/remove", {"dir": parent_path, "names": [name]})
+        return {"path": path, "name": name}
 
     def resolve_playback(self, fid: str) -> dict[str, Any]:
         path = _clean_path(fid)

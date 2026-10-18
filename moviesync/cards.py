@@ -463,6 +463,10 @@ class PlaybackProviderCard(Card):
     def resolve_playback(self, fid: str) -> dict[str, Any]:
         raise NotImplementedError
 
+    def delete_file(self, file_path: str) -> dict[str, Any]:
+        """Optionally delete one file when the card declares playback.delete_files."""
+        raise NotImplementedError
+
 
 class StorageTargetCard(Card):
     """存储/转存目标卡片接口。
