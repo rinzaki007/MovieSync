@@ -22,7 +22,7 @@ RUN mkdir -p /out/licenses && cp LICENSE /out/licenses/PanSou-LICENSE
 FROM python:3.12-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates tzdata ffmpeg \
+    && apt-get install -y --no-install-recommends ca-certificates tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
