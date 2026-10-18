@@ -205,22 +205,21 @@ class OpenListAdminClient:
                 kwargs["params"] = params or {}
                 kwargs["json"] = payload or {}
             response = request_method(url, **kwargs)
-            response.raise_for_status()
-            body = response.json()
         except requests.RequestException as exc:
-            status_code = getattr(response, "status_code", None)
-            if status_code in (401, 403):
-                raise RuntimeError("内置 OpenList 管理 API 鉴权失败，请检查 OpenList 运行状态") from exc
             raise RuntimeError(f"连接内置 OpenList 失败（{type(exc).__name__}）") from exc
+
+        if response.status_code in (401, 403):
+            raise RuntimeError("内置 OpenList 管理 API 鉴权失败，请检查 OpenList 运行状态")
+        try:
+            body = response.json()
         except (ValueError, TypeError) as exc:
             raise RuntimeError("内置 OpenList 返回了无效 JSON") from exc
-
         if not isinstance(body, dict):
             raise RuntimeError("内置 OpenList 返回的数据格式无效")
         code = body.get("code")
-        if code not in (None, 0, 200, "0", "200"):
+        if not response.ok or code not in (None, 0, 200, "0", "200"):
             message = str(body.get("message") or body.get("msg") or "OpenList 接口请求失败")
-            raise RuntimeError(f"OpenList API 错误（{code}）：{message[:180]}")
+            raise RuntimeError(f"OpenList API 错误（{code or response.status_code}）：{message[:180]}")
         return body
 
     @staticmethod
