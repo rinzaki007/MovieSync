@@ -139,3 +139,63 @@ def test_openlist_resolves_raw_playback_url_and_enforces_root():
 
     with pytest.raises(ValueError):
         card.resolve_playback("/outside/film.mp4")
+
+
+
+def test_openlist_delete_file_uses_remove_api_and_refreshes_parent_listing():
+    config = {
+        "base_url": "http://openlist.local:5244",
+        "root_path": "/media",
+        "token": "secret-token",
+    }
+    card = OpenListPlaybackCard({"config_store": FakeConfigStore(config)})
+    card.session = FakeSession({
+        "code": 200,
+        "data": {
+            "content": [
+                {"name": "film.mp4", "is_dir": False, "size": 1234},
+            ]
+        },
+    })
+
+    result = card.delete_file("/media/film.mp4")
+
+    assert result == {"path": "/media/film.mp4", "name": "film.mp4"}
+    assert card.session.calls[0][0] == "http://openlist.local:5244/api/fs/list"
+    assert card.session.calls[0][1]["json"]["refresh"] is True
+    assert card.session.calls[1][0] == "http://openlist.local:5244/api/fs/remove"
+    assert card.session.calls[1][1]["json"] == {"dir": "/media", "names": ["film.mp4"]}
+    assert card.session.calls[1][1]["headers"]["Authorization"] == "secret-token"
+
+
+def test_openlist_delete_rejects_outside_root_and_directories():
+    config = {
+        "base_url": "http://openlist.local:5244",
+        "root_path": "/media",
+    }
+    card = OpenListPlaybackCard({"config_store": FakeConfigStore(config)})
+    card.session = FakeSession({
+        "code": 200,
+        "data": {"content": [{"name": "folder", "is_dir": True}]},
+    })
+
+    with pytest.raises(ValueError, match="媒体根目录"):
+        card.delete_file("/outside/film.mp4")
+    with pytest.raises(ValueError, match="只允许删除单个文件"):
+        card.delete_file("/media/folder")
+    assert all("/api/fs/remove" not in url for url, _ in card.session.calls)
+
+
+def test_openlist_delete_rejects_missing_file_and_reports_permission_denial():
+    config = {
+        "base_url": "http://openlist.local:5244",
+        "root_path": "/media",
+    }
+    card = OpenListPlaybackCard({"config_store": FakeConfigStore(config)})
+    card.session = FakeSession({"code": 200, "data": {"content": []}})
+    with pytest.raises(ValueError, match="文件不存在"):
+        card.delete_file("/media/missing.mp4")
+
+    card.session = FakeSession({"code": 403, "message": "forbidden"})
+    with pytest.raises(RuntimeError, match="权限不足"):
+        card._request("/api/fs/remove", {"dir": "/media", "names": ["film.mp4"]})
