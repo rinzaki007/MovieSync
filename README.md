@@ -57,15 +57,34 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - MOVIESYNC_COOKIE_SECURE=0
+
+  # 可选服务：只有显式启用 openlist profile 时才会启动
+  openlist:
+    image: openlistteam/openlist:latest
+    container_name: OpenList
+    profiles: ["openlist"]
+    restart: unless-stopped
+    ports:
+      - "5244:5244"
+    volumes:
+      - ./openlist-data:/opt/openlist/data
+    environment:
+      - TZ=Asia/Shanghai
 ```
 
-启动容器：
+只部署 MovieSync（默认不安装 OpenList）：
 
 ```bash
 docker compose up -d
 ```
 
-浏览器访问 `http://服务器IP:8099`，按页面提示创建管理员账号。
+如需独立 OpenList 容器，再显式启用它：
+
+```bash
+docker compose --profile openlist up -d
+```
+
+浏览器访问 `http://服务器IP:8099`，按页面提示创建管理员账号。启用 OpenList 后，可通过 `http://服务器IP:5244` 打开其管理界面。
 
 ### iStoreOS / NAS
 
@@ -83,7 +102,7 @@ volumes:
 1. 创建管理员账号并登录。
 2. 在「卡片管理」安装需要的影视信息、资源来源或存储卡片。
 3. 安装夸克存储卡片，并填写自己的 Cookie 和保存目录。
-4. 如需使用在线播放中心，在「设置 → 卡片管理」安装 OpenList 播放卡片并完成配置。
+4. 如需使用在线播放中心，在「设置 → 卡片管理」安装 OpenList 播放卡片并完成配置。若使用上方可选的 OpenList 容器，MovieSync 卡片的服务地址填写 `http://openlist:5244`（容器间通信地址），再填写 OpenList API Token 与媒体根目录；「浏览器播放地址前缀」填写浏览器可访问的地址，例如 `http://服务器IP:5244`。不启用 OpenList 时，MovieSync 核心的搜索、转存和任务管理不受影响。
 5. 如需 PanSou 搜索，安装 PanSou 卡片；镜像已内置对应搜索服务。
 6. 如需 TMDB 或 Telegram，分别安装对应卡片并按页面提示配置。
 7. 搜索影视、选择资源与文件，提交转存；转存成功后可从任务卡片打开播放中心。需要时也可以创建自动追剧任务。
