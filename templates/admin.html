@@ -809,6 +809,12 @@
                 </div>
                 <div id="generic-card-health" class="hidden rounded-xl border border-slate-800 bg-slate-900/50 p-3 text-xs"></div>
                 <div id="generic-card-fields" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+<section id="openlist-mount-panel" class="hidden rounded-xl border border-sky-800/60 bg-sky-950/20 p-4 space-y-3">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div><h4 class="text-sm font-semibold text-sky-100"><i class="fa-solid fa-cloud mr-2"></i>OpenList 网盘挂载管理</h4><p class="mt-1 text-[11px] leading-5 text-slate-400">直接管理当前 OpenList 服务中的挂载。先保存上方地址与管理员 Token，再刷新列表；管理员 Token 不会发送到浏览器。</p></div>
+    <div class="flex gap-2"><button type="button" onclick="loadOpenListMounts()" class="rounded-lg bg-slate-800 px-3 py-2 text-xs text-slate-200">刷新</button><button type="button" onclick="openOpenListMountEditor()" class="rounded-lg bg-sky-600 px-3 py-2 text-xs font-semibold text-white">新增挂载</button></div>
+  </div><div id="openlist-mount-message" class="hidden rounded-lg border p-3 text-xs"></div><div id="openlist-mount-list" class="space-y-2"><div class="rounded-lg border border-slate-800 p-3 text-xs text-slate-500">点击“刷新”读取挂载列表。</div></div>
+</section>
                 <div id="generic-card-no-fields" class="hidden rounded-xl border border-slate-800 bg-slate-900/40 p-4 text-xs text-slate-500">该卡片未声明可编辑的配置字段。</div>
                 <div class="flex flex-wrap justify-end gap-2 border-t border-slate-800 pt-4">
                     <button type="button" id="generic-card-check" onclick="checkGenericCard()" class="hidden bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-4 py-2 rounded"><i class="fa-solid fa-heart-pulse mr-1"></i>保存并检查连接</button>
@@ -821,6 +827,15 @@
 
     
 
+<div id="openlist-mount-editor" class="hidden fixed inset-0 z-[70] overflow-y-auto bg-black/80 p-3 sm:p-6">
+  <div class="mx-auto my-3 max-w-4xl rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+    <div class="flex items-center justify-between gap-3 border-b border-slate-800 p-4 sm:p-5"><div><h3 id="openlist-mount-editor-title" class="text-base font-bold text-white">新增 OpenList 挂载</h3><p class="mt-1 text-[11px] text-slate-500">字段由所选驱动的实际配置定义动态生成。</p></div><button type="button" onclick="closeOpenListMountEditor()" class="text-xl text-slate-400 hover:text-white">×</button></div>
+    <div class="space-y-4 p-4 sm:p-5"><div class="max-w-xl"><label for="openlist-mount-driver" class="mb-1 block text-xs font-semibold text-slate-300">网盘驱动</label><select id="openlist-mount-driver" class="glass-input w-full rounded-lg border px-3 py-2 text-sm"></select></div>
+      <div id="openlist-mount-fields" class="grid grid-cols-1 gap-3 md:grid-cols-2"></div><div id="openlist-mount-editor-message" class="hidden rounded-lg border p-3 text-xs"></div>
+      <div class="flex flex-wrap justify-end gap-2 border-t border-slate-800 pt-4"><button type="button" onclick="closeOpenListMountEditor()" class="rounded-lg bg-slate-800 px-4 py-2 text-xs text-slate-200">取消</button><button type="button" id="openlist-mount-save" onclick="saveOpenListMount()" class="rounded-lg bg-sky-600 px-5 py-2 text-xs font-semibold text-white">保存挂载</button></div>
+    </div>
+  </div>
+</div>
     <!-- ==========================================================
          JavaScript
          ========================================================== -->
@@ -1980,6 +1995,8 @@
                 const canCheck = (card.capabilities || []).some(cap => cap.endsWith(".health_check") || cap.endsWith(".check"));
                 document.getElementById("generic-card-check").classList.toggle("hidden", managerMode || !canCheck);
                 document.getElementById("generic-card-health").classList.add("hidden");
+                document.getElementById("openlist-mount-panel")?.classList.toggle("hidden", cardId !== "openlist");
+                if (cardId === "openlist") loadOpenListMounts();
                 document.getElementById("generic-card-dialog").classList.toggle("generic-card-dialog-wide", cardId === "telegram");
                 if (cardId === "openlist_storage") document.getElementById("generic-card-dialog").classList.add("generic-card-dialog-wide");
                 document.getElementById("generic-card-modal").classList.remove("hidden");
@@ -2691,6 +2708,7 @@
         }
 
     </script>
+    <script src="{{ url_for('static', filename='js/openlist-manager.js') }}"></script>
 
 </body>
 </html>     
