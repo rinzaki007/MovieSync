@@ -12,3 +12,5 @@ def test_playback_template_compiles_as_jinja():
     assert "async function deleteItem(item, button)" in source
     assert "is_dir: Boolean(item.is_dir)" in source
     assert 'href="/tasks"' in source
+    assert "Range 请求" in source
+    assert "播放地址已获取，正在尝试开始播放。" in source
