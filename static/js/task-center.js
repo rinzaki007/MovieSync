@@ -364,7 +364,6 @@ function renderTasks() {
                 (task.total ? '<span>文件 ' + Number(task.total) + '</span>' : '') +
                 '</div>' +
                 '<div class="mt-2 text-[11px] ' + ((task.status === 'failed' || task.last_error) ? 'text-rose-400' : 'text-slate-500') + '">' + escapeTask(task.message || task.last_error || '') + '</div>' +
-                renderTransferActions(task) +
                 '</div>' +
                 '<div class="flex shrink-0 flex-wrap content-start justify-end gap-2">' +
                 '<button data-action="detail" data-id="' + escapeTask(task.id) + '" class="rounded-xl border border-slate-700/70 bg-slate-950/55 px-3 py-2 text-[11px] text-slate-300 hover:bg-slate-800/80"><i class="fa-solid fa-circle-info mr-1"></i>详情</button>' +
@@ -372,7 +371,7 @@ function renderTasks() {
                 (task.type === 'subscription' && !task.pending_save_uncertain ? '<button data-action="run-sub" data-id="' + escapeTask(task.subscription_id) + '" class="rounded-xl bg-purple-600/90 px-3 py-2 text-[11px] font-medium text-white shadow-lg shadow-purple-600/15 hover:bg-purple-500"><i class="fa-solid fa-play mr-1"></i>立即检查</button>' : '') +
                 ((task.type === 'subscription' || task.status === 'success' || task.status === 'failed' || task.status === 'error') ? '<button data-action="delete" data-id="' + escapeTask(task.id) + '" class="rounded-xl border border-slate-700/70 bg-slate-950/55 px-3 py-2 text-[11px] text-slate-400 hover:bg-slate-800 hover:text-rose-300"><i class="fa-solid fa-trash mr-1"></i>删除</button>' : '') +
                 (retryable ? '<button data-action="retry" data-id="' + escapeTask(task.id) + '" class="rounded-xl border border-amber-800/70 bg-amber-950/35 px-3 py-2 text-[11px] text-amber-300 hover:bg-amber-900/60"><i class="fa-solid fa-rotate-right mr-1"></i>失败重试</button>' : '') +
-                '</div></div>';
+                '</div></div>' + renderTransferActions(task);
             list.appendChild(card);
         });
     });
