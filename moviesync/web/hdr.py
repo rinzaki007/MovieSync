@@ -120,8 +120,10 @@ class HDRTranscoder:
         with self._lock:
             self._cleanup_locked()
             for job in self._jobs.values():
-                if job.url_hash == digest and job.process.poll() is None:
-                    return job.job_id
+                if job.url_hash == digest:
+                    playlist = job.directory / "index.m3u8"
+                    if job.process.poll() is None or playlist.exists():
+                        return job.job_id
             active = sum(job.process.poll() is None for job in self._jobs.values())
             if active >= self.max_jobs:
                 return None
@@ -165,6 +167,19 @@ class HDRTranscoder:
                     return False
             time.sleep(0.2)
         return False
+
+    def discard(self, job_id: str) -> None:
+        with self._lock:
+            job = self._jobs.pop(job_id, None)
+            if not job:
+                return
+            if job.process.poll() is None:
+                job.process.terminate()
+                try:
+                    job.process.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    job.process.kill()
+            shutil.rmtree(job.directory, ignore_errors=True)
 
     def file_path(self, job_id: str, filename: str) -> Path | None:
         # Only serve known HLS assets; never accept arbitrary filesystem paths.
