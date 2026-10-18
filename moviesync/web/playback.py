@@ -139,7 +139,7 @@ def playback_resolve():
 @playback_api.post("/remove")
 @require_csrf
 def playback_remove():
-    """Remove one explicitly confirmed file through the configured OpenList provider."""
+    """Remove one explicitly confirmed item through a provider that supports deletion."""
     card, error = _provider()
     if card is None:
         return jsonify({"success": False, "message": error}), 400
@@ -152,7 +152,7 @@ def playback_remove():
         "playback.delete_files" in card.capabilities
         and callable(getattr(card, "delete_file", None))
     )
-    if card.card_id != "openlist" or not (supports_items or supports_legacy_files):
+    if not (supports_items or supports_legacy_files):
         return jsonify({
             "success": False,
             "message": "当前播放卡片不支持删除文件或文件夹",
@@ -184,17 +184,17 @@ def playback_remove():
     except ValueError as exc:
         return jsonify({"success": False, "message": str(exc)[:240]}), 400
     except RuntimeError as exc:
-        current_app.logger.warning("OpenList 文件删除失败: %s", str(exc)[:240])
+        current_app.logger.warning("播放卡片删除失败: %s", str(exc)[:240])
         return jsonify({"success": False, "message": str(exc)[:240]}), 502
     except Exception:
         current_app.logger.exception("OpenList 文件删除异常")
         return jsonify({
             "success": False,
-            "message": "OpenList 删除失败，请检查服务状态、Token 权限和服务日志",
+            "message": "删除失败，请检查播放卡片服务状态、权限和服务日志",
         }), 502
 
     return jsonify({
         "success": True,
-        "message": ("文件夹及其内容已通过 OpenList 删除" if is_dir else "文件已通过 OpenList 删除"),
+        "message": ("文件夹及其内容已删除" if is_dir else "文件已删除"),
         "path": deleted.get("path", path) if isinstance(deleted, dict) else path,
     })

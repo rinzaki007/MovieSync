@@ -115,6 +115,7 @@ def test_playback_remove_requires_csrf_and_explicit_confirmation(tmp_path, monke
 def test_playback_remove_folder_requires_item_capability_and_passes_type(tmp_path, monkeypatch):
     app, client, csrf_token = make_logged_in_client(tmp_path)
     card = FakePlaybackCard()
+    card.card_id = "example.playback"
     monkeypatch.setattr("moviesync.web.playback._provider", lambda: (card, ""))
 
     response = client.post(
