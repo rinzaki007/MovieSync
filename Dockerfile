@@ -24,6 +24,7 @@ RUN mkdir -p /out/licenses && cp LICENSE /out/licenses/PanSou-LICENSE
 FROM --platform=$BUILDPLATFORM alpine:3.22 AS openlist-builder
 ARG TARGETARCH
 ARG OPENLIST_VERSION
+COPY third_party/openlist/LICENSE /tmp/openlist-upstream/LICENSE
 RUN apk add --no-cache ca-certificates coreutils curl tar \
     && case "${TARGETARCH}" in amd64|arm64) ;; \
        *) echo "OpenList bundled runtime currently supports amd64 and arm64 (got: ${TARGETARCH})" >&2; exit 1 ;; \
@@ -41,12 +42,9 @@ RUN apk add --no-cache ca-certificates coreutils curl tar \
     && md5sum -c selected.md5 \
     && tar -xzf "openlist-linux-musl-${TARGETARCH}.tar.gz" \
     && install -m 0755 openlist /out/openlist \
-    && curl -fsSL --retry 3 \
-       "https://raw.githubusercontent.com/OpenListTeam/OpenList/${OPENLIST_VERSION}/LICENSE" \
-       -o /out/OpenList-LICENSE \
-    && printf 'OpenList %s\\nSource: https://github.com/OpenListTeam/OpenList/tree/%s\\nSource archive: https://github.com/OpenListTeam/OpenList/archive/refs/tags/%s.tar.gz\\nLicense: AGPL-3.0\\n' \
+    && cp /tmp/openlist-upstream/LICENSE /out/OpenList-LICENSE \
+    && printf 'OpenList %s\nSource: https://github.com/OpenListTeam/OpenList/tree/%s\nSource archive: https://github.com/OpenListTeam/OpenList/archive/refs/tags/%s.tar.gz\nLicense: AGPL-3.0\n' \
        "${OPENLIST_VERSION}" "${OPENLIST_VERSION}" "${OPENLIST_VERSION}" > /out/OpenList-SOURCE.txt
-
 FROM python:3.12-slim
 
 RUN apt-get update \
