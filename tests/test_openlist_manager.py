@@ -40,7 +40,7 @@ class Session:
 def test_driver_info_uses_openlist_admin_api_and_server_side_token():
     session = Session({"code": 200, "data": [{"name": "refresh_token"}]})
     manager = OpenListManager(
-        ConfigStore({"base_url": "http://127.0.0.1:5244", "token": "private-token"}),
+        ConfigStore({"base_url": "http://127.0.0.1:5244", "admin_token": "private-token"}),
         session=session,
     )
 
@@ -55,7 +55,7 @@ def test_driver_info_uses_openlist_admin_api_and_server_side_token():
 def test_storage_create_and_update_validate_payloads():
     session = Session({"code": 200, "data": {"id": 12}})
     manager = OpenListManager(
-        ConfigStore({"token": "private-token"}),
+        ConfigStore({"admin_token": "private-token"}),
         session=session,
     )
 
@@ -68,7 +68,7 @@ def test_storage_create_and_update_validate_payloads():
 
 
 def test_storage_id_validation_blocks_bad_ids():
-    manager = OpenListManager(ConfigStore({"token": "private-token"}), session=Session({"code": 200}))
+    manager = OpenListManager(ConfigStore({"admin_token": "private-token"}), session=Session({"code": 200}))
     with pytest.raises(ValueError, match="ID"):
         manager.delete_storage("../1")
     with pytest.raises(ValueError, match="ID"):
