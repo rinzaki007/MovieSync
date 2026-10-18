@@ -48,4 +48,4 @@ def test_successful_transfer_actions_are_provider_agnostic_and_optional():
     assert 'target="_blank" rel="noopener noreferrer"' in task_center
     assert 'getattr(card, "web_url", "")' in manager
     assert "https://pan.quark.cn/" not in task_center
-    assert task_template.count(">播放中心</a>") == 1
+    assert task_template.count("播放中心</a>") == 1
