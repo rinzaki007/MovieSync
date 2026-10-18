@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import inspect
+import os
 
 from flask import Blueprint, current_app, jsonify, render_template, request, send_file
 
@@ -134,7 +135,7 @@ def playback_resolve():
     source_url = url
     hdr_detected = None
     tone_mapped = False
-    hdr_mode = __import__("os").environ.get("MOVIESYNC_HDR_TONEMAP", "auto").strip().lower()
+    hdr_mode = os.environ.get("MOVIESYNC_HDR_TONEMAP", "auto").strip().lower()
     if hdr_mode not in {"off", "false", "0", "direct"}:
         hdr_detected = probe_hdr(url)
         if hdr_detected is True:
