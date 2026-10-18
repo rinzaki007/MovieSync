@@ -29,6 +29,8 @@ class QuarkStorageCard(StorageTargetCard):
     原有 QuarkClient 业务保持不变，降低迁移风险。
     """
 
+    web_url = "https://pan.quark.cn/"
+
     manifest = CardManifest(
         id="quark",
         name="Quark",
