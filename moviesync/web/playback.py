@@ -128,11 +128,35 @@ def playback_resolve():
     url = str(result.get("play_url") or result.get("url") or "").strip()
     if not url.startswith(("http://", "https://")):
         return jsonify({"success": False, "message": "播放卡片没有返回有效的 HTTP/HTTPS 地址"}), 502
+    # Subtitle metadata is optional: providers that expose tracks may return
+    # a list of {src, srclang, label, kind, default} entries. Existing providers
+    # remain compatible and simply produce an empty list.
+    subtitles = result.get("subtitles", [])
+    valid_subtitles = []
+    if isinstance(subtitles, list):
+        for item in subtitles:
+            if not isinstance(item, dict):
+                continue
+            subtitle_url = str(item.get("src") or "").strip()
+            if not subtitle_url.startswith(("http://", "https://")):
+                continue
+            srclang = str(item.get("srclang") or "und")[:16]
+            label = str(item.get("label") or srclang)[:80]
+            kind = "captions" if item.get("kind") == "captions" else "subtitles"
+            valid_subtitles.append({
+                "src": subtitle_url,
+                "srclang": srclang,
+                "label": label,
+                "kind": kind,
+                "default": item.get("default") is True,
+            })
+
     return jsonify({
         "success": True,
         "name": result.get("name") or path.rsplit("/", 1)[-1],
         "url": url,
         "mime_type": result.get("mime_type") or "",
+        "subtitles": valid_subtitles,
     })
 
 

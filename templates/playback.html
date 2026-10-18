@@ -8,6 +8,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.css">
   <style>
     .playback-shell{background:linear-gradient(145deg,rgba(15,23,42,.94),rgba(2,6,23,.84));border:1px solid rgba(148,163,184,.14);box-shadow:0 18px 48px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.025)}
     .playback-control{background:rgba(2,6,23,.62);border:1px solid rgba(71,85,105,.55)}
@@ -15,7 +16,15 @@
     .media-row:hover{background:rgba(51,65,85,.35);border-color:rgba(148,163,184,.16)}
     .media-row.selected{background:rgba(16,185,129,.09);border-color:rgba(52,211,153,.3)}
     #video-player{background:#000;max-height:78vh}
-    @media(max-width:767px){ #video-player{max-height:42vh}.playback-main{padding:.75rem}.playback-shell{border-radius:1rem}.playback-header{align-items:flex-start}.playback-header-actions{flex-wrap:wrap;justify-content:flex-end}}
+    /* Plyr: MovieSync dark cinema theme */
+    :root{--plyr-color-main:#34d399;--plyr-video-background:#000;--plyr-menu-background:rgba(8,13,24,.97);--plyr-menu-color:#e2e8f0;--plyr-tooltip-background:#0f172a;--plyr-tooltip-color:#f8fafc}
+    .playback-player{overflow:hidden;border:1px solid rgba(148,163,184,.16);border-radius:14px;background:#000;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+    .playback-player .plyr{--plyr-control-radius:8px;width:100%}
+    .playback-player .plyr__video-wrapper{background:#000}
+    .playback-player .plyr__controls{padding:12px 14px;background:linear-gradient(180deg,transparent 0%,rgba(0,0,0,.78) 45%,rgba(0,0,0,.94) 100%)}
+    .playback-player .plyr__control:hover,.playback-player .plyr__control[aria-expanded="true"]{background:rgba(52,211,153,.16)}
+    .playback-player .plyr__menu__container{border:1px solid rgba(148,163,184,.18);border-radius:10px;box-shadow:0 16px 40px rgba(0,0,0,.45)}
+    @media(max-width:767px){ #video-player{max-height:42vh}.playback-main{padding:.75rem}.playback-shell{border-radius:1rem}.playback-header{align-items:flex-start}.playback-header-actions{flex-wrap:wrap;justify-content:flex-end}.playback-player{border-radius:10px}.playback-player .plyr__controls{padding:8px}}
   </style>
 </head>
 <body class="min-h-screen text-slate-100">
@@ -57,22 +66,23 @@
         <span id="player-state" class="shrink-0 rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-[10px] text-slate-500"><i class="fa-solid fa-circle mr-1 text-[7px]"></i>待播放</span>
       </div>
       <div class="p-3 sm:p-4">
-        <div class="overflow-hidden rounded-xl border border-slate-800 bg-black shadow-2xl shadow-black/20">
-          <video id="video-player" class="aspect-video w-full" controls playsinline preload="metadata"></video>
+        <div class="playback-player">
+          <video id="video-player" playsinline controls preload="metadata"></video>
         </div>
         <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
           <div id="player-status" class="flex-1 text-xs leading-5 text-slate-400">播放地址由播放卡片解析，视频流由浏览器直接请求。</div>
           <button id="stop-btn" class="rounded-lg border border-slate-700 px-3 py-2 text-[11px] text-slate-400 transition hover:bg-slate-800 hover:text-white"><i class="fa-solid fa-stop mr-1"></i>停止播放</button>
         </div>
         <div class="mt-4 grid gap-2 sm:grid-cols-3">
-          <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3"><div class="text-[10px] text-slate-500">播放方式</div><div class="mt-1 text-xs font-medium text-slate-300">浏览器原生播放器</div></div>
+          <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3"><div class="text-[10px] text-slate-500">播放方式</div><div class="mt-1 text-xs font-medium text-slate-300">Plyr HTML5 播放器</div></div>
           <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3"><div class="text-[10px] text-slate-500">播放进度</div><div id="playback-progress" class="mt-1 text-xs font-medium text-slate-300">00:00 / --:--</div></div>
-          <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3"><div class="text-[10px] text-slate-500">快捷提示</div><div class="mt-1 text-xs font-medium text-slate-300">支持全屏与进度拖动</div></div>
+          <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3"><div class="text-[10px] text-slate-500">快捷提示</div><div class="mt-1 text-xs font-medium text-slate-300">倍速、字幕与全屏</div></div>
         </div>
         <div class="mt-4 rounded-xl border border-slate-800/70 bg-slate-950/35 p-3 text-[11px] leading-5 text-slate-500"><i class="fa-solid fa-lightbulb mr-1.5 text-amber-300"></i>如果无法播放或拖动进度条，请确认浏览器能访问 OpenList 返回的播放链接；部分编码格式也可能不受浏览器支持。</div>
       </div>
     </section>
   </main>
+<script src="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.min.js"></script>
 <script>
 (() => {
   const list = document.getElementById('file-list');
@@ -83,6 +93,56 @@
   const searchInput = document.getElementById('file-search');
   const fileCount = document.getElementById('file-count');
   const player = document.getElementById('video-player');
+  const plyrPlayer = new Plyr(player, {
+    ratio: '16:9',
+    hideControls: true,
+    controls: [
+      'play-large', 'play', 'progress', 'current-time', 'duration',
+      'mute', 'volume', 'captions', 'settings', 'fullscreen'
+    ],
+    settings: ['captions', 'speed'],
+    speed: { selected: 1, options: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2] },
+    captions: { active: false, language: 'zh', update: true },
+    keyboard: { focused: true, global: false },
+    tooltips: { controls: true, seek: true },
+    i18n: {
+      restart: '重新播放', play: '播放', pause: '暂停',
+      speed: '播放速度', normal: '正常', settings: '播放设置',
+      captions: '字幕', enableCaptions: '开启字幕',
+      disableCaptions: '关闭字幕', enterFullscreen: '进入全屏',
+      exitFullscreen: '退出全屏'
+    }
+  });
+
+  function clearSubtitleTracks() {
+    player.querySelectorAll('track[data-moviesync-track]')
+      .forEach(track => track.remove());
+  }
+
+  function setSubtitleTracks(subtitles) {
+    clearSubtitleTracks();
+    if (!Array.isArray(subtitles)) return;
+
+    for (const item of subtitles) {
+      if (!item || typeof item.src !== 'string') continue;
+      let subtitleUrl;
+      try {
+        subtitleUrl = new URL(item.src, window.location.href);
+      } catch {
+        continue;
+      }
+      if (!['http:', 'https:'].includes(subtitleUrl.protocol)) continue;
+
+      const track = document.createElement('track');
+      track.dataset.moviesyncTrack = 'true';
+      track.kind = item.kind === 'captions' ? 'captions' : 'subtitles';
+      track.label = String(item.label || item.srclang || '字幕');
+      track.srclang = String(item.srclang || 'und');
+      track.src = subtitleUrl.href;
+      track.default = item.default === true;
+      player.appendChild(track);
+    }
+  }
   const playerTitle = document.getElementById('player-title');
   const playerPath = document.getElementById('player-path');
   const playerStatus = document.getElementById('player-status');
@@ -242,6 +302,8 @@
       const response = await fetch('/api/playback/resolve?path=' + encodeURIComponent(item.path), {credentials:'same-origin'});
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.message || '获取播放地址失败');
+      clearSubtitleTracks();
+      setSubtitleTracks(result.subtitles);
       player.src = result.url;
       player.load();
       player.play().catch(() => {});
@@ -257,6 +319,7 @@
   searchInput.addEventListener('input', renderItems);
   document.getElementById('stop-btn').addEventListener('click', () => {
     player.pause();
+    clearSubtitleTracks();
     player.removeAttribute('src');
     player.load();
     playerState.textContent = '已停止';
