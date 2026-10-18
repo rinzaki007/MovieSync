@@ -124,7 +124,9 @@
     for (const item of items) {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'media-row flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left' + (item.path === selectedPath ? ' selected' : '');
+      const row = document.createElement('div');
+      row.className = 'flex items-center gap-1';
+      button.className = 'media-row flex min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-3 text-left' + (item.path === selectedPath ? ' selected' : '');
       const icon = item.is_dir ? 'fa-folder text-amber-300' : (item.is_video ? 'fa-circle-play text-emerald-300' : 'fa-file text-slate-500');
       const size = typeof item.size === 'number' && !item.is_dir ? formatSize(item.size) : '';
       button.innerHTML = '<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-950/80"><i class="fa-solid ' + icon + '"></i></span><span class="min-w-0 flex-1"><span class="block break-words text-xs font-medium leading-5 text-slate-200">' + escapeHtml(item.name) + '</span><span class="mt-0.5 block text-[10px] text-slate-500">' + (item.is_dir ? '文件夹' : (item.is_video ? '视频文件' : '其他文件')) + (size ? ' · ' + escapeHtml(size) : '') + '</span></span>' + (item.is_dir ? '<i class="fa-solid fa-chevron-right text-[10px] text-slate-600"></i>' : (item.is_video ? '<i class="fa-solid fa-play text-[10px] text-emerald-400"></i>' : ''));
@@ -134,7 +136,54 @@
         if (item.is_dir) loadDirectory(item.path, true);
         else if (item.is_video) playFile(item);
       });
-      list.appendChild(button);
+      row.appendChild(button);
+      if (!item.is_dir) {
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'shrink-0 rounded-lg border border-rose-900/70 px-3 py-2 text-xs text-rose-300 transition hover:border-rose-700 hover:bg-rose-950/50 disabled:cursor-wait disabled:opacity-50';
+        deleteButton.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+        deleteButton.title = '通过 OpenList 删除此文件';
+        deleteButton.setAttribute('aria-label', '删除 ' + item.name);
+        deleteButton.addEventListener('click', async event => {
+          event.preventDefault();
+          event.stopPropagation();
+          await deleteFile(item, deleteButton);
+        });
+        row.appendChild(deleteButton);
+      }
+      list.appendChild(row);
+    }
+  }
+  async function deleteFile(item, button) {
+    const confirmed = window.confirm(
+      '确定要通过 OpenList 删除这个文件吗？\\n\\n' + item.path +
+      '\\n\\n这会删除映射存储中的实际文件，无法由 MovieSync 撤销。'
+    );
+    if (!confirmed) return;
+
+    button.disabled = true;
+    status.textContent = '正在删除：' + item.name;
+    status.className = 'text-[11px] text-amber-300';
+    try {
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
+      const response = await fetch('/api/playback/remove', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
+        body: JSON.stringify({path: item.path, confirmed: true}),
+        cache: 'no-store'
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || '删除失败');
+      status.textContent = '已删除：' + item.name;
+      status.className = 'text-[11px] text-emerald-300';
+      await loadDirectory(currentPath, false, true);
+      status.textContent = '已删除：' + item.name;
+      status.className = 'text-[11px] text-emerald-300';
+    } catch (error) {
+      status.textContent = error.message || '删除失败，请稍后重试';
+      status.className = 'text-[11px] text-rose-300';
+      button.disabled = false;
     }
   }
   async function loadDirectory(path = currentPath, pushHistory = false, forceRefresh = false) {
