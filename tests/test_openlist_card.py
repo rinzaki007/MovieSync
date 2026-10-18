@@ -1,4 +1,5 @@
 import pytest
+import requests
 
 from card_templates.openlist import OpenListPlaybackCard, _clean_path
 from moviesync.cards import PlaybackProviderCard
@@ -21,21 +22,22 @@ class FakeResponse:
 
     def raise_for_status(self):
         if self.status_code >= 400:
-            raise RuntimeError("HTTP error")
+            raise requests.HTTPError("HTTP error", response=self)
 
     def json(self):
         return self.payload
 
 
 class FakeSession:
-    def __init__(self, payload):
+    def __init__(self, payload, status_code=200):
         self.payload = payload
+        self.status_code = status_code
         self.headers = {}
         self.calls = []
 
     def post(self, url, **kwargs):
         self.calls.append((url, kwargs))
-        return FakeResponse(self.payload)
+        return FakeResponse(self.payload, status_code=self.status_code)
 
 
 def test_openlist_card_manifest_and_config_validation():
@@ -199,7 +201,7 @@ def test_openlist_delete_rejects_missing_file_and_reports_permission_denial():
     with pytest.raises(ValueError, match="文件不存在"):
         card.delete_file("/media/missing.mp4")
 
-    card.session = FakeSession({"code": 403, "message": "forbidden"})
+    card.session = FakeSession({"message": "forbidden"}, status_code=403)
     with pytest.raises(RuntimeError, match="权限不足"):
         card._request("/api/fs/remove", {"dir": "/media", "names": ["film.mp4"]})
 
