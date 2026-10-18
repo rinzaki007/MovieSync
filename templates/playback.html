@@ -82,6 +82,7 @@
       </div>
     </section>
   </main>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.20/dist/hls.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.min.js"></script>
 <script>
 (() => {
@@ -153,6 +154,7 @@
   let currentPath = '';
   let currentItems = [];
   let selectedPath = '';
+  let hlsInstance = null;
 
   function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -302,12 +304,33 @@
       const response = await fetch('/api/playback/resolve?path=' + encodeURIComponent(item.path), {credentials:'same-origin'});
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.message || '获取播放地址失败');
+      if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
       clearSubtitleTracks();
       setSubtitleTracks(result.subtitles);
-      player.src = result.url;
-      player.load();
-      player.play().catch(() => {});
-      playerStatus.textContent = '播放地址已获取，正在尝试开始播放。';
+      if (result.tone_mapped && window.Hls && Hls.isSupported()) {
+        hlsInstance = new Hls({enableWorker: true, lowLatencyMode: false, backBufferLength: 30});
+        hlsInstance.loadSource(result.url);
+        hlsInstance.attachMedia(player);
+        hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => player.play().catch(() => {}));
+        hlsInstance.on(Hls.Events.ERROR, (_event, data) => {
+          if (!data.fatal) return;
+          if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+          playerStatus.textContent = 'HDR 转 SDR 流不可用，正在回退到原始视频。';
+          player.src = result.source_url || result.url;
+          player.load();
+        });
+        playerStatus.textContent = '检测到 HDR 片源，正在实时转换为 SDR（软件转码可能增加 CPU 占用）。';
+      } else {
+        const nativeHls = player.canPlayType('application/vnd.apple.mpegurl');
+        player.src = result.tone_mapped && !nativeHls ? (result.source_url || result.url) : result.url;
+        player.load();
+        player.play().catch(() => {});
+        playerStatus.textContent = result.tone_mapped && !nativeHls
+          ? '当前浏览器不支持 HLS 转码流，已回退到原始视频。'
+          : (result.hdr_detected === true && !result.tone_mapped
+            ? '检测到 HDR，但服务器无法启动色调映射；已回退到原始视频。'
+            : (result.hdr_detected === false ? '已识别为 SDR 片源，直接播放，不进行转码。' : '播放地址已获取，正在尝试开始播放。'));
+      }
     } catch (error) {
       playerStatus.textContent = error.message || '获取播放地址失败';
       playerState.textContent = '获取失败';
@@ -318,6 +341,7 @@
   refreshButton.addEventListener('click', () => loadDirectory(currentPath, false, true));
   searchInput.addEventListener('input', renderItems);
   document.getElementById('stop-btn').addEventListener('click', () => {
+    if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
     player.pause();
     clearSubtitleTracks();
     player.removeAttribute('src');
