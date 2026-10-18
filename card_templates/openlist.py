@@ -84,7 +84,8 @@ class OpenListPlaybackCard(PlaybackProviderCard):
                     "填写浏览器可访问的 OpenList 地址；不需要填写 /api 路径。"
                 ),
             },
-        )    )
+        ),
+    )
 
     def __init__(self, context):
         self.config_store = context["config_store"]
