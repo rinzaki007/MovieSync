@@ -124,6 +124,18 @@ def test_create_storage_uses_official_driver_schema_and_root_mapping():
                 }
             },
         }),
+        FakeResponse({
+            "code": 200,
+            "data": {
+                "Quark": {
+                    "config": {"name": "夸克网盘"},
+                    "additional": [
+                        {"name": "cookie", "type": "string", "required": True},
+                        {"name": "root_folder_id", "type": "string", "default": "0"},
+                    ],
+                }
+            },
+        }),
         FakeResponse({"code": 200, "data": {"content": [], "total": 0}}),
         FakeResponse({"code": 200, "data": {"id": 7}}),
     ])
