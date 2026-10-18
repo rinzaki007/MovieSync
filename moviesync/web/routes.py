@@ -1161,7 +1161,10 @@ def save_openlist_storage_mount():
             return jsonify({
                 "success": False,
                 "mount": found,
-                "message": "OpenList 已保存该挂载，但网盘驱动初始化失败。请在 MovieSync 卡片中修改授权参数后重试；无需进入 OpenList 后台。",
+                "message": (
+                    "OpenList 已保存该挂载，但网盘驱动初始化失败。"
+                    "请在 MovieSync 卡片中修改授权参数后重试；无需进入 OpenList 后台。"
+                ),
             }), 422
         return _json_error("OpenList 未能创建挂载，请检查授权参数及服务日志", 502)
 
