@@ -13,12 +13,13 @@ class BundledAdminClient:
         return "generated-by-openlist-cli"
 
     def driver_map(self):
-        return {"Quark": {"additional": []}, "115": {"additional": []}}
+        return {
+            "Quark": {"common": [], "additional": [{"name": "refresh_token"}]},
+            "115": {"common": [], "additional": []},
+        }
 
     def _request(self, method, endpoint, *, payload=None, params=None):
         self.calls.append((method, endpoint, payload, params, self._admin_token()))
-        if endpoint == "/api/admin/driver/info":
-            return {"code": 200, "data": {"common": [], "additional": [{"name": "refresh_token"}]}}
         if endpoint == "/api/admin/storage/list":
             return {"code": 200, "data": {"content": [], "total": 0}}
         return {"code": 200, "data": {"id": 12}}
@@ -34,11 +35,7 @@ def test_driver_info_uses_shared_bundled_admin_client():
         "common": [],
         "additional": [{"name": "refresh_token"}],
     }
-    method, endpoint, payload, params, token = client.calls[0]
-    assert method == "GET"
-    assert endpoint == "/api/admin/driver/info"
-    assert params == {"driver": "Quark"}
-    assert token == "generated-by-openlist-cli"
+    assert client.calls == []
 
 
 def test_storage_create_and_update_validate_payloads():
