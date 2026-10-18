@@ -260,6 +260,11 @@ class OpenListPlaybackCard(PlaybackProviderCard):
         if not name or name in {".", ".."}:
             raise ValueError("文件路径无效")
 
+        if not str(config.get("token") or "").strip():
+            raise RuntimeError(
+                "删除操作需要配置具备删除权限的 OpenList API Token；匿名访问不允许删除"
+            )
+
         # Re-read the parent listing to reject directories, stale paths, and names
         # that were never present in the managed OpenList directory.
         entries = self.list_files(parent_path, refresh=True)
