@@ -318,6 +318,7 @@
           playerStatus.textContent = 'HDR 转 SDR 流不可用，正在回退到原始视频。';
           player.src = result.source_url || result.url;
           player.load();
+          player.play().catch(() => {});
         });
         playerStatus.textContent = '检测到 HDR 片源，正在实时转换为 SDR（软件转码可能增加 CPU 占用）。';
       } else {
