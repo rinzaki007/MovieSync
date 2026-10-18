@@ -144,14 +144,18 @@ def playback_remove():
     if card is None:
         return jsonify({"success": False, "message": error}), 400
 
-    if (
-        card.card_id != "openlist"
-        or "playback.delete_files" not in card.capabilities
-        or not callable(getattr(card, "delete_file", None))
-    ):
+    supports_items = (
+        "playback.delete_items" in card.capabilities
+        and callable(getattr(card, "delete_item", None))
+    )
+    supports_legacy_files = (
+        "playback.delete_files" in card.capabilities
+        and callable(getattr(card, "delete_file", None))
+    )
+    if card.card_id != "openlist" or not (supports_items or supports_legacy_files):
         return jsonify({
             "success": False,
-            "message": "当前播放卡片不支持文件删除",
+            "message": "当前播放卡片不支持删除文件或文件夹",
         }), 501
 
     data = request.get_json(silent=True)
@@ -165,10 +169,18 @@ def playback_remove():
 
     path = str(data.get("path") or "").strip()
     if not path:
-        return jsonify({"success": False, "message": "缺少待删除文件路径"}), 400
+        return jsonify({"success": False, "message": "缺少待删除路径"}), 400
+    is_dir = data.get("is_dir", False)
+    if not isinstance(is_dir, bool):
+        return jsonify({"success": False, "message": "目标类型无效"}), 400
+    if is_dir and not supports_items:
+        return jsonify({
+            "success": False,
+            "message": "当前播放卡片不支持删除文件夹",
+        }), 501
 
     try:
-        deleted = card.delete_file(path)
+        deleted = card.delete_item(path, expected_is_dir=is_dir) if supports_items else card.delete_file(path)
     except ValueError as exc:
         return jsonify({"success": False, "message": str(exc)[:240]}), 400
     except RuntimeError as exc:
@@ -183,6 +195,6 @@ def playback_remove():
 
     return jsonify({
         "success": True,
-        "message": "文件已通过 OpenList 删除",
+        "message": ("文件夹及其内容已通过 OpenList 删除" if is_dir else "文件已通过 OpenList 删除"),
         "path": deleted.get("path", path) if isinstance(deleted, dict) else path,
     })
