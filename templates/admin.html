@@ -1141,18 +1141,22 @@
                     ? "正常"
                     : healthStatus === "unhealthy"
                         ? "连接异常"
-                        : card.configured
-                            ? "已配置"
-                            : healthStatus === "unknown"
-                                ? "尚未检查"
-                                : "需配置";
+                        : card.configuration_required === false
+                            ? "无需配置"
+                            : card.configured
+                                ? "已配置"
+                                : healthStatus === "unknown"
+                                    ? "尚未检查"
+                                    : "需配置";
             const statusClass = card.enabled === false
                 ? "border-slate-500/15 bg-slate-500/5 text-slate-400"
                 : healthStatus === "healthy"
                     ? "border-emerald-400/15 bg-emerald-400/5 text-emerald-300"
                     : healthStatus === "unhealthy"
                         ? "border-rose-400/20 bg-rose-400/5 text-rose-300"
-                        : "border-amber-400/15 bg-amber-400/5 text-amber-300";
+                        : card.configuration_required === false
+                            ? "border-sky-400/15 bg-sky-400/5 text-sky-300"
+                            : "border-amber-400/15 bg-amber-400/5 text-amber-300";
             const clickable = "cursor-pointer hover:border-blue-400/40";
             return '<button type="button" class="glass-shell rounded-2xl p-4 text-left w-full transition ' + clickable + '" ' +
                 'onclick="openCardFromRegistry(' + JSON.stringify(card.id).replace(/"/g, '&quot;') + ')"' + ">" +

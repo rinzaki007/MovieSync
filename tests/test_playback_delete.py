@@ -3,7 +3,7 @@ from moviesync.app import create_app
 
 class FakePlaybackCard:
     card_id = "openlist"
-    capabilities = ("playback.list_files", "playback.resolve", "playback.delete_files")
+    capabilities = ("playback.list_files", "playback.resolve", "playback.delete_files", "playback.delete_items")
 
     def __init__(self, error=None, capabilities=None):
         self.deleted = []
@@ -21,6 +21,12 @@ class FakePlaybackCard:
             raise RuntimeError(self.error)
         self.deleted.append(path)
         return {"path": path, "name": path.rsplit("/", 1)[-1]}
+
+    def delete_item(self, path, expected_is_dir=None):
+        if self.error:
+            raise RuntimeError(self.error)
+        self.deleted.append((path, expected_is_dir))
+        return {"path": path, "name": path.rsplit("/", 1)[-1], "is_dir": expected_is_dir}
 
 
 class RefreshPlaybackCard(FakePlaybackCard):
@@ -102,8 +108,42 @@ def test_playback_remove_requires_csrf_and_explicit_confirmation(tmp_path, monke
     )
     assert response.status_code == 200
     assert response.get_json()["success"] is True
-    assert card.deleted == ["/media/film.mp4"]
+    assert card.deleted == [("/media/film.mp4", False)]
 
+
+
+def test_playback_remove_folder_requires_item_capability_and_passes_type(tmp_path, monkeypatch):
+    app, client, csrf_token = make_logged_in_client(tmp_path)
+    card = FakePlaybackCard()
+    card.card_id = "example.playback"
+    monkeypatch.setattr("moviesync.web.playback._provider", lambda: (card, ""))
+
+    response = client.post(
+        "/api/playback/remove",
+        json={"path": "/media/Season 01", "is_dir": True, "confirmed": True},
+        headers={"X-CSRF-Token": csrf_token},
+    )
+
+    assert response.status_code == 200
+    assert response.get_json()["success"] is True
+    assert "文件夹" in response.get_json()["message"]
+    assert card.deleted == [("/media/Season 01", True)]
+
+
+def test_playback_remove_folder_rejected_by_legacy_file_only_card(tmp_path, monkeypatch):
+    app, client, csrf_token = make_logged_in_client(tmp_path)
+    card = FakePlaybackCard(capabilities=("playback.list_files", "playback.resolve", "playback.delete_files"))
+    monkeypatch.setattr("moviesync.web.playback._provider", lambda: (card, ""))
+
+    response = client.post(
+        "/api/playback/remove",
+        json={"path": "/media/Season 01", "is_dir": True, "confirmed": True},
+        headers={"X-CSRF-Token": csrf_token},
+    )
+
+    assert response.status_code == 501
+    assert "不支持删除文件夹" in response.get_json()["message"]
+    assert card.deleted == []
 
 def test_playback_remove_requires_provider_delete_capability(tmp_path, monkeypatch):
     app, client, csrf_token = make_logged_in_client(tmp_path)
@@ -117,7 +157,7 @@ def test_playback_remove_requires_provider_delete_capability(tmp_path, monkeypat
     )
 
     assert response.status_code == 501
-    assert "不支持文件删除" in response.get_json()["message"]
+    assert "不支持删除文件或文件夹" in response.get_json()["message"]
     assert card.deleted == []
 
 

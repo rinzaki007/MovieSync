@@ -18,10 +18,12 @@
             <nav class="hidden items-center gap-1 sm:flex">
                 <a href="/" class="rounded-md px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-800 hover:text-white">影视浏览</a>
                 <a href="/tasks" class="rounded-md bg-purple-600 px-3 py-1.5 text-xs font-medium text-white">任务中心</a>
+                <a href="/playback" class="rounded-md px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-800 hover:text-white"><i class="fa-solid fa-circle-play mr-1"></i>播放中心</a>
                 <a href="/admin" class="rounded-md px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-800 hover:text-white">系统设置</a>
             </nav>
         </div>
         <div class="flex items-center gap-2">
+            <a href="/playback" class="rounded-lg border border-emerald-800/70 bg-emerald-950/50 px-3 py-2 text-xs font-medium text-emerald-300 hover:bg-emerald-900/60"><i class="fa-solid fa-circle-play mr-1"></i>播放中心</a>
             <button onclick="openAddTask()" class="rounded-lg bg-purple-600 px-3.5 py-2 text-xs font-medium text-white shadow-lg shadow-purple-600/20 hover:bg-purple-500"><i class="fa-solid fa-plus mr-1"></i> 新建追剧任务</button>
             <a href="/" class="rounded-lg border border-slate-700 bg-slate-800/70 px-3 py-2 text-xs text-slate-300 hover:bg-slate-700">返回影视</a>
         </div>
@@ -50,6 +52,7 @@
     <section class="glass-panel rounded-2xl shadow-[0_18px_55px_rgba(0,0,0,.18)]">
         <div class="flex flex-col gap-3 border-b border-slate-800 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div><h2 class="text-sm font-semibold text-white">普通转存</h2><p class="mt-1 text-[11px] text-slate-500">这里显示你手动选择资源后的保存进度，包括文件检查、目录读取和转存状态。</p></div>
+            <a href="/playback" class="self-start rounded-lg border border-emerald-900/70 px-3 py-2 text-[11px] text-emerald-300 hover:bg-emerald-950/50 sm:self-auto"><i class="fa-solid fa-circle-play mr-1"></i>查看已转存视频</a>
             <div class="flex items-center gap-1 rounded-lg border border-slate-800 bg-slate-950 p-1 text-[11px]">
                 <button data-filter="all" onclick="setFilter('all')" class="task-filter rounded-md bg-slate-700 px-3 py-1.5 text-slate-100">全部</button>
                 <button data-filter="running" onclick="setFilter('running')" class="task-filter rounded-md px-3 py-1.5 text-slate-400 hover:text-white">执行中</button>
@@ -62,8 +65,11 @@
 
     <section class="mt-4 glass-panel rounded-2xl shadow-[0_18px_55px_rgba(0,0,0,.18)]">
         <div class="border-b border-slate-800 p-4">
-            <h2 class="text-sm font-semibold text-white">智能追剧</h2>
-            <p class="mt-1 text-[11px] text-slate-500">系统会定期检查已选的资源来源；发现符合条件的新集后，会自动保存。</p>
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div><h2 class="text-sm font-semibold text-white">智能追剧</h2>
+                <p class="mt-1 text-[11px] text-slate-500">系统会定期检查已选的资源来源；发现符合条件的新集后，会自动保存。</p></div>
+                <a href="/playback" class="self-start rounded-lg border border-emerald-900/70 px-3 py-2 text-[11px] text-emerald-300 hover:bg-emerald-950/50 sm:self-auto"><i class="fa-solid fa-circle-play mr-1"></i>播放已追更内容</a>
+            </div>
         </div>
         <div id="smart-task-list" class="divide-y divide-slate-800/80"></div>
     </section>

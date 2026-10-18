@@ -30,6 +30,7 @@
       </div>
       <div class="playback-header-actions flex shrink-0 items-center gap-2">
         <span id="provider-badge" class="hidden rounded-full border border-slate-700 bg-slate-900 px-2.5 py-1.5 text-[10px] text-slate-400 sm:inline-flex sm:items-center sm:gap-1.5"><i class="fa-solid fa-circle text-[7px] text-slate-500"></i>正在检测播放卡片</span>
+        <a href="/tasks" class="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-300 transition hover:bg-slate-800"><i class="fa-solid fa-list-check mr-1"></i>任务中心</a>
         <a href="/admin" class="rounded-xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-xs text-slate-300 transition hover:bg-slate-800"><i class="fa-solid fa-sliders mr-1"></i>卡片设置</a>
       </div>
     </div>
@@ -137,32 +138,33 @@
         else if (item.is_video) playFile(item);
       });
       row.appendChild(button);
-      if (!item.is_dir) {
-        const deleteButton = document.createElement('button');
-        deleteButton.type = 'button';
-        deleteButton.className = 'shrink-0 rounded-lg border border-rose-900/70 px-3 py-2 text-xs text-rose-300 transition hover:border-rose-700 hover:bg-rose-950/50 disabled:cursor-wait disabled:opacity-50';
-        deleteButton.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
-        deleteButton.title = '通过 OpenList 删除此文件';
-        deleteButton.setAttribute('aria-label', '删除 ' + item.name);
-        deleteButton.addEventListener('click', async event => {
-          event.preventDefault();
-          event.stopPropagation();
-          await deleteFile(item, deleteButton);
-        });
-        row.appendChild(deleteButton);
-      }
+      const deleteButton = document.createElement('button');
+      deleteButton.type = 'button';
+      deleteButton.className = 'shrink-0 rounded-lg border border-rose-900/70 px-3 py-2 text-xs text-rose-300 transition hover:border-rose-700 hover:bg-rose-950/50 disabled:cursor-wait disabled:opacity-50';
+      deleteButton.innerHTML = '<i class="fa-solid fa-trash-can"></i>';
+      deleteButton.title = item.is_dir ? '删除此文件夹及其全部内容' : '通过 OpenList 删除此文件';
+      deleteButton.setAttribute('aria-label', '删除 ' + item.name);
+      deleteButton.addEventListener('click', async event => {
+        event.preventDefault();
+        event.stopPropagation();
+        await deleteItem(item, deleteButton);
+      });
+      row.appendChild(deleteButton);
       list.appendChild(row);
     }
   }
-  async function deleteFile(item, button) {
+  async function deleteItem(item, button) {
+    const itemType = item.is_dir ? '文件夹及其中的全部内容' : '文件';
     const confirmed = window.confirm(
-      '确定要通过 OpenList 删除这个文件吗？\n\n' + item.path +
-      '\n\n这会删除映射存储中的实际文件，无法由 MovieSync 撤销。'
+      '确定要通过 OpenList 删除这个' + itemType + '吗？\n\n' + item.path +
+      (item.is_dir
+        ? '\n\n此操作会递归删除文件夹内的所有内容，无法由 MovieSync 撤销。'
+        : '\n\n这会删除映射存储中的实际文件，无法由 MovieSync 撤销。')
     );
     if (!confirmed) return;
 
     button.disabled = true;
-    status.textContent = '正在删除：' + item.name;
+    status.textContent = '正在删除' + (item.is_dir ? '文件夹：' : '：') + item.name;
     status.className = 'text-[11px] text-amber-300';
     try {
       const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || '';
@@ -170,7 +172,7 @@
         method: 'POST',
         credentials: 'same-origin',
         headers: {'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken},
-        body: JSON.stringify({path: item.path, confirmed: true}),
+        body: JSON.stringify({path: item.path, is_dir: Boolean(item.is_dir), confirmed: true}),
         cache: 'no-store'
       });
       const result = await response.json();
@@ -180,7 +182,7 @@
       const refreshed = await loadDirectory(currentPath, false, true);
       status.textContent = refreshed
         ? '已删除：' + item.name
-        : '文件已删除，但目录刷新失败；请点击“刷新目录”重试。';
+        : '项目已删除，但目录刷新失败；请点击“刷新目录”重试。';
       status.className = refreshed ? 'text-[11px] text-emerald-300' : 'text-[11px] text-amber-300';
     } catch (error) {
       status.textContent = error.message || '删除失败，请稍后重试';

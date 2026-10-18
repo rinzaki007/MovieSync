@@ -622,6 +622,14 @@ def cards():
             saved = saved if isinstance(saved, dict) else {}
             item = manifest
             item["enabled"] = bool(saved.get("enabled", True))
+            # Only fields explicitly marked required should make setup mandatory.
+            # Cards with no required fields (e.g. Douban and built-in filename
+            # recognition) work with their defaults and should not be flagged.
+            item["configuration_required"] = any(
+                bool(field.get("required"))
+                for field in manifest.get("config_fields", [])
+                if isinstance(field, dict)
+            )
             card_config = saved.get("config", {})
             card_config = card_config if isinstance(card_config, dict) else {}
 

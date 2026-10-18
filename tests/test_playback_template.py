@@ -9,3 +9,6 @@ def test_playback_template_compiles_as_jinja():
 
     # CSS selectors such as `{#video-player` collide with Jinja's comment opener.
     Environment().parse(source)
+    assert "async function deleteItem(item, button)" in source
+    assert "is_dir: Boolean(item.is_dir)" in source
+    assert 'href="/tasks"' in source
