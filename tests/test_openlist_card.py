@@ -46,6 +46,7 @@ def test_openlist_card_manifest_and_config_validation():
     assert card.card_type == "playback_provider"
     assert "playback.list_files" in card.capabilities
     assert "playback.resolve" in card.capabilities
+    assert "playback.delete_files" in card.capabilities
 
     config = card.validate_config({
         "base_url": "http://openlist.local:5244",
@@ -172,6 +173,7 @@ def test_openlist_delete_rejects_outside_root_and_directories():
     config = {
         "base_url": "http://openlist.local:5244",
         "root_path": "/media",
+        "token": "secret-token",
     }
     card = OpenListPlaybackCard({"config_store": FakeConfigStore(config)})
     card.session = FakeSession({
@@ -190,6 +192,7 @@ def test_openlist_delete_rejects_missing_file_and_reports_permission_denial():
     config = {
         "base_url": "http://openlist.local:5244",
         "root_path": "/media",
+        "token": "secret-token",
     }
     card = OpenListPlaybackCard({"config_store": FakeConfigStore(config)})
     card.session = FakeSession({"code": 200, "data": {"content": []}})
