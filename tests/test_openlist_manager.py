@@ -1,5 +1,5 @@
-import requests
 import pytest
+import requests
 
 from moviesync.services.openlist_manager import OpenListManager
 
