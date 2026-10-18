@@ -2,6 +2,9 @@
 # PanSou source is pinned to a reviewed upstream commit for reproducible builds.
 ARG PANSOU_REF=7a73fbc3f62c6647183f33931477e055ee3d6847
 ARG OPENLIST_VERSION=v4.2.7
+# SHA-256 digests published by GitHub for the v4.2.7 release assets.
+ARG OPENLIST_AMD64_SHA256=7236d408038dfc9f9d4be9bc6f225d79c317f32e0381a55e761feb4fefb3b356
+ARG OPENLIST_ARM64_SHA256=4b00de91b072667adcdff467458ce85048a6d599d52a85da9b2bc5e64627985f
 FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS pansou-builder
 ARG TARGETARCH
 ARG PANSOU_REF
@@ -24,9 +27,13 @@ RUN mkdir -p /out/licenses && cp LICENSE /out/licenses/PanSou-LICENSE
 FROM --platform=$BUILDPLATFORM alpine:3.22 AS openlist-builder
 ARG TARGETARCH
 ARG OPENLIST_VERSION
+ARG OPENLIST_AMD64_SHA256
+ARG OPENLIST_ARM64_SHA256
 COPY third_party/openlist/LICENSE /tmp/openlist-upstream/LICENSE
 RUN apk add --no-cache ca-certificates coreutils curl tar \
-    && case "${TARGETARCH}" in amd64|arm64) ;; \
+    && case "${TARGETARCH}" in \
+       amd64) OPENLIST_SHA256="${OPENLIST_AMD64_SHA256}" ;; \
+       arm64) OPENLIST_SHA256="${OPENLIST_ARM64_SHA256}" ;; \
        *) echo "OpenList bundled runtime currently supports amd64 and arm64 (got: ${TARGETARCH})" >&2; exit 1 ;; \
        esac \
     && mkdir -p /tmp/openlist /out \
@@ -34,12 +41,7 @@ RUN apk add --no-cache ca-certificates coreutils curl tar \
     && curl -fsSL --retry 3 \
        "https://github.com/OpenListTeam/OpenList/releases/download/${OPENLIST_VERSION}/openlist-linux-musl-${TARGETARCH}.tar.gz" \
        -o "openlist-linux-musl-${TARGETARCH}.tar.gz" \
-    && curl -fsSL --retry 3 \
-       "https://github.com/OpenListTeam/OpenList/releases/download/${OPENLIST_VERSION}/md5-linux-musl.txt" \
-       -o md5-linux-musl.txt \
-    && grep "openlist-linux-musl-${TARGETARCH}\.tar\.gz$" md5-linux-musl.txt > selected.md5 \
-    && test -s selected.md5 \
-    && md5sum -c selected.md5 \
+    && printf '%s  %s\n' "${OPENLIST_SHA256}" "openlist-linux-musl-${TARGETARCH}.tar.gz" | sha256sum -c - \
     && tar -xzf "openlist-linux-musl-${TARGETARCH}.tar.gz" \
     && install -m 0755 openlist /out/openlist \
     && cp /tmp/openlist-upstream/LICENSE /out/OpenList-LICENSE \
