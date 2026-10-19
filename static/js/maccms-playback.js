@@ -123,38 +123,39 @@
     function setAutoProgress(stage, title, detail = '') {
         const panel = $('#maccms-watch-progress');
         if (!panel) return;
-        const stages = { info: 0, search: 1, match: 2, play: 3, success: 4, failed: 4 };
+        const stages = { info: 0, search: 1, match: 2, play: 3, searchFailed: 1, matchFailed: 2, playFailed: 3, success: 4, failed: 3 };
         const index = stages[stage] ?? 0;
+        const failed = stage.endsWith('Failed') || stage === 'failed';
         panel.classList.remove('hidden', 'border-rose-900/60', 'bg-rose-950/20');
-        panel.classList.toggle('border-emerald-900/50', stage !== 'failed');
-        panel.classList.toggle('border-rose-900/60', stage === 'failed');
-        panel.classList.toggle('bg-emerald-950/20', stage !== 'failed');
-        panel.classList.toggle('bg-rose-950/20', stage === 'failed');
+        panel.classList.toggle('border-emerald-900/50', !failed);
+        panel.classList.toggle('border-rose-900/60', failed);
+        panel.classList.toggle('bg-emerald-950/20', !failed);
+        panel.classList.toggle('bg-rose-950/20', failed);
         $('#maccms-watch-progress-title').textContent = title;
         $('#maccms-watch-progress-detail').textContent = detail;
-        $('#maccms-watch-progress-state').textContent = stage === 'success' ? '已完成' : stage === 'failed' ? '未完成' : '进行中';
-        $('#maccms-watch-progress-state').className = 'shrink-0 text-[10px] ' + (stage === 'failed' ? 'text-rose-300' : 'text-emerald-300');
+        $('#maccms-watch-progress-state').textContent = stage === 'success' ? '已完成' : failed ? '未完成' : '进行中';
+        $('#maccms-watch-progress-state').className = 'shrink-0 text-[10px] ' + (failed ? 'text-rose-300' : 'text-emerald-300');
         const bar = $('#maccms-watch-progress-bar');
         bar.style.width = (stage === 'info' ? 12 : stage === 'search' ? 35 : stage === 'match' ? 58 : stage === 'play' ? 82 : 100) + '%';
-        bar.classList.toggle('bg-rose-400', stage === 'failed');
-        bar.classList.toggle('bg-emerald-400', stage !== 'failed');
-        bar.classList.toggle('animate-pulse', stage !== 'success' && stage !== 'failed');
+        bar.classList.toggle('bg-rose-400', failed);
+        bar.classList.toggle('bg-emerald-400', !failed);
+        bar.classList.toggle('animate-pulse', stage !== 'success' && !failed);
         $('#maccms-watch-progress-icon').innerHTML = stage === 'success'
             ? '<i class="fa-solid fa-circle-check"></i>'
-            : stage === 'failed'
+            : failed
                 ? '<i class="fa-solid fa-triangle-exclamation"></i>'
                 : '<i class="fa-solid fa-circle-notch fa-spin"></i>';
         $('#maccms-watch-progress-icon').className = 'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ' +
-            (stage === 'failed' ? 'bg-rose-900/50 text-rose-300' : 'bg-emerald-900/50 text-emerald-300');
+            (failed ? 'bg-rose-900/50 text-rose-300' : 'bg-emerald-900/50 text-emerald-300');
         panel.querySelectorAll('[data-progress-step]').forEach(step => {
             const stepIndex = Number(step.dataset.progressStep);
-            const complete = stage === 'success' || (stage === 'failed' ? stepIndex < index : stepIndex < index);
-            const active = stage !== 'success' && stage !== 'failed' && stepIndex === index;
+            const complete = stage === 'success' || stepIndex < index;
+            const active = stage !== 'success' && !failed && stepIndex === index;
             step.classList.toggle('text-emerald-200', complete || active);
             step.classList.toggle('border', active);
             step.classList.toggle('border-emerald-700/70', active);
-            step.classList.toggle('text-rose-300', stage === 'failed' && stepIndex === index);
-            step.classList.toggle('text-slate-500', !complete && !active && !(stage === 'failed' && stepIndex === index));
+            step.classList.toggle('text-rose-300', failed && stepIndex === index);
+            step.classList.toggle('text-slate-500', !complete && !active && !(failed && stepIndex === index));
             if (complete) step.innerHTML = '<i class="fa-solid fa-check mr-1"></i>' + ['影片信息', '搜索资源站', '匹配资源', '尝试播放'][stepIndex];
             else step.textContent = ['影片信息', '搜索资源站', '匹配资源', '尝试播放'][stepIndex];
         });
@@ -387,7 +388,7 @@
         } catch (error) {
             if (requestId !== detailRequest) return;
             playerMessage.textContent = (error.message || '读取播放线路失败。') + ' 可以直接选择其他匹配影片。';
-            setAutoProgress('failed', '读取影片详情失败', (error.message || '请求失败') + '；可以选择其他候选资源。');
+            setAutoProgress('matchFailed', '读取影片详情失败', (error.message || '请求失败') + '；可以选择其他候选资源。');
             addText($('#maccms-watch-lines'), 'p', 'text-xs leading-5 text-amber-300', '详情读取失败；请尝试同一影片的其他采集站。');
         }
     }
@@ -413,7 +414,6 @@
             try {
                 await window.MovieSyncPlayback.playOnline(url, title, itemName);
                 playerMessage.textContent = `正在尝试：${title || ''} · ${itemName || ''}`;
-                setAutoProgress('play', '播放资源已提交', '正在等待播放器确认视频是否真正开始播放。');
             } catch (error) {
                 if (automatic) handleAutoPlaybackFailure(error);
                 else playerMessage.textContent = (error.message || '无法启动这条线路。') + ' 可直接切换线路或播放项。';
@@ -483,13 +483,13 @@
                 if (autoPlay) startAutoPlayback(candidates);
             } else {
                 playerMessage.textContent = '没有找到候选影片。你可以检查站点设置或尝试更短的片名。';
-                setAutoProgress('failed', '没有找到匹配资源', '可以换个片名搜索，或检查已启用的采集源。');
+                setAutoProgress('searchFailed', '没有找到匹配资源', '可以换个片名搜索，或检查已启用的采集源。');
             }
         } catch (error) {
             if (requestId !== searchRequest) return;
             $('#maccms-watch-status').textContent = error.message || '搜索采集源失败。';
             playerMessage.textContent = '搜索失败，请稍后重试或检查采集源配置。';
-            setAutoProgress('failed', '搜索在线资源失败', (error.message || '请求失败') + '；可以稍后重试或手动搜索。');
+            setAutoProgress('searchFailed', '搜索在线资源失败', (error.message || '请求失败') + '；可以稍后重试或手动搜索。');
         }
     }
 
@@ -503,7 +503,7 @@
         if (!autoPlayActive || generation !== autoPlayGeneration) return;
         if (autoPlayUrlIndex >= autoPlayUrls.length) {
             const candidate = autoPlayCandidates[autoPlayCandidateIndex++];
-            if (!candidate) { autoPlayActive = false; playerMessage.textContent = '所有匹配资源都尝试失败了。可以手动选择其他影片或检查采集源。'; $('#maccms-watch-status').textContent = '已尝试所有候选资源，均未能开始播放'; setAutoProgress('failed', '暂时无法自动播放', '已尝试匹配资源。你仍可以手动选择影片、切换线路或点击播放重试。'); return; }
+            if (!candidate) { autoPlayActive = false; playerMessage.textContent = '所有匹配资源都尝试失败了。可以手动选择其他影片或检查采集源。'; $('#maccms-watch-status').textContent = '已尝试所有候选资源，均未能开始播放'; setAutoProgress('playFailed', '暂时无法自动播放', '已尝试匹配资源。你仍可以手动选择影片、切换线路或点击播放重试。'); return; }
             selectedCandidate = candidate; currentDetail = null; currentSourceName = candidate.source.source_name || '采集站'; activeLineIndex = 0;
             $('#maccms-watch-selected-title').textContent = candidate.item.title || '影片详情'; $('#maccms-watch-selected-meta').textContent = candidateSubtitle(candidate);
             playerMessage.textContent = '正在读取匹配资源：' + (candidate.item.title || '');
