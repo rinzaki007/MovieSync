@@ -13,14 +13,14 @@
     .playback-shell{background:linear-gradient(145deg,rgba(15,23,42,.94),rgba(2,6,23,.84));border:1px solid rgba(148,163,184,.14);box-shadow:0 18px 48px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.025)}
     /* Online playback keeps the shared player visible beside search and source choices. */
     #playback-main-grid.playback-online-layout{grid-template-columns:minmax(0,1.65fr) minmax(300px,.85fr)!important;align-items:start}
-    #playback-main-grid.playback-online-layout #player-workspace-panel{grid-column:1;grid-row:1}
-    #playback-main-grid.playback-online-layout #maccms-inline-panel{grid-column:2;grid-row:1;margin-top:0}
+    #playback-main-grid.playback-online-layout #maccms-inline-panel{grid-column:1;grid-row:1;margin-top:0}
+    #playback-main-grid.playback-online-layout #player-workspace-panel{grid-column:2;grid-row:1}
     #maccms-inline-panel.maccms-inline-layout .grid{grid-template-columns:minmax(0,1fr)!important}
     #maccms-inline-panel.maccms-inline-layout>section{max-height:calc(100vh - 150px);overflow:auto}
     @media(max-width:1023px){
       #playback-main-grid.playback-online-layout{grid-template-columns:minmax(0,1fr)!important}
-      #playback-main-grid.playback-online-layout #player-workspace-panel,
-      #playback-main-grid.playback-online-layout #maccms-inline-panel{grid-column:1;grid-row:auto}
+      #playback-main-grid.playback-online-layout #maccms-inline-panel{grid-column:1;grid-row:1}
+      #playback-main-grid.playback-online-layout #player-workspace-panel{grid-column:1;grid-row:2}
       #maccms-inline-panel.maccms-inline-layout>section{max-height:none}
     }
     .playback-control{background:rgba(2,6,23,.62);border:1px solid rgba(71,85,105,.55)}
@@ -230,6 +230,9 @@
   }
 
   function stopOnlinePlayback() {
+    // Detach per-source handlers before pause/load so teardown cannot trigger fallback.
+    player.onerror = null;
+    player.onplaying = null;
     if (onlineHls) {
       onlineHls.destroy();
       onlineHls = null;
@@ -308,7 +311,18 @@
   window.MovieSyncPlayback = window.MovieSyncPlayback || {};
   window.MovieSyncPlayback.playOnline = playOnline;
   window.MovieSyncPlayback.stopOnlinePlayback = stopOnlinePlayback;
+  function stopPlaybackForSourceSwitch() {
+    if (window.MovieSyncPlayback.cancelAutoPlayback) window.MovieSyncPlayback.cancelAutoPlayback();
+    stopOnlinePlayback();
+    clearSubtitleTracks();
+    playerTitle.textContent = '选择一个视频开始播放';
+    playerPath.textContent = '尚未选择文件';
+    playerStatus.textContent = '已切换播放来源，选择资源后开始播放。';
+    setPlayerState('已停止');
+    progress.textContent = '00:00 / --:--';
+  }
   window.MovieSyncPlayback.showFiles = () => {
+    stopPlaybackForSourceSwitch();
     const browser = document.getElementById('file-browser-panel');
     const panel = document.getElementById('maccms-inline-panel');
     const grid = document.getElementById('playback-main-grid');
@@ -326,6 +340,7 @@
   document.querySelectorAll('[data-playback-source]').forEach(button => {
     button.addEventListener('click', () => {
       if (button.dataset.playbackSource === 'online') {
+        stopPlaybackForSourceSwitch();
         const browser = document.getElementById('file-browser-panel');
         const panel = document.getElementById('maccms-inline-panel');
         const grid = document.getElementById('playback-main-grid');

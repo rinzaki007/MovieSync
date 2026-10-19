@@ -484,6 +484,13 @@
     window.movieDetailWatch = movieDetailWatch;
     window.MovieSyncPlayback = window.MovieSyncPlayback || {};
     window.MovieSyncPlayback.openOnline = openOnline;
+    window.MovieSyncPlayback.cancelAutoPlayback = () => {
+        autoPlayActive = false;
+        autoPlayGeneration++;
+        searchRequest++;
+        detailRequest++;
+        resetVideo();
+    };
     window.MovieSyncPlayback.onOnlinePlaybackFailure = handleAutoPlaybackFailure;
     window.MovieSyncPlayback.onOnlinePlaybackStarted = handleAutoPlaybackStarted;
 })();
