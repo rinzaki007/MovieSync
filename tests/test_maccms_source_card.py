@@ -95,8 +95,10 @@ def test_check_explains_non_json_response(monkeypatch):
     assert "不是有效 JSON" in result["sources"][0]["message"]
 
 
-def test_manifest_declares_connection_check():
+def test_manifest_declares_canonical_identity_and_connection_check():
     card = vod_source_manager.VodSourceManagerCard()
 
+    assert card.card_id == "vod_source_manager"
+    assert card.manifest.id == "vod_source_manager"
     assert "vod_source_manager.check" in card.capabilities
     assert card.manifest.config_fields[0]["editor"] == "vod_source_manager_sources"
