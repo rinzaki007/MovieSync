@@ -177,7 +177,7 @@
           <button id="stop-btn" class="rounded-lg border border-slate-700 px-3 py-2 text-[11px] text-slate-400 transition hover:bg-slate-800 hover:text-white"><i class="fa-solid fa-stop mr-1"></i>停止播放</button>
         </div>
         <div id="vod_source_manager-episode-panel" class="hidden mt-4 min-w-0 rounded-xl border border-slate-800/80 bg-slate-950/40 p-3 sm:p-4"></div>
-        <div class="mt-4 rounded-xl border border-slate-800/70 bg-slate-950/35 p-3 text-[11px] leading-5 text-slate-500"><i class="fa-solid fa-lightbulb mr-1.5 text-amber-300"></i>如果无法播放或拖动进度条，请确认浏览器能访问 OpenList 返回的播放链接；部分编码格式也可能不受浏览器支持。</div>
+        <div id="playback-openlist-hint" class="mt-4 rounded-xl border border-slate-800/70 bg-slate-950/35 p-3 text-[11px] leading-5 text-slate-500"><i class="fa-solid fa-lightbulb mr-1.5 text-amber-300"></i>如果无法播放或拖动进度条，请确认浏览器能访问 OpenList 返回的播放链接；部分编码格式也可能不受浏览器支持。</div>
         <div id="vod_source_manager-inline-panel" class="hidden mt-4 min-w-0"></div>
       </div>
     </section>
@@ -351,6 +351,10 @@
     const grid = document.getElementById('playback-main-grid');
     if (browser) browser.classList.toggle('hidden', online);
     if (panel) panel.classList.toggle('hidden', !online);
+    const episodePanel = document.getElementById('vod_source_manager-episode-panel');
+    if (episodePanel) episodePanel.classList.toggle('hidden', !online || !episodePanel.childElementCount);
+    const openlistHint = document.getElementById('playback-openlist-hint');
+    if (openlistHint) openlistHint.classList.toggle('hidden', online);
     if (grid) {
       grid.style.gridTemplateColumns = '';
       grid.classList.toggle('playback-online-layout', online);
