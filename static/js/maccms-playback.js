@@ -624,6 +624,7 @@
             const candidate = autoPlayCandidates[autoPlayCandidateIndex++];
             if (!candidate) { autoPlayActive = false; playerMessage.textContent = '所有匹配资源都尝试失败了。可以手动选择其他影片或检查采集源。'; $('#maccms-watch-status').textContent = '已尝试所有候选资源，均未能开始播放'; setAutoProgress('playFailed', '暂时无法自动播放', '已尝试匹配资源。你仍可以手动选择影片、切换线路或点击播放重试。'); return; }
             selectedCandidate = candidate; currentDetail = null; currentSourceName = candidate.source.source_name || '采集站'; activeLineIndex = 0;
+            renderCandidatesFromSelection();
             $('#maccms-watch-selected-title').textContent = candidate.item.title || '影片详情'; $('#maccms-watch-selected-meta').textContent = candidateSubtitle(candidate);
             playerMessage.textContent = '正在读取匹配资源：' + (candidate.item.title || '');
             setAutoProgress('match', '正在读取匹配资源', `资源站：${currentSourceName} · ${candidate.item.title || ''}`);
