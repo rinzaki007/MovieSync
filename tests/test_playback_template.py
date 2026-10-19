@@ -32,6 +32,9 @@ def test_playback_template_supports_douban_autoplay_and_fallback():
     template = (root / "templates" / "playback.html").read_text(encoding="utf-8")
     script = (root / "static" / "js" / "maccms-playback.js").read_text(encoding="utf-8")
     assert "playbackQuery.get('title')" in template
+    # Query-driven activation must happen after the shared-player const bindings and setup.
+    assert template.index("const playerTitle =") < template.index("if (playbackQuery.get('title'))")
+    assert template.index("loadDirectory('');") < template.index("if (playbackQuery.get('title'))")
     assert "onOnlinePlaybackFailure" in template
     assert "window.location.assign('/playback?'" in script
     assert "function startAutoPlayback(candidates)" in script
