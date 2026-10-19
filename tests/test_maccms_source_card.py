@@ -59,7 +59,7 @@ def test_check_reports_json_maccms_response(monkeypatch):
             json=lambda: {"code": 1, "msg": "数据列表", "list": []},
         ),
     )
-    card = vod_source_manager.MacCMSSourceManagerCard()
+    card = vod_source_manager.VodSourceManagerCard()
 
     result = card.check({
         "sources": [
@@ -82,7 +82,7 @@ def test_check_explains_non_json_response(monkeypatch):
             json=lambda: (_ for _ in ()).throw(ValueError("not json")),
         ),
     )
-    card = vod_source_manager.MacCMSSourceManagerCard()
+    card = vod_source_manager.VodSourceManagerCard()
 
     result = card.check({
         "sources": [
@@ -96,7 +96,7 @@ def test_check_explains_non_json_response(monkeypatch):
 
 
 def test_manifest_declares_connection_check():
-    card = vod_source_manager.MacCMSSourceManagerCard()
+    card = vod_source_manager.VodSourceManagerCard()
 
-    assert "maccms.check" in card.capabilities
-    assert card.manifest.config_fields[0]["editor"] == "maccms_sources"
+    assert "vod_source_manager.check" in card.capabilities
+    assert card.manifest.config_fields[0]["editor"] == "vod_source_manager_sources"
