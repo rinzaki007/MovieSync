@@ -97,7 +97,9 @@ def _normalize_sources(value: object) -> list[dict[str, Any]]:
 
         source_id = str(raw.get("id") or "").strip().lower()
         if not source_id:
-            slug = re.sub(r"[^a-z0-9_-]+", "-", name.lower()).strip("-_")[:32] or "source"
+            slug = re.sub(r"[^a-z0-9_-]+", "-", name.lower()).strip("-_")[:32]
+            if len(slug) < 2:
+                slug = "source"
             suffix = hashlib.sha256(url.encode("utf-8")).hexdigest()[:8]
             source_id = f"{slug}-{suffix}"[:64]
         if not _SOURCE_ID_RE.fullmatch(source_id):
