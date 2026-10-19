@@ -167,7 +167,7 @@ class MacCMSSourceManagerCard(Card):
         name="影视采集源",
         version="0.1.0",
         type="custom",
-        description="集中管理多个 MacCMS JSON 采集接口，并检查接口连接状态。",
+        description="集中管理多个兼容型影视采集接口，并检查接口连接状态。", 
         capabilities=("maccms.sources.manage", "maccms.check"),
         config_fields=(
             {
@@ -186,8 +186,8 @@ class MacCMSSourceManagerCard(Card):
                     },
                     {
                         "key": "url",
-                        "label": "MacCMS JSON 接口地址",
-                        "placeholder": "https://example.com/api.php/provide/vod/",
+                        "label": "影视采集接口地址",
+                        "placeholder": "https://example.com/api.php/provide/vod/", 
                         "required": True,
                     },
                 ),
