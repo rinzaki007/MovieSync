@@ -181,7 +181,10 @@ class MacCMSSourceManagerCard(Card):
                     {"key": "name", "label": "站点名称", "placeholder": "例如：影视站 A", "required": True},
                     {"key": "url", "label": "MacCMS JSON 接口地址", "placeholder": "https://example.com/api.php/provide/vod/", "required": True},
                 ),
-                "description": "在这里集中添加多个站点。添加后先保存并检查连接；只有启用的站点会在后续点播搜索中使用。",
+                "description": (
+                    "在这里集中添加多个站点。添加后先保存并检查连接；"
+                    "只有启用的站点会在后续点播搜索中使用。"
+                ),
             },
         ),
     )
