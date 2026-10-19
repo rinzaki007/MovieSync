@@ -396,10 +396,16 @@
             button.addEventListener('click', () => {
                 activeLineIndex = index;
                 renderLineChoices(currentDetail);
+                if (isEpisodicMedia()) {
+                    playerMessage.textContent = '已切换到线路：' + (line.name || `线路 ${index + 1}`) + '。线路切换仅更新选集列表，不会自动替换正在播放的视频；点击新线路中的集数后才会切换播放。';
+                }
             });
             lineTabs.appendChild(button);
         });
         root.appendChild(lineTabs);
+        if (isEpisodicMedia()) {
+            addText(root, 'p', 'mt-2 text-[11px] leading-5 text-slate-500', '切换线路只更新下方选集列表，不会中断当前播放；点击新线路中的集数后才开始切换视频。');
+        }
         const activeLine = lines[activeLineIndex] || lines[0];
         const episodeItems = (activeLine.episodes || []).filter(episode => /^https?:\/\//i.test(episode.url || ''));
         if (isEpisodicMedia()) {
