@@ -26,7 +26,7 @@
         inlineMode = Boolean(inlineRoot);
         modal = inlineRoot || document.createElement('div');
         modal.id = inlineMode ? 'maccms-inline-panel' : 'maccms-watch-modal';
-        modal.className = inlineMode ? 'hidden mt-4 min-w-0' : 'fixed inset-0 z-[120] hidden items-center justify-center bg-black/80 p-2 backdrop-blur-sm sm:p-4';
+        modal.className = inlineMode ? 'hidden mt-4 min-w-0 maccms-inline-layout' : 'fixed inset-0 z-[120] hidden items-center justify-center bg-black/80 p-2 backdrop-blur-sm sm:p-4';
         modal.innerHTML = `
             <section class="${inlineMode ? 'w-full overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-xl' : 'flex max-h-[96vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl'}">
                 <header class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3 sm:px-5">
