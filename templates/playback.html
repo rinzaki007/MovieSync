@@ -11,17 +11,20 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.css">
   <style>
     .playback-shell{background:linear-gradient(145deg,rgba(15,23,42,.94),rgba(2,6,23,.84));border:1px solid rgba(148,163,184,.14);box-shadow:0 18px 48px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.025)}
-    /* Online playback keeps the shared player visible beside search and source choices. */
-    #playback-main-grid.playback-online-layout{grid-template-columns:minmax(0,1.65fr) minmax(300px,.85fr)!important;align-items:start}
-    #playback-main-grid.playback-online-layout #maccms-inline-panel{grid-column:1;grid-row:1;margin-top:0}
-    #playback-main-grid.playback-online-layout #player-workspace-panel{grid-column:2;grid-row:1}
-    #maccms-inline-panel.maccms-inline-layout .grid{grid-template-columns:minmax(0,1fr)!important}
+    /* Both sources use the same resource-left, video-right workspace proportions. */
+    #playback-main-grid.playback-online-layout{grid-template-columns:minmax(250px,.65fr) minmax(0,1.8fr)!important;align-items:start}
+    #playback-main-grid.playback-online-layout #maccms-inline-panel{grid-column:1;grid-row:1;margin-top:0;min-width:0}
+    #playback-main-grid.playback-online-layout #player-workspace-panel{grid-column:2;grid-row:1;min-width:0}
     #maccms-inline-panel.maccms-inline-layout>section{max-height:calc(100vh - 150px);overflow:auto}
+    #maccms-inline-panel.maccms-inline-layout .grid{display:flex;flex-direction:column;gap:.75rem}
+    #maccms-inline-panel.maccms-inline-layout .grid>aside{order:-1}
+    #maccms-inline-panel.maccms-inline-layout #maccms-watch-results{max-height:38vh;overflow-y:auto;padding-right:2px}
     @media(max-width:1023px){
       #playback-main-grid.playback-online-layout{grid-template-columns:minmax(0,1fr)!important}
       #playback-main-grid.playback-online-layout #maccms-inline-panel{grid-column:1;grid-row:1}
       #playback-main-grid.playback-online-layout #player-workspace-panel{grid-column:1;grid-row:2}
       #maccms-inline-panel.maccms-inline-layout>section{max-height:none}
+      #maccms-inline-panel.maccms-inline-layout #maccms-watch-results{max-height:none}
     }
     .playback-control{background:rgba(2,6,23,.62);border:1px solid rgba(71,85,105,.55)}
     .media-row{border:1px solid transparent;transition:background .15s ease,border-color .15s ease}
@@ -321,39 +324,32 @@
     setPlayerState('已停止');
     progress.textContent = '00:00 / --:--';
   }
-  window.MovieSyncPlayback.showFiles = () => {
-    stopPlaybackForSourceSwitch();
+  function activatePlaybackSource(source, stopCurrent = true) {
+    const online = source === 'online';
+    if (stopCurrent) stopPlaybackForSourceSwitch();
     const browser = document.getElementById('file-browser-panel');
     const panel = document.getElementById('maccms-inline-panel');
     const grid = document.getElementById('playback-main-grid');
-    if (browser) browser.classList.remove('hidden');
-    if (panel) panel.classList.add('hidden');
-    if (grid) { grid.classList.remove('playback-online-layout'); grid.style.gridTemplateColumns = ''; }
-    document.querySelectorAll('[data-playback-source]').forEach(button => {
-      const active = button.dataset.playbackSource === 'files';
-      button.setAttribute('aria-selected', String(active));
-      button.className = active
+    if (browser) browser.classList.toggle('hidden', online);
+    if (panel) panel.classList.toggle('hidden', !online);
+    if (grid) {
+      grid.style.gridTemplateColumns = '';
+      grid.classList.toggle('playback-online-layout', online);
+    }
+    document.querySelectorAll('[data-playback-source]').forEach(tab => {
+      const active = tab.dataset.playbackSource === source;
+      tab.setAttribute('aria-selected', String(active));
+      tab.className = active
         ? 'rounded-xl border border-emerald-600/60 bg-emerald-950/50 px-4 py-2.5 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-900/50'
         : 'rounded-xl border border-slate-700 bg-slate-900/50 px-4 py-2.5 text-xs font-semibold text-slate-300 transition hover:border-slate-600 hover:bg-slate-800';
     });
-  };
+  }
+  window.MovieSyncPlayback.activateOnline = () => activatePlaybackSource('online', false);
+  window.MovieSyncPlayback.showFiles = () => activatePlaybackSource('files', true);
   document.querySelectorAll('[data-playback-source]').forEach(button => {
     button.addEventListener('click', () => {
       if (button.dataset.playbackSource === 'online') {
-        stopPlaybackForSourceSwitch();
-        const browser = document.getElementById('file-browser-panel');
-        const panel = document.getElementById('maccms-inline-panel');
-        const grid = document.getElementById('playback-main-grid');
-        if (browser) browser.classList.add('hidden');
-        if (panel) panel.classList.remove('hidden');
-        if (grid) { grid.style.gridTemplateColumns = ''; grid.classList.add('playback-online-layout'); }
-        document.querySelectorAll('[data-playback-source]').forEach(tab => {
-          const active = tab.dataset.playbackSource === 'online';
-          tab.setAttribute('aria-selected', String(active));
-          tab.className = active
-            ? 'rounded-xl border border-emerald-600/60 bg-emerald-950/50 px-4 py-2.5 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-900/50'
-            : 'rounded-xl border border-slate-700 bg-slate-900/50 px-4 py-2.5 text-xs font-semibold text-slate-300 transition hover:border-slate-600 hover:bg-slate-800';
-        });
+        activatePlaybackSource('online', true);
         if (window.MovieSyncPlayback.openOnline) window.MovieSyncPlayback.openOnline();
       } else if (window.MovieSyncPlayback.showFiles) window.MovieSyncPlayback.showFiles();
     });
@@ -361,9 +357,11 @@
 
   const playbackQuery = new URLSearchParams(window.location.search);
   if (playbackQuery.get('title')) {
-    const onlineTab = document.querySelector('[data-playback-source="online"]');
-    if (onlineTab) onlineTab.click();
-    if (window.MovieSyncPlayback && window.MovieSyncPlayback.openOnline) window.MovieSyncPlayback.openOnline(playbackQuery.get('title'), playbackQuery.get('year') || '');
+    // Activate the inline online workspace directly; do not click the tab and open/search twice.
+    activatePlaybackSource('online', true);
+    if (window.MovieSyncPlayback && window.MovieSyncPlayback.openOnline) {
+      window.MovieSyncPlayback.openOnline(playbackQuery.get('title'), playbackQuery.get('year') || '');
+    }
   }
 
   function setSubtitleTracks(subtitles) {

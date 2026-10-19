@@ -18,10 +18,10 @@ def test_playback_template_compiles_as_jinja():
     assert 'id="maccms-inline-panel"' in source
     assert 'id="player-workspace-panel"' in source
     assert "playback-online-layout" in source
-    assert (
-        "#playback-main-grid.playback-online-layout #maccms-inline-panel{grid-column:1;grid-row:1;margin-top:0}"
-        in source
-    )
+    assert "grid-template-columns:minmax(250px,.65fr) minmax(0,1.8fr)!important" in source
+    assert "function activatePlaybackSource(source, stopCurrent = true)" in source
+    assert "activatePlaybackSource('online', true)" in source
+    assert "window.MovieSyncPlayback.activateOnline" in source
     assert "function stopPlaybackForSourceSwitch()" in source
     assert "player.onerror = null;" in source
     assert "window.MovieSyncPlayback.playOnline = playOnline" in source

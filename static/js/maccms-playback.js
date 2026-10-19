@@ -473,6 +473,9 @@
 
     function openOnline(title = '', year = '') {
         ensureModal();
+        if (inlineMode && window.MovieSyncPlayback && window.MovieSyncPlayback.activateOnline) {
+            window.MovieSyncPlayback.activateOnline();
+        }
         modal.classList.remove('hidden');
         if (title) searchTitle(title, year);
         else {
