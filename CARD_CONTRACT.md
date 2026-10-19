@@ -88,7 +88,7 @@ def create_card(context):
     return ExampleSource()
 ```
 
-插件包方式仍适合需要额外依赖的卡片。除此之外，可信的单文件卡片可以由后台上传并立即加载；文件名（不含 `.py`）必须与 `CardManifest.id` 完全一致，并导出 `create_card(context)` 工厂函数。单文件插件最多 256 KiB，依赖必须已经存在于 MovieSync 的 Python 环境。安装后的卡片会进入统一注册表，并出现在 `GET /api/cards`；资源搜索、集数配置和健康检查由资源来源管理器按卡片 ID 分发。
+插件包方式仍适合需要额外依赖的卡片。除此之外，可信的单文件卡片可以由后台上传并立即加载；文件名用于定位、上传和卸载插件文件，不要求与 `CardManifest.id` 一致；`CardManifest.id` 才是注册表、配置和业务分发使用的稳定卡片 ID。插件必须导出 `create_card(context)` 工厂函数。单文件插件最多 256 KiB，依赖必须已经存在于 MovieSync 的 Python 环境。安装后的卡片会进入统一注册表，并出现在 `GET /api/cards`；资源搜索、集数配置和健康检查由资源来源管理器按卡片 ID 分发。
 
 
 ## 卡片业务配置校验
@@ -153,7 +153,7 @@ def create_card(context):
     return ExampleStorage()
 ```
 
-存储插件可以通过可信 Python 包 entry point 加载，也可以使用单文件卡片方式。单文件方式必须返回 `StorageTargetCard`，文件名（不含 `.py`）与卡片 ID 一致，并导出 `create_card(context)`。启动时会隔离单个文件的加载错误；后台上传会先尝试加载，失败则删除本次上传文件。卸载会注销卡片并删除文件，但保留历史配置。插件依赖必须预先安装，单文件代码以 MovieSync 服务权限运行，不应安装来源不明的代码。
+存储插件可以通过可信 Python 包 entry point 加载，也可以使用单文件卡片方式。单文件方式必须返回 `StorageTargetCard` 并导出 `create_card(context)`；文件名用于文件管理，卡片 ID 以 `CardManifest.id` 为准，两者可以不同。启动时会隔离单个文件的加载错误；后台上传会先尝试加载，失败则删除本次上传文件。卸载会注销卡片并删除文件，但保留历史配置。插件依赖必须预先安装，单文件代码以 MovieSync 服务权限运行，不应安装来源不明的代码。
 
 
 ## 可运行的独立存储插件示例
