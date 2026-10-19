@@ -136,7 +136,7 @@
         $('#maccms-watch-progress-state').textContent = stage === 'success' ? '已完成' : failed ? '未完成' : '进行中';
         $('#maccms-watch-progress-state').className = 'shrink-0 text-[10px] ' + (failed ? 'text-rose-300' : 'text-emerald-300');
         const bar = $('#maccms-watch-progress-bar');
-        bar.style.width = (stage === 'info' ? 12 : stage === 'search' ? 35 : stage === 'match' ? 58 : stage === 'play' ? 82 : 100) + '%';
+        bar.style.width = (stage === 'success' ? 100 : index === 0 ? 12 : index === 1 ? 35 : index === 2 ? 58 : 82) + '%';
         bar.classList.toggle('bg-rose-400', failed);
         bar.classList.toggle('bg-emerald-400', !failed);
         bar.classList.toggle('animate-pulse', stage !== 'success' && !failed);
@@ -530,7 +530,7 @@
     }
 
     function handleAutoPlaybackFailure(error) { if (!autoPlayActive) return; playerMessage.textContent = (error && error.message ? error.message + '；' : '') + '当前资源失败，正在自动切换下一条…'; setAutoProgress('play', '当前线路未能播放，正在切换', (error && error.message ? error.message + ' · ' : '') + '正在尝试下一条资源。'); tryNextAutoResource(autoPlayGeneration); }
-    function handleAutoPlaybackStarted() { playerMessage.textContent = '资源已开始播放。'; setAutoProgress('success', '视频已开始播放', '播放已由播放器事件确认；如果之后中断，可以手动切换线路。'); if (autoPlayActive) autoPlayActive = false; }
+    function handleAutoPlaybackStarted() { playerMessage.textContent = '资源已开始播放。'; setAutoProgress('success', '视频已开始播放', '播放已由播放器事件确认；如果之后中断，可以手动切换线路。'); }
 
     async function movieDetailWatch() {
         const movie = Array.isArray(moviesData) && Number.isInteger(activeMovieDetailIndex) ? moviesData[activeMovieDetailIndex] : null;
