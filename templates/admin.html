@@ -1164,7 +1164,7 @@
                     '<div class="flex items-center gap-2 min-w-0">' +
                         '<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 border border-blue-400/15 text-blue-300"><i class="fa-solid fa-puzzle-piece"></i></span>' +
                         '<div class="min-w-0"><div class="truncate text-sm font-semibold text-slate-100">' + escapeHtml(card.name || card.id) + '</div>' +
-                        '<div class="mt-0.5 text-[10px] text-slate-500">' + escapeHtml(card.id || "unknown") + " · v" + escapeHtml(card.version || "1.0.0") + "</div></div>" +
+                        '<div class="mt-0.5 text-[10px] text-slate-500">' + escapeHtml(card.id === "maccms" ? "资源站管理" : (card.id || "unknown")) + " · v" + escapeHtml(card.version || "1.0.0") + "</div></div>" +
                     '</div><span class="shrink-0 rounded-full border ' + statusClass + ' px-2.5 py-1 text-[10px]">' + statusLabel + '</span>' +
                 '</div><div class="mt-3 flex flex-wrap gap-2"><span class="resource-chip resource-chip-accent">' + escapeHtml(CARD_CATEGORY_META[card.type]?.title || card.type || "其它能力") + "</span>" +
                 capabilities.map(cap => '<span class="resource-chip">' + escapeHtml(CARD_CAPABILITY_LABELS[cap] || "扩展功能") + "</span>").join("") + "</div>" +
@@ -1440,7 +1440,7 @@
                         '<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">' +
                         '<label class="block text-[10px] text-slate-400">站点名称<input data-card-source-name value="' + escapeHtml(item.name || '') +
                         '" maxlength="100" placeholder="例如：影视站 A" class="glass-input mt-1 w-full rounded-md border border-slate-800 px-2.5 py-2 text-xs text-slate-200"></label>' +
-                        '<label class="block text-[10px] text-slate-400">MacCMS JSON 接口地址<input data-card-source-url value="' + escapeHtml(item.url || '') +
+                        '<label class="block text-[10px] text-slate-400">影视采集接口地址<input data-card-source-url value="' + escapeHtml(item.url || '') +
                         '" placeholder="https://example.com/api.php/provide/vod/" class="glass-input mt-1 w-full rounded-md border border-slate-800 px-2.5 py-2 text-xs text-slate-200"></label>' +
                         '</div><div class="flex flex-wrap items-center justify-between gap-2">' +
                         '<label class="flex items-center gap-2 text-[11px] text-slate-300"><input data-card-source-enabled type="checkbox" ' + (item.enabled !== false ? 'checked' : '') +
@@ -1451,7 +1451,7 @@
                         '<div data-card-maccms-source-list="' + escapeHtml(key) + '" class="mt-2 space-y-3">' +
                         items.filter(item => item && typeof item === "object").map(renderSource).join('') +
                         '</div><button type="button" data-card-add-source class="mt-3 rounded-lg border border-sky-400/25 bg-sky-400/5 px-3 py-2 text-[11px] text-sky-200 hover:bg-sky-400/10">＋ 添加采集站点</button>' +
-                        '<p class="mt-2 text-[10px] leading-5 text-slate-500">填写完整的 MacCMS JSON 接口地址。可先关闭“启用此站点”保存后检查接口；内网、本机和非公网地址会被安全策略拦截。</p>';
+                        '<p class="mt-2 text-[10px] leading-5 text-slate-500">填写完整的 影视采集接口地址。可先关闭“启用此站点”保存后检查接口；内网、本机和非公网地址会被安全策略拦截。</p>';
                 } else if (controlType === "json" && field.editor === "rule_list") {
                     const items = Array.isArray(value) ? value : [];
                     const itemFields = Array.isArray(field.item_fields) ? field.item_fields : [];
@@ -1653,7 +1653,7 @@
                             row.className = "rounded-xl border border-slate-700/80 bg-slate-950/45 p-3 space-y-2";
                             row.innerHTML = '<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">' +
                                 '<label class="block text-[10px] text-slate-400">站点名称<input data-card-source-name maxlength="100" placeholder="例如：影视站 A" class="glass-input mt-1 w-full rounded-md border border-slate-800 px-2.5 py-2 text-xs text-slate-200"></label>' +
-                                '<label class="block text-[10px] text-slate-400">MacCMS JSON 接口地址<input data-card-source-url placeholder="https://example.com/api.php/provide/vod/" class="glass-input mt-1 w-full rounded-md border border-slate-800 px-2.5 py-2 text-xs text-slate-200"></label>' +
+                                '<label class="block text-[10px] text-slate-400">影视采集接口地址<input data-card-source-url placeholder="https://example.com/api.php/provide/vod/" class="glass-input mt-1 w-full rounded-md border border-slate-800 px-2.5 py-2 text-xs text-slate-200"></label>' +
                                 '</div><div class="flex flex-wrap items-center justify-between gap-2"><label class="flex items-center gap-2 text-[11px] text-slate-300"><input data-card-source-enabled type="checkbox" checked class="h-4 w-4 accent-blue-500">启用此站点</label>' +
                                 '<button type="button" data-card-remove-source class="rounded-md border border-rose-400/20 px-2.5 py-1.5 text-[11px] text-rose-300 hover:bg-rose-400/10"><i class="fa-solid fa-trash-can mr-1"></i>删除站点</button></div>';
                             list.appendChild(row);
