@@ -14,3 +14,6 @@ def test_playback_template_compiles_as_jinja():
     assert 'href="/tasks"' in source
     assert "Range 请求" in source
     assert "播放地址已获取，正在尝试开始播放。" in source
+    assert 'id="playback-source-switch"' in source
+    assert 'id="maccms-inline-panel"' in source
+    assert "window.MovieSyncPlayback.playOnline = playOnline" in source
