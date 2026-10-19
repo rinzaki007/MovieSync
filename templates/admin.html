@@ -1702,7 +1702,8 @@
                 const canCheck = (card.capabilities || []).some(cap => cap.endsWith(".health_check") || cap.endsWith(".check"));
                 document.getElementById("generic-card-check").classList.toggle("hidden", !canCheck);
                 document.getElementById("generic-card-health").classList.add("hidden");
-                document.getElementById("generic-card-dialog").classList.toggle("generic-card-dialog-wide", ["telegram", "maccms"].includes(cardId));
+                document.getElementById("generic-card-dialog").classList.toggle("generic-card-dialog-wide", cardId === "telegram");
+                if (cardId === "maccms") document.getElementById("generic-card-dialog").classList.add("generic-card-dialog-wide");
                 document.getElementById("generic-card-modal").classList.remove("hidden");
             } catch (error) {
                 if (requestId === genericCardRequestSequence) alert(error.message || "读取卡片配置失败");
