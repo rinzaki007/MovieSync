@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from card_templates.vod_source_manager import _normalize_sources
-from moviesync.web.maccms import _parse_play_sources
+from moviesync.web.vod_source_manager import _parse_play_sources
 
 
 def test_parse_play_sources_aligns_multiple_lines_and_filters_invalid_urls():
