@@ -1164,7 +1164,7 @@
                     '<div class="flex items-center gap-2 min-w-0">' +
                         '<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 border border-blue-400/15 text-blue-300"><i class="fa-solid fa-puzzle-piece"></i></span>' +
                         '<div class="min-w-0"><div class="truncate text-sm font-semibold text-slate-100">' + escapeHtml(card.name || card.id) + '</div>' +
-                        '<div class="mt-0.5 text-[10px] text-slate-500">' + escapeHtml(card.id === "maccms" ? "资源站管理" : (card.id || "unknown")) + " · v" + escapeHtml(card.version || "1.0.0") + "</div></div>" +
+                        '<div class="mt-0.5 text-[10px] text-slate-500">' + escapeHtml(card.id === "vod_source_manager" ? "资源站管理" : (card.id || "unknown")) + " · v" + escapeHtml(card.version || "1.0.0") + "</div></div>" +
                     '</div><span class="shrink-0 rounded-full border ' + statusClass + ' px-2.5 py-1 text-[10px]">' + statusLabel + '</span>' +
                 '</div><div class="mt-3 flex flex-wrap gap-2"><span class="resource-chip resource-chip-accent">' + escapeHtml(CARD_CATEGORY_META[card.type]?.title || card.type || "其它能力") + "</span>" +
                 capabilities.map(cap => '<span class="resource-chip">' + escapeHtml(CARD_CAPABILITY_LABELS[cap] || "扩展功能") + "</span>").join("") + "</div>" +
@@ -1434,9 +1434,9 @@
                         '<input data-card-channel-new-name type="text" autocomplete="off" placeholder="显示名称（可选）" class="glass-input min-w-0 flex-1 rounded-lg border border-slate-800 px-3 py-2 text-xs text-slate-200">' +
                         '<button type="button" data-card-add-channel class="shrink-0 rounded-lg border border-sky-400/25 px-3 py-2 text-xs text-sky-200 hover:bg-sky-400/10">添加频道</button></div>' +
                         '<p class="mt-2 text-[10px] text-slate-500">填写后点“添加频道”，频道会变成小标签；点标签上的 × 即可删除。用户名不需要输入 @。</p>';
-                } else if (controlType === "json" && field.editor === "maccms_sources") {
+                } else if (controlType === "json" && field.editor === "vod_source_manager_sources") {
                     const items = Array.isArray(value) ? value : [];
-                    const renderSource = item => '<div data-card-maccms-source-row class="rounded-xl border border-slate-700/80 bg-slate-950/45 p-3 space-y-2">' +
+                    const renderSource = item => '<div data-card-vod_source_manager-source-row class="rounded-xl border border-slate-700/80 bg-slate-950/45 p-3 space-y-2">' +
                         '<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">' +
                         '<label class="block text-[10px] text-slate-400">站点名称<input data-card-source-name value="' + escapeHtml(item.name || '') +
                         '" maxlength="100" placeholder="例如：影视站 A" class="glass-input mt-1 w-full rounded-md border border-slate-800 px-2.5 py-2 text-xs text-slate-200"></label>' +
@@ -1448,7 +1448,7 @@
                         '<button type="button" data-card-remove-source class="rounded-md border border-rose-400/20 px-2.5 py-1.5 text-[11px] text-rose-300 hover:bg-rose-400/10"><i class="fa-solid fa-trash-can mr-1"></i>删除站点</button>' +
                         '</div></div>';
                     control = '<input type="hidden" ' + common + ' value="[]">' +
-                        '<div data-card-maccms-source-list="' + escapeHtml(key) + '" class="mt-2 space-y-3">' +
+                        '<div data-card-vod_source_manager-source-list="' + escapeHtml(key) + '" class="mt-2 space-y-3">' +
                         items.filter(item => item && typeof item === "object").map(renderSource).join('') +
                         '</div><button type="button" data-card-add-source class="mt-3 rounded-lg border border-sky-400/25 bg-sky-400/5 px-3 py-2 text-[11px] text-sky-200 hover:bg-sky-400/10">＋ 添加采集站点</button>' +
                         '<p class="mt-2 text-[10px] leading-5 text-slate-500">填写完整的 影视采集接口地址。可先关闭“启用此站点”保存后检查接口；内网、本机和非公网地址会被安全策略拦截。</p>';
@@ -1525,7 +1525,7 @@
                 const requiredMark = field.required ? '<span class="ml-1 text-rose-300">*</span>' : '';
                 const savedMark = secret && hasValue[key] ? '<span class="ml-2 text-[10px] text-emerald-300">已保存</span>' : '';
                 const wrapper = document.createElement("div");
-                wrapper.className = "min-w-0 rounded-xl border border-slate-800 bg-slate-900/30 p-3" + (field.editor === "channel_chips" ? " md:col-span-2" : "") + (field.editor === "maccms_sources" ? " md:col-span-2" : "");
+                wrapper.className = "min-w-0 rounded-xl border border-slate-800 bg-slate-900/30 p-3" + (field.editor === "channel_chips" ? " md:col-span-2" : "") + (field.editor === "vod_source_manager_sources" ? " md:col-span-2" : "");
                 wrapper.innerHTML = '<label class="block text-[11px] font-semibold text-slate-300">' + escapeHtml(field.label || key) + requiredMark + sensitiveMark + savedMark + '</label>' +
                     (field.description ? '<p class="mt-1 text-[10px] leading-4 text-slate-500">' + escapeHtml(field.description) + '</p>' : '') + control;
                 const addChannel = () => {
@@ -1646,10 +1646,10 @@
                             list.appendChild(empty);
                         }
                     } else if (event.target.closest("[data-card-add-source]")) {
-                        const list = wrapper.querySelector('[data-card-maccms-source-list="' + CSS.escape(key) + '"]');
+                        const list = wrapper.querySelector('[data-card-vod_source_manager-source-list="' + CSS.escape(key) + '"]');
                         if (list) {
                             const row = document.createElement("div");
-                            row.setAttribute("data-card-maccms-source-row", "");
+                            row.setAttribute("data-card-vod_source_manager-source-row", "");
                             row.className = "rounded-xl border border-slate-700/80 bg-slate-950/45 p-3 space-y-2";
                             row.innerHTML = '<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">' +
                                 '<label class="block text-[10px] text-slate-400">站点名称<input data-card-source-name maxlength="100" placeholder="例如：影视站 A" class="glass-input mt-1 w-full rounded-md border border-slate-800 px-2.5 py-2 text-xs text-slate-200"></label>' +
@@ -1660,7 +1660,7 @@
                             row.querySelector("[data-card-source-name]")?.focus();
                         }
                     } else if (event.target.closest("[data-card-remove-source]")) {
-                        event.target.closest("[data-card-maccms-source-row]")?.remove();
+                        event.target.closest("[data-card-vod_source_manager-source-row]")?.remove();
                     } else if (event.target.closest("[data-card-add-row]")) {
                         const list = wrapper.querySelector('[data-card-structured-list="' + CSS.escape(key) + '"]');
                         const itemFields = Array.isArray(field.item_fields) ? field.item_fields : [];
@@ -1703,7 +1703,7 @@
                 document.getElementById("generic-card-check").classList.toggle("hidden", !canCheck);
                 document.getElementById("generic-card-health").classList.add("hidden");
                 document.getElementById("generic-card-dialog").classList.toggle("generic-card-dialog-wide", cardId === "telegram");
-                if (cardId === "maccms") document.getElementById("generic-card-dialog").classList.add("generic-card-dialog-wide");
+                if (cardId === "vod_source_manager") document.getElementById("generic-card-dialog").classList.add("generic-card-dialog-wide");
                 document.getElementById("generic-card-modal").classList.remove("hidden");
             } catch (error) {
                 if (requestId === genericCardRequestSequence) alert(error.message || "读取卡片配置失败");
@@ -1723,7 +1723,7 @@
                 const key = String(field.key);
                 const input = document.querySelector('[data-card-field="' + CSS.escape(key) + '"]');
                 const type = input?.dataset.cardType || field.type || "string";
-                const structuredJson = type === "json" && ["channel_chips", "object_list", "object_fields", "rule_list", "maccms_sources"].includes(field.editor);
+                const structuredJson = type === "json" && ["channel_chips", "object_list", "object_fields", "rule_list", "vod_source_manager_sources"].includes(field.editor);
                 if (!input && !structuredJson) continue;
                 let value;
                 if (type === "boolean") value = input.checked;
@@ -1748,9 +1748,9 @@
                         });
                         return item;
                     }).filter(item => item.pattern || item.replace) : [];
-                } else if (type === "json" && field.editor === "maccms_sources") {
-                    const list = document.querySelector('[data-card-maccms-source-list="' + CSS.escape(key) + '"]');
-                    value = list ? Array.from(list.querySelectorAll("[data-card-maccms-source-row]")).map(row => ({
+                } else if (type === "json" && field.editor === "vod_source_manager_sources") {
+                    const list = document.querySelector('[data-card-vod_source_manager-source-list="' + CSS.escape(key) + '"]');
+                    value = list ? Array.from(list.querySelectorAll("[data-card-vod_source_manager-source-row]")).map(row => ({
                         name: row.querySelector("[data-card-source-name]")?.value.trim() || "",
                         url: row.querySelector("[data-card-source-url]")?.value.trim() || "",
                         enabled: Boolean(row.querySelector("[data-card-source-enabled]")?.checked)
