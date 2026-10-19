@@ -62,3 +62,13 @@ def test_homepage_douban_immediate_watch_navigates_to_playback_center():
     assert "year: movie.year || movie.release_year || ''" in script
     assert "type: category" in script
 
+
+
+def test_playback_source_switch_separates_episode_selector_and_openlist_hint():
+    root = Path(__file__).resolve().parents[1]
+    template = (root / "templates" / "playback.html").read_text(encoding="utf-8")
+
+    assert 'id="playback-openlist-hint"' in template
+    assert "const episodePanel = document.getElementById('vod_source_manager-episode-panel')" in template
+    assert "episodePanel.classList.toggle('hidden', !online || !episodePanel.childElementCount)" in template
+    assert "openlistHint.classList.toggle('hidden', online)" in template
