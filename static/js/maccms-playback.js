@@ -38,9 +38,9 @@
                 <form id="maccms-watch-search-form" class="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-900/50 px-4 py-3 sm:px-5">
                     <label class="flex min-w-[150px] flex-1 items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-3">
                         <i class="fa-solid fa-magnifying-glass text-xs text-slate-500"></i>
-                        <input id="maccms-watch-search-input" type="search" placeholder="搜索电影名称…" class="w-full min-w-0 bg-transparent py-2 text-xs text-slate-200 outline-none placeholder:text-slate-600" required>
+                        <input id="maccms-watch-search-input" type="search" placeholder="搜索影片或剧集名称…" class="w-full min-w-0 bg-transparent py-2 text-xs text-slate-200 outline-none placeholder:text-slate-600" required>
                     </label>
-                    <input id="maccms-watch-search-year" type="number" min="1900" max="2099" placeholder="年份（可选）" aria-label="电影年份（可选）" class="w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 outline-none placeholder:text-slate-600">
+                    <input id="maccms-watch-search-year" type="number" min="1900" max="2099" placeholder="年份（可选）" aria-label="影片年份（可选）" class="w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 outline-none placeholder:text-slate-600">
                     <button type="submit" class="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500"><i class="fa-solid fa-search mr-1"></i>搜索</button>
                 </form>
                 <div id="maccms-watch-progress" class="hidden mx-3 mt-3 rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-3 sm:mx-5 sm:p-4" role="status" aria-live="polite">
@@ -505,7 +505,7 @@
         mediaType = resolveMediaType(requestedMediaType);
         autoPlayEpisodeMode = false;
         const value = String(title || '').trim();
-        if (!value) { playerMessage.textContent = '请输入电影名称后再搜索。'; return; }
+        if (!value) { playerMessage.textContent = '请输入影片或剧集名称后再搜索。'; return; }
         const requestId = ++searchRequest;
         autoPlayActive = false;
         autoPlayGeneration++;
@@ -644,7 +644,7 @@
         if (title) searchTitle(title, year, mediaType === 'movie', mediaType);
         else {
             $('#maccms-watch-search-input').focus();
-            playerMessage.textContent = '输入电影名称搜索采集源；选择匹配影片后，再手动选择线路播放。';
+            playerMessage.textContent = '输入影片或剧集名称搜索采集源；匹配后选择线路与播放项。';
         }
     }
 
