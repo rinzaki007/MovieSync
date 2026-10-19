@@ -228,7 +228,7 @@ class CardFilePluginManager:
         except (OSError, UnicodeDecodeError):
             return
         if "MacCMSSourceManagerCard" not in legacy_text or not re.search(
-            r"\\bid\\s*=\\s*['\\\"]maccms['\\\"]", legacy_text
+            r"\bid\s*=\s*['\"]maccms['\"]", legacy_text
         ):
             return
 
