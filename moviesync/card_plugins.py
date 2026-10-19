@@ -108,6 +108,8 @@ class CardFilePluginManager:
             return
         marker_dir = self.plugin_dir / ".seeded"
         marker_dir.mkdir(parents=True, exist_ok=True)
+        self._migrate_renamed_maccms_card(bundled_dir, marker_dir)
+
         for source in sorted(bundled_dir.glob("*.py")):
             try:
                 filename = self.validate_filename(source.name)
@@ -207,6 +209,73 @@ class CardFilePluginManager:
                 self.logger.info("已卸载已从内置模板移除且未修改的卡片 %s", filename)
             except OSError:
                 self.logger.exception("清理已移除的内置卡片 %s 失败", filename)
+
+    def _migrate_renamed_maccms_card(self, bundled_dir: Path, marker_dir: Path) -> None:
+        """Move a legacy persistent maccms.py card to its renamed module path.
+
+        Preserve administrator edits, but avoid loading both the old and new files
+        under the same stable card ID after upgrading from older releases.
+        """
+        legacy = self.plugin_dir / "maccms.py"
+        destination = self.plugin_dir / "vod_source_manager.py"
+        bundled = bundled_dir / "vod_source_manager.py"
+        if not legacy.is_file() or not bundled.is_file():
+            return
+
+        try:
+            legacy_content = legacy.read_bytes()
+            legacy_text = legacy_content.decode("utf-8")
+        except (OSError, UnicodeDecodeError):
+            return
+        if "MacCMSSourceManagerCard" not in legacy_text or not re.search(
+            r"\bid\s*=\s*['\"]maccms['\"]", legacy_text
+        ):
+            return
+
+        legacy_blob = _git_blob_sha(legacy_content)
+        legacy_marker = marker_dir / "maccms.py.seeded"
+        destination_marker = marker_dir / "vod_source_manager.py.seeded"
+        try:
+            legacy_marker_value = (
+                legacy_marker.read_text(encoding="ascii").strip()
+                if legacy_marker.is_file()
+                else ""
+            )
+            bundled_blob = _git_blob_sha(bundled.read_bytes())
+            if destination.exists():
+                destination_blob = _git_blob_sha(destination.read_bytes())
+                destination_marker_value = (
+                    destination_marker.read_text(encoding="ascii").strip()
+                    if destination_marker.is_file()
+                    else ""
+                )
+                destination_is_unmodified = (
+                    destination_blob == bundled_blob
+                    or destination_marker_value == destination_blob
+                )
+                if not destination_is_unmodified:
+                    self.logger.error(
+                        "检测到旧版 maccms.py 与已自定义的 vod_source_manager.py 同时存在；"
+                        "为避免覆盖用户修改，保留两个文件，请手动合并后移除旧文件"
+                    )
+                    return
+                destination.unlink()
+
+            # A matching seed marker proves the old file was not edited. The known
+            # original template hash also handles installations without a marker.
+            if legacy_marker_value == legacy_blob or legacy_blob == "be00389c9e63e655eb79f7a4d873b8b1c9fe9373":
+                new_marker_value = legacy_blob
+            else:
+                new_marker_value = f"customized:{legacy_blob}"
+
+            legacy.rename(destination)
+            destination_marker.write_text(new_marker_value, encoding="ascii")
+            legacy_marker.unlink(missing_ok=True)
+            self.logger.info(
+                "已将旧版内置卡片 maccms.py 迁移为 vod_source_manager.py，保留卡片 ID maccms"
+            )
+        except OSError:
+            self.logger.exception("迁移旧版 MacCMS 卡片文件失败")
 
     def _migrate_legacy_builtin_card(self, filename: str, destination: Path) -> None:
         """Apply narrowly-scoped upgrades without replacing administrator card files."""
