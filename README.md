@@ -1,8 +1,5 @@
 # 🎬 MovieSync
 
-<img width="1920" height="945" alt="99ecaf9aca6fa251b3fc9ecc3d8a911e" src="https://github.com/user-attachments/assets/381f42b5-b998-4538-8405-e9657fda3a78" />
-
-
 > 自托管影视检索、资源选择与网盘任务管理平台
 
 MovieSync 面向 Docker、NAS 和家庭服务器。它把影视信息、资源搜索、网盘转存和自动追剧整合在一个 Web 界面中，并通过卡片扩展资源来源和存储目标。
