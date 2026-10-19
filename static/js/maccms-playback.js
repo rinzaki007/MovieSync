@@ -11,6 +11,12 @@
     let currentDetail = null;
     let currentSourceName = '';
     let activeLineIndex = 0;
+    let autoPlayCandidates = [];
+    let autoPlayCandidateIndex = 0;
+    let autoPlayUrls = [];
+    let autoPlayUrlIndex = 0;
+    let autoPlayActive = false;
+    let autoPlayGeneration = 0;
 
     const $ = (selector) => modal.querySelector(selector);
 
@@ -291,6 +297,8 @@
     }
 
     async function chooseMovie(candidate) {
+        autoPlayActive = false;
+        autoPlayGeneration++;
         const requestId = ++detailRequest;
         selectedCandidate = candidate;
         currentDetail = null;
@@ -332,16 +340,18 @@
         });
     }
 
-    async function playUrl(url, itemName, title) {
+    async function playUrl(url, itemName, title, automatic = false) {
+        if (!automatic) autoPlayActive = false;
         resetVideo();
         $('#maccms-watch-placeholder').classList.add('hidden');
         playerMessage.textContent = `正在尝试播放：${title || ''} · ${itemName || ''}`;
         if (window.MovieSyncPlayback && typeof window.MovieSyncPlayback.playOnline === 'function') {
             try {
                 await window.MovieSyncPlayback.playOnline(url, title, itemName);
-                playerMessage.textContent = `已将线路交给播放中心：${title || ''} · ${itemName || ''}。若未自动播放，请点击主播放器上的播放按钮。`;
+                playerMessage.textContent = `正在尝试：${title || ''} · ${itemName || ''}`;
             } catch (error) {
-                playerMessage.textContent = (error.message || '无法启动这条线路。') + ' 可直接切换线路或播放项。';
+                if (automatic) handleAutoPlaybackFailure(error);
+                else playerMessage.textContent = (error.message || '无法启动这条线路。') + ' 可直接切换线路或播放项。';
             }
             return;
         }
@@ -386,10 +396,12 @@
         });
     }
 
-    async function searchTitle(title, year = '') {
+    async function searchTitle(title, year = '', autoPlay = true) {
         const value = String(title || '').trim();
         if (!value) { playerMessage.textContent = '请输入电影名称后再搜索。'; return; }
         const requestId = ++searchRequest;
+        autoPlayActive = false;
+        autoPlayGeneration++;
         openModal(value);
         $('#maccms-watch-search-input').value = value;
         $('#maccms-watch-search-year').value = String(year || '');
@@ -398,9 +410,10 @@
             if (requestId !== searchRequest) return;
             const candidates = renderCandidates(result.results, value, year || '');
             if (candidates.length) {
-                playerMessage.textContent = '已按片名、年份及站点返回的线路信息排序。选择影片后，再点击“播放”确认开始播放。';
+                playerMessage.textContent = '已按片名、年份和线路信息排序，正在自动尝试最佳匹配；失败会依次切换后续资源。';
                 const bestCard = $('#maccms-watch-results').firstElementChild;
                 if (bestCard) bestCard.classList.add('ring-1', 'ring-emerald-900/70');
+                if (autoPlay) startAutoPlayback(candidates);
             } else playerMessage.textContent = '没有找到候选影片。你可以检查站点设置或尝试更短的片名。';
         } catch (error) {
             if (requestId !== searchRequest) return;
@@ -408,6 +421,43 @@
             playerMessage.textContent = '搜索失败，请稍后重试或检查采集源配置。';
         }
     }
+
+    function startAutoPlayback(candidates) {
+        autoPlayGeneration++; autoPlayCandidates = candidates.slice(); autoPlayCandidateIndex = 0;
+        autoPlayUrls = []; autoPlayUrlIndex = 0; autoPlayActive = true;
+        tryNextAutoResource(autoPlayGeneration);
+    }
+
+    async function tryNextAutoResource(generation) {
+        if (!autoPlayActive || generation !== autoPlayGeneration) return;
+        if (autoPlayUrlIndex >= autoPlayUrls.length) {
+            const candidate = autoPlayCandidates[autoPlayCandidateIndex++];
+            if (!candidate) { autoPlayActive = false; playerMessage.textContent = '所有匹配资源都尝试失败了。可以手动选择其他影片或检查采集源。'; $('#maccms-watch-status').textContent = '已尝试所有候选资源，均未能开始播放'; return; }
+            selectedCandidate = candidate; currentDetail = null; currentSourceName = candidate.source.source_name || '采集站'; activeLineIndex = 0;
+            $('#maccms-watch-selected-title').textContent = candidate.item.title || '影片详情'; $('#maccms-watch-selected-meta').textContent = candidateSubtitle(candidate);
+            playerMessage.textContent = '正在读取匹配资源：' + (candidate.item.title || '');
+            try {
+                const params = new URLSearchParams({ source_id: candidate.source.source_id, vod_id: candidate.item.id });
+                const result = await fetchJson('/api/maccms/detail?' + params.toString());
+                if (!autoPlayActive || generation !== autoPlayGeneration) return;
+                currentDetail = result.detail; currentSourceName = result.source_name || currentSourceName;
+                $('#maccms-watch-selected-title').textContent = currentDetail.title || candidate.item.title || '影片详情';
+                $('#maccms-watch-selected-meta').textContent = [currentSourceName, currentDetail.year || candidate.item.year].filter(Boolean).join(' · ');
+                renderLineChoices(currentDetail); autoPlayUrls = [];
+                for (const line of (currentDetail.play_sources || [])) for (const episode of (line.episodes || [])) {
+                    if (/^https?:\/\//i.test(episode.url || '')) autoPlayUrls.push({ url: episode.url, name: [line.name, episode.name].filter(Boolean).join(' · ') || '正片', title: currentDetail.title || candidate.item.title || '' });
+                }
+                autoPlayUrlIndex = 0;
+            } catch (error) { if (!autoPlayActive || generation !== autoPlayGeneration) return; playerMessage.textContent = '读取资源失败，正在尝试下一项：' + (error.message || '详情请求失败'); return tryNextAutoResource(generation); }
+            if (!autoPlayUrls.length) return tryNextAutoResource(generation);
+        }
+        const resource = autoPlayUrls[autoPlayUrlIndex++]; if (!resource) return tryNextAutoResource(generation);
+        $('#maccms-watch-placeholder').classList.remove('hidden'); playerMessage.textContent = '正在尝试资源 ' + autoPlayUrlIndex + '/' + autoPlayUrls.length + '：' + resource.name;
+        try { await playUrl(resource.url, resource.name, resource.title, true); } catch (error) { handleAutoPlaybackFailure(error); }
+    }
+
+    function handleAutoPlaybackFailure(error) { if (!autoPlayActive) return; playerMessage.textContent = (error && error.message ? error.message + '；' : '') + '当前资源失败，正在自动切换下一条…'; tryNextAutoResource(autoPlayGeneration); }
+    function handleAutoPlaybackStarted() { if (autoPlayActive) playerMessage.textContent = '资源已开始播放；若线路随后失效，将自动尝试下一条。'; }
 
     async function movieDetailWatch() {
         const movie = Array.isArray(moviesData) && Number.isInteger(activeMovieDetailIndex) ? moviesData[activeMovieDetailIndex] : null;
@@ -417,7 +467,8 @@
             showToast('目前先支持电影点播；电视剧、综艺和动漫的线路及集数选择会在后续阶段接入。', 'info');
             return;
         }
-        await searchTitle(movie.title || '', movie.year || movie.release_year || '');
+        const params = new URLSearchParams({ title: movie.title || '', year: movie.year || movie.release_year || '' });
+        window.location.assign('/playback?' + params.toString());
     }
 
     function openOnline(title = '', year = '') {
@@ -433,4 +484,6 @@
     window.movieDetailWatch = movieDetailWatch;
     window.MovieSyncPlayback = window.MovieSyncPlayback || {};
     window.MovieSyncPlayback.openOnline = openOnline;
+    window.MovieSyncPlayback.onOnlinePlaybackFailure = handleAutoPlaybackFailure;
+    window.MovieSyncPlayback.onOnlinePlaybackStarted = handleAutoPlaybackStarted;
 })();

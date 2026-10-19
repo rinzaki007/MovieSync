@@ -248,6 +248,8 @@
     if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('只支持 HTTP 或 HTTPS 在线播放地址。');
     stopOnlinePlayback();
     clearSubtitleTracks();
+    player.onerror = () => { playerStatus.textContent = '在线线路加载失败；正在尝试下一条资源。'; setPlayerState('播放失败', 'error'); if (window.MovieSyncPlayback && window.MovieSyncPlayback.onOnlinePlaybackFailure) window.MovieSyncPlayback.onOnlinePlaybackFailure(new Error('媒体资源加载失败')); };
+    player.onplaying = () => { setPlayerState('正在播放', 'playing'); if (window.MovieSyncPlayback && window.MovieSyncPlayback.onOnlinePlaybackStarted) window.MovieSyncPlayback.onOnlinePlaybackStarted(); };
     playerTitle.textContent = title || itemName || 'MacCMS 在线点播';
     playerPath.textContent = '在线点播 · ' + (itemName || '已选择播放项');
     playerStatus.textContent = '正在尝试播放在线线路；线路尚未经过预先验证。';
@@ -266,8 +268,8 @@
       });
       onlineHls.on(window.Hls.Events.ERROR, (_event, data) => {
         if (data && data.fatal) {
-          playerStatus.textContent = '在线线路播放失败；请在点播区域切换线路或播放项。';
-          setPlayerState('播放失败', 'error');
+          playerStatus.textContent = '在线线路播放失败；正在尝试下一条资源。'; setPlayerState('播放失败', 'error');
+          if (window.MovieSyncPlayback && window.MovieSyncPlayback.onOnlinePlaybackFailure) window.MovieSyncPlayback.onOnlinePlaybackFailure(new Error('HLS 线路播放失败'));
         }
       });
       return true;
@@ -321,6 +323,13 @@
       } else if (window.MovieSyncPlayback.showFiles) window.MovieSyncPlayback.showFiles();
     });
   });
+
+  const playbackQuery = new URLSearchParams(window.location.search);
+  if (playbackQuery.get('title')) {
+    const onlineTab = document.querySelector('[data-playback-source="online"]');
+    if (onlineTab) onlineTab.click();
+    if (window.MovieSyncPlayback && window.MovieSyncPlayback.openOnline) window.MovieSyncPlayback.openOnline(playbackQuery.get('title'), playbackQuery.get('year') || '');
+  }
 
   function setSubtitleTracks(subtitles) {
     clearSubtitleTracks();

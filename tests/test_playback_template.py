@@ -17,3 +17,14 @@ def test_playback_template_compiles_as_jinja():
     assert 'id="playback-source-switch"' in source
     assert 'id="maccms-inline-panel"' in source
     assert "window.MovieSyncPlayback.playOnline = playOnline" in source
+
+
+def test_playback_template_supports_douban_autoplay_and_fallback():
+    root = Path(__file__).resolve().parents[1]
+    template = (root / "templates" / "playback.html").read_text(encoding="utf-8")
+    script = (root / "static" / "js" / "maccms-playback.js").read_text(encoding="utf-8")
+    assert "playbackQuery.get('title')" in template
+    assert "onOnlinePlaybackFailure" in template
+    assert "window.location.assign('/playback?'" in script
+    assert "function startAutoPlayback(candidates)" in script
+    assert "function tryNextAutoResource(generation)" in script
