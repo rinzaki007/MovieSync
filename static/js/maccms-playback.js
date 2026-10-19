@@ -241,7 +241,17 @@
         const year = String(item.year || '').match(/\b(19\d{2}|20\d{2})\b/);
         const wantedYear = String(targetYear || '').match(/\b(19\d{2}|20\d{2})\b/);
         if (year && wantedYear) score += year[1] === wantedYear[1] ? 24 : -12;
-        if (item.category && /电影|movie/i.test(item.category)) score += 4;
+        const category = String(item.category || item.type || '').toLowerCase();
+        const expectedCategory = mediaType === 'series' ? /电视剧|连续剧|剧集|series|tv/i.test(category)
+            : mediaType === 'anime' ? /动漫|动画|番剧|anime|animation/i.test(category)
+                : mediaType === 'variety' ? /综艺|真人秀|variety|reality/i.test(category)
+                    : /电影|movie/i.test(category);
+        const clearlyMovie = /电影|movie/i.test(category);
+        const clearlySeries = /电视剧|连续剧|剧集|series|tv/i.test(category);
+        const clearlyAnime = /动漫|动画|番剧|anime|animation/i.test(category);
+        const clearlyVariety = /综艺|真人秀|variety|reality/i.test(category);
+        if (category && expectedCategory) score += 8;
+        else if (category && (clearlyMovie || clearlySeries || clearlyAnime || clearlyVariety)) score -= 12;
         if (Array.isArray(item.play_sources) && item.play_sources.length) score += 3;
         if (item.remarks) score += 1;
         return score;
@@ -337,7 +347,7 @@
         const activeLine = lines[activeLineIndex] || lines[0];
         const episodes = document.createElement('div');
         episodes.className = 'space-y-2';
-        addText(episodes, 'div', 'text-[10px] text-slate-400', `${activeLine.name || '当前线路'} · ${(activeLine.episodes || []).length} 个播放项`);
+        addText(episodes, 'div', 'text-[10px] text-slate-400', `${activeLine.name || '当前线路'} · ${(activeLine.episodes || []).length} ${isEpisodicMedia() ? '个选集' : '个播放项'}`);
         for (const episode of (activeLine.episodes || [])) {
             if (!/^https?:\/\//i.test(episode.url || '')) continue;
             const row = document.createElement('div');
