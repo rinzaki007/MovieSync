@@ -46,13 +46,23 @@ def test_file_plugin_loads_and_uninstall_removes_only_plugin_file(tmp_path):
     assert manager.list_plugins() == []
 
 
-def test_file_plugin_requires_filename_to_match_manifest_id(tmp_path):
+def test_file_plugin_allows_filename_to_differ_from_manifest_id(tmp_path):
+    plugin_dir = tmp_path / "cards"
+    registry = CardRegistry()
     manager = CardFilePluginManager(
-        tmp_path / "cards", CardRegistry(), logging.getLogger("test-card-plugins")
+        plugin_dir, registry, logging.getLogger("test-card-plugins")
     )
-    with pytest.raises(ValueError, match="必须与文件名"):
-        manager.install("sample-plugin.py", _plugin_source("different-id"))
-    assert not (tmp_path / "cards" / "sample-plugin.py").exists()
+
+    card = manager.install("vod_source_manager.py", _plugin_source("maccms"))
+
+    assert card.card_id == "maccms"
+    assert registry.get("maccms") is card
+    assert manager.list_plugins()[0]["filename"] == "vod_source_manager.py"
+    assert manager.list_plugins()[0]["card_id"] == "maccms"
+
+    removed = manager.uninstall("vod_source_manager.py")
+    assert removed == {"filename": "vod_source_manager.py", "card_id": "maccms"}
+    assert registry.get("maccms") is None
 
 
 @pytest.mark.parametrize("filename", ["../escape.py", "UPPER.py", "not-python.txt", ".hidden.py"])
