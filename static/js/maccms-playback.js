@@ -336,6 +336,8 @@
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'mt-2 w-full rounded-lg border border-slate-700 bg-slate-800/80 px-3 py-2 text-left text-[11px] font-medium text-slate-200 hover:border-emerald-700 hover:bg-slate-800';
+            button.dataset.sourceId = String(candidate.source.source_id ?? '');
+            button.dataset.itemId = String(candidate.item.id ?? '');
             button.textContent = selectedCandidate === candidate ? '当前已选择' : '选择此影片';
             if (selectedCandidate === candidate) button.classList.add('border-emerald-700', 'text-emerald-300');
             button.addEventListener('click', () => chooseMovie(candidate));
@@ -496,11 +498,13 @@
     function renderCandidatesFromSelection() {
         const buttons = $('#maccms-watch-results').querySelectorAll('article button');
         buttons.forEach(button => {
-            const card = button.closest('article');
-            const title = card && card.querySelector('.text-xs.font-semibold');
-            if (title && selectedCandidate && title.textContent === selectedCandidate.item.title) {
-                button.textContent = '当前已选择';
-            }
+            const isSelected = Boolean(selectedCandidate) &&
+                button.dataset.sourceId === String(selectedCandidate.source.source_id ?? '') &&
+                button.dataset.itemId === String(selectedCandidate.item.id ?? '');
+            button.textContent = isSelected ? '当前已选择' : '选择此影片';
+            button.classList.toggle('border-emerald-700', isSelected);
+            button.classList.toggle('text-emerald-300', isSelected);
+            button.setAttribute('aria-pressed', String(isSelected));
         });
     }
 
