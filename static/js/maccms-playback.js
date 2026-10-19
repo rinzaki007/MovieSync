@@ -610,12 +610,28 @@
                 if (matches.length === 1) addResource(line, matches[0]);
             });
         }
-        if (autoPlayUrls.length > 1) {
-            playerMessage.textContent = `已选择 ${episodeName}，将按顺序尝试其他线路中可确认的同一集。`;
-        } else {
-            playerMessage.textContent = `已选择 ${episodeName}。没有找到可确认的同集备用线路，不会自动尝试其他集数。`;
+        if (!autoPlayUrls.length) {
+            autoPlayActive = false;
+            playerMessage.textContent = `“${episodeName}”没有有效的 HTTP/HTTPS 播放地址，请尝试该线路的其他播放项。`;
+            setAutoProgress('playFailed', '播放地址无效', '资源站没有为当前选集提供可用的 HTTP/HTTPS 地址。');
+            return;
         }
-        tryNextAutoResource(autoPlayGeneration);
+
+        if (autoPlayUrls.length > 1) {
+            playerMessage.textContent = `已选择 ${episodeName}，正在播放所选集；失败时只尝试其他线路中可确认的同一集。`;
+        } else {
+            playerMessage.textContent = `正在播放所选集：${episodeName}。没有找到可确认的同集备用线路，不会自动尝试其他集数。`;
+        }
+
+        // Start the selected URL directly in the click handler's call chain so the
+        // browser's user-activation allowance is preserved (especially for HLS).
+        // Set the fallback cursor first; playback errors can then continue with the
+        // remaining same-episode URLs through handleAutoPlaybackFailure().
+        const selectedResource = autoPlayUrls[0];
+        autoPlayUrlIndex = 1;
+        $('#maccms-watch-placeholder').classList.add('hidden');
+        setAutoProgress('play', '正在播放所选集', selectedResource.name + ' · 等待播放器确认播放结果');
+        void playUrl(selectedResource.url, selectedResource.name, selectedResource.title, true);
     }
 
     function handleAutoPlaybackFailure(error) { if (!autoPlayActive) return; playerMessage.textContent = (error && error.message ? error.message + '；' : '') + '当前资源失败，正在自动切换下一条…'; setAutoProgress('play', '当前线路未能播放，正在切换', (error && error.message ? error.message + ' · ' : '') + '正在尝试下一条资源。'); tryNextAutoResource(autoPlayGeneration); }
