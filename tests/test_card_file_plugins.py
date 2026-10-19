@@ -670,3 +670,40 @@ def test_failed_registration_closes_factory_created_card(tmp_path):
     assert marker.read_text(encoding="utf-8") == "closed"
     assert registry.get("duplicate") is existing
     assert manager.list_plugins()[0]["loaded"] is False
+
+
+def test_legacy_maccms_card_is_migrated_to_renamed_file_without_duplicate_registration(tmp_path):
+    plugin_dir = tmp_path / "cards"
+    bundled_dir = tmp_path / "bundled"
+    marker_dir = plugin_dir / ".seeded"
+    bundled_dir.mkdir(parents=True)
+    marker_dir.mkdir(parents=True)
+
+    bundled_source = '''from moviesync.cards import Card, CardManifest
+class MacCMSSourceManagerCard(Card):
+    manifest = CardManifest(id="maccms", name="VOD source", type="custom")
+def create_card(context): return MacCMSSourceManagerCard()
+'''
+    legacy_custom_source = bundled_source.replace(
+        'name="VOD source"', 'name="Customized legacy VOD source"'
+    ) + "# administrator customization\\n"
+    (bundled_dir / "vod_source_manager.py").write_text(bundled_source, encoding="utf-8")
+    (plugin_dir / "maccms.py").write_text(legacy_custom_source, encoding="utf-8")
+    # Simulate a previously seeded new filename from an earlier startup after upgrade.
+    (plugin_dir / "vod_source_manager.py").write_text(bundled_source, encoding="utf-8")
+    (marker_dir / "maccms.py.seeded").write_text("old-bundled-hash", encoding="ascii")
+    (marker_dir / "vod_source_manager.py.seeded").write_text(
+        card_plugins._git_blob_sha(bundled_source.encode()), encoding="ascii"
+    )
+
+    registry = CardRegistry()
+    manager = CardFilePluginManager(plugin_dir, registry, logging.getLogger("test-maccms-migration"), bundled_dir)
+    loaded = manager.load_all()
+
+    assert loaded == ["maccms"]
+    assert registry.get("maccms") is not None
+    assert registry.get("maccms").manifest.name == "Customized legacy VOD source"
+    assert not (plugin_dir / "maccms.py").exists()
+    assert (plugin_dir / "vod_source_manager.py").is_file()
+    assert not (marker_dir / "maccms.py.seeded").exists()
+    assert (marker_dir / "vod_source_manager.py.seeded").read_text(encoding="ascii").startswith("customized:")
