@@ -596,7 +596,7 @@
         const episodeName = String(episode.name || '未命名播放项');
         const title = currentDetail && currentDetail.title || (selectedCandidate && selectedCandidate.item.title) || '';
         const addResource = (line, item) => {
-            if (!item || !/^https?:\\/\\//i.test(item.url || '')) return;
+            if (!item || !/^https?:\/\//i.test(item.url || '')) return;
             if (autoPlayUrls.some(resource => resource.url === item.url)) return;
             autoPlayUrls.push({url: item.url, name: [line.name, item.name].filter(Boolean).join(' · ') || episodeName, title});
         };
@@ -606,7 +606,7 @@
         if (selectedKey) {
             lines.forEach((line, index) => {
                 if (index === sourceIndex) return;
-                const matches = (line.episodes || []).filter(item => episodeMatchKey(item.name) === selectedKey && /^https?:\\/\\//i.test(item.url || ''));
+                const matches = (line.episodes || []).filter(item => episodeMatchKey(item.name) === selectedKey && /^https?:\/\//i.test(item.url || ''));
                 if (matches.length === 1) addResource(line, matches[0]);
             });
         }
