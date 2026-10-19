@@ -8,7 +8,7 @@ MovieSync 是一个面向 Docker、NAS 和家庭服务器的自托管影视管�
 - **资源搜索**：通过 PanSou、Telegram 等资源卡片查找影视资源。
 - **网盘转存**：选择资源、存储目标和保存目录，集中查看任务状态与日志。
 - **自动追剧**：设置起追集数，跟进后续内容并避免重复转存。
-- **播放中心**：从影视卡片直达在线点播；也可通过兼容的播放卡片播放已转存文件。MacCMS 在线点播需配置可用的资源站。
+- **播放中心**：从影视卡片直达在线点播；也可通过兼容的播放卡片播放已转存文件。在线点播需配置可用的兼容资源站。
 - **卡片扩展**：按需安装和配置影视信息、资源来源、存储及播放卡片。
 
 MovieSync 核心可以独立运行，不要求预装特定资源源或网盘。OpenList 是可选的独立服务，不包含在 MovieSync 镜像中。
@@ -54,12 +54,12 @@ docker compose up -d
 ### 可选服务
 
 - **OpenList**：仅在需要 OpenList 网盘入口或 OpenList 播放卡片时单独部署，并在对应卡片中配置可访问的服务地址和凭据。
-- **MacCMS 资源站**：如需在线点播，在 MovieSync 中配置兼容的可用资源站；不要求为此单独部署 OpenList。
+- **在线点播**：如需搜索并播放外部资源站中的影视，请在 MovieSync 中配置兼容的可用资源站；不要求为此单独部署 OpenList。
 - **其他集成**：在「卡片管理」中按需安装和配置对应卡片。部分卡片需要自行提供 Cookie、Token 或 API 密钥。
 
 ## 相关文档
 
-- [MacCMS 在线点播说明](MACCMS_PLAYBACK.md)
+- [在线点播说明](ONLINE_PLAYBACK.md)
 - [架构说明](ARCHITECTURE.md)
 - [卡片开发规范](CARD_DEVELOPMENT.md) · [卡片接口约定](CARD_CONTRACT.md)
 - [智能追剧规则](SMART_FOLLOW_RULES.md) · [更新记录](CHANGELOG.md)
