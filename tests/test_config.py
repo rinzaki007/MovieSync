@@ -370,3 +370,18 @@ def test_concurrent_config_updates_do_not_overwrite_each_other(tmp_path):
             f"https://storage-{index}.example"
         )
     assert config["default_storage_target_id"] == "test-storage-00"
+
+def test_legacy_vod_source_card_config_is_migrated_once_to_canonical_id(tmp_path):
+    store = ConfigStore(tmp_path / "config.json", tmp_path / "legacy")
+    sources = [{"id": "site-a", "name": "测试站点", "url": "https://example.com/api.php/provide/vod/"}]
+    store.save_card_config("maccms", {"sources": sources}, enabled=False, config_version=1)
+
+    migrated = store.load()
+    assert "maccms" not in migrated["cards"]
+    assert migrated["cards"]["vod_source_manager"]["config"]["sources"] == sources
+    assert migrated["cards"]["vod_source_manager"]["enabled"] is False
+
+    # Repeated reads keep the canonical structure and never recreate the legacy key.
+    reloaded = store.load()
+    assert "maccms" not in reloaded["cards"]
+    assert reloaded["cards"]["vod_source_manager"]["config"]["sources"] == sources
