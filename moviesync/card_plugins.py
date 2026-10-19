@@ -424,11 +424,9 @@ class CardFilePluginManager:
     def _validate_card(card: object, filename: str) -> None:
         if not isinstance(card, Card):
             raise TypeError("create_card(context) 必须返回 MovieSync Card 实例")
-        expected_id = filename[:-3]
-        if card.card_id != expected_id:
-            raise ValueError(
-                f"卡片 ID「{card.card_id}」必须与文件名「{expected_id}」一致"
-            )
+        # The filename identifies the plugin file for upload/uninstall bookkeeping;
+        # the manifest ID is the stable runtime identity used by the registry/config.
+        # They intentionally need not match (for example, vod_source_manager.py -> maccms).
         expected_types = {
             "resource_source": ResourceSourceCard,
             "storage_target": StorageTargetCard,
