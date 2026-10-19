@@ -1,4 +1,4 @@
-"""Manage the VOD source card backed by the MacCMS JSON API.
+"""Manage the VOD source card backed by a compatible JSON API.
 
 The module name describes the card responsibility without tying the filename to
 Apple/Mac branding. The integration and stable card ID remain unchanged for existing installations.
@@ -187,7 +187,7 @@ class MacCMSSourceManagerCard(Card):
                     {
                         "key": "url",
                         "label": "影视采集接口地址",
-                        "placeholder": "https://example.com/api.php/provide/vod/", 
+                        "placeholder": "https://example.com/api.php/provide/vod/",
                         "required": True,
                     },
                 ),
