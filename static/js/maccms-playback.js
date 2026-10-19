@@ -19,6 +19,7 @@
     let autoPlayGeneration = 0;
     let mediaType = 'movie';
     let autoPlayEpisodeMode = false;
+    let selectedEpisodeName = '';
 
     const $ = (selector) => modal.querySelector(selector);
 
@@ -200,6 +201,9 @@
         currentDetail = null;
         currentSourceName = '';
         activeLineIndex = 0;
+        selectedEpisodeName = '';
+        const episodePanel = document.getElementById('maccms-episode-panel');
+        if (episodePanel) { episodePanel.replaceChildren(); episodePanel.classList.add('hidden'); }
         $('#maccms-watch-title').textContent = title || '立即观看';
         $('#maccms-watch-status').textContent = '正在查询启用的采集站点…';
         $('#maccms-watch-results').replaceChildren();
@@ -310,11 +314,13 @@
         $('#maccms-watch-status').textContent = candidates.length
             ? `找到 ${candidates.length} 条候选，已按片名和年份等信息排序`
             : '没有找到匹配影片';
+        const extraCandidates = document.createDocumentFragment();
         for (let index = 0; index < candidates.length; index++) {
             const candidate = candidates[index];
             const card = document.createElement('article');
             card.className = 'rounded-xl border border-slate-800 bg-slate-900/60 p-3';
             if (index === 0) card.classList.add('border-emerald-800/80');
+            else card.classList.add('hidden');
             const heading = document.createElement('div');
             heading.className = 'flex items-start gap-2';
             const textWrap = document.createElement('div');
@@ -334,7 +340,23 @@
             if (selectedCandidate === candidate) button.classList.add('border-emerald-700', 'text-emerald-300');
             button.addEventListener('click', () => chooseMovie(candidate));
             card.appendChild(button);
-            root.appendChild(card);
+            if (index === 0) root.appendChild(card);
+            else extraCandidates.appendChild(card);
+        }
+        if (candidates.length > 1) {
+            const moreButton = document.createElement('button');
+            moreButton.type = 'button';
+            moreButton.className = 'w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2.5 text-[11px] font-medium text-slate-300 transition hover:border-emerald-700 hover:text-emerald-200';
+            let expanded = false;
+            moreButton.textContent = `查看更多资源（${candidates.length - 1}）`;
+            const extras = Array.from(extraCandidates.children);
+            moreButton.addEventListener('click', () => {
+                expanded = !expanded;
+                extras.forEach(card => card.classList.toggle('hidden', !expanded));
+                moreButton.textContent = expanded ? '收起其他资源' : `查看更多资源（${candidates.length - 1}）`;
+            });
+            root.appendChild(moreButton);
+            root.appendChild(extraCandidates);
         }
         if (!candidates.length) {
             const empty = addText(root, 'div', 'rounded-xl border border-slate-800 p-4 text-xs leading-6 text-slate-400',
@@ -346,10 +368,16 @@
 
     function renderLineChoices(detail) {
         const root = $('#maccms-watch-lines');
+        const episodePanel = document.getElementById('maccms-episode-panel');
         root.replaceChildren();
+        if (episodePanel) {
+            episodePanel.replaceChildren();
+            episodePanel.classList.toggle('hidden', !isEpisodicMedia());
+        }
         const lines = detail.play_sources || [];
         if (!lines.length) {
             addText(root, 'p', 'text-xs leading-5 text-amber-300', '站点没有返回可识别的播放线路。');
+            if (episodePanel) episodePanel.classList.add('hidden');
             return;
         }
         const lineTabs = document.createElement('div');
@@ -371,29 +399,58 @@
         });
         root.appendChild(lineTabs);
         const activeLine = lines[activeLineIndex] || lines[0];
-        const episodes = document.createElement('div');
-        episodes.className = 'space-y-2';
-        addText(episodes, 'div', 'text-[10px] text-slate-400', `${activeLine.name || '当前线路'} · ${(activeLine.episodes || []).length} ${isEpisodicMedia() ? '个选集' : '个播放项'}`);
-        for (const episode of (activeLine.episodes || [])) {
-            if (!/^https?:\/\//i.test(episode.url || '')) continue;
-            const row = document.createElement('div');
-            row.className = 'flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/70 p-2.5';
-            const label = addText(row, 'div', 'min-w-0 flex-1 truncate text-xs text-slate-200', episode.name || '正片');
-            label.title = episode.name || '正片';
-            const play = document.createElement('button');
-            play.type = 'button';
-            play.dataset.playUrl = episode.url;
-            play.className = 'shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-[11px] font-semibold text-white hover:bg-emerald-500';
-            play.innerHTML = '<i class="fa-solid fa-play mr-1"></i>播放';
-            play.addEventListener('click', () => {
-                if (isEpisodicMedia()) playSelectedEpisode(episode, activeLineIndex);
-                else playUrl(episode.url, episode.name, detail.title);
-            });
-            row.appendChild(play);
-            episodes.appendChild(row);
+        const episodeItems = (activeLine.episodes || []).filter(episode => /^https?:\/\//i.test(episode.url || ''));
+        if (isEpisodicMedia()) {
+            if (!episodePanel) return;
+            const heading = document.createElement('div');
+            heading.className = 'flex flex-wrap items-center justify-between gap-2';
+            const headingText = document.createElement('div');
+            headingText.className = 'min-w-0';
+            addText(headingText, 'div', 'text-sm font-semibold text-white', '选集');
+            addText(headingText, 'div', 'mt-1 text-[11px] text-slate-400', `${activeLine.name || '当前线路'} · 共 ${episodeItems.length} 集`);
+            heading.appendChild(headingText);
+            if (selectedEpisodeName) addText(heading, 'span', 'rounded-md border border-emerald-800/70 bg-emerald-950/50 px-2 py-1 text-[10px] text-emerald-300', `当前：${selectedEpisodeName}`);
+            episodePanel.appendChild(heading);
+            const grid = document.createElement('div');
+            grid.className = 'mt-3 grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8';
+            for (const episode of episodeItems) {
+                const play = document.createElement('button');
+                play.type = 'button';
+                play.dataset.playUrl = episode.url;
+                const isSelected = selectedEpisodeName && episode.name === selectedEpisodeName;
+                play.className = 'min-w-0 truncate rounded-lg border px-2 py-2.5 text-xs font-medium transition ' +
+                    (isSelected
+                        ? 'border-emerald-500 bg-emerald-950/70 text-emerald-200'
+                        : 'border-slate-700 bg-slate-900/80 text-slate-300 hover:border-emerald-700 hover:bg-slate-800');
+                play.textContent = episode.name || '正片';
+                play.title = episode.name || '正片';
+                play.setAttribute('aria-pressed', String(Boolean(isSelected)));
+                play.addEventListener('click', () => playSelectedEpisode(episode, activeLineIndex));
+                grid.appendChild(play);
+            }
+            if (episodeItems.length) episodePanel.appendChild(grid);
+            else addText(episodePanel, 'p', 'mt-3 text-xs text-slate-500', '这条线路没有可识别的选集。');
+            episodePanel.classList.remove('hidden');
+        } else {
+            const episodes = document.createElement('div');
+            episodes.className = 'mt-3 space-y-2';
+            addText(episodes, 'div', 'text-[10px] text-slate-400', `${activeLine.name || '当前线路'} · ${episodeItems.length} 个播放项`);
+            for (const episode of episodeItems) {
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-950/70 p-2.5';
+                addText(row, 'div', 'min-w-0 flex-1 truncate text-xs text-slate-200', episode.name || '正片');
+                const play = document.createElement('button');
+                play.type = 'button';
+                play.dataset.playUrl = episode.url;
+                play.className = 'shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-[11px] font-semibold text-white hover:bg-emerald-500';
+                play.innerHTML = '<i class="fa-solid fa-play mr-1"></i>播放';
+                play.addEventListener('click', () => playUrl(episode.url, episode.name, detail.title));
+                row.appendChild(play);
+                episodes.appendChild(row);
+            }
+            if (!episodeItems.length) addText(episodes, 'p', 'text-xs text-slate-500', '这条线路没有可识别的播放项。');
+            root.appendChild(episodes);
         }
-        if (!episodes.childElementCount) addText(episodes, 'p', 'text-xs text-slate-500', '这条线路没有可识别的播放项。');
-        root.appendChild(episodes);
     }
 
     async function chooseMovie(candidate) {
@@ -405,6 +462,9 @@
         currentDetail = null;
         currentSourceName = candidate.source.source_name || '采集站';
         activeLineIndex = 0;
+        selectedEpisodeName = '';
+        const episodePanel = document.getElementById('maccms-episode-panel');
+        if (episodePanel) { episodePanel.replaceChildren(); episodePanel.classList.add('hidden'); }
         resetVideo();
         $('#maccms-watch-placeholder').classList.remove('hidden');
         $('#maccms-watch-selected-title').textContent = candidate.item.title || '影片详情';
@@ -585,6 +645,8 @@
     }
 
     function playSelectedEpisode(episode, sourceIndex) {
+        selectedEpisodeName = String(episode.name || '');
+        if (currentDetail) renderLineChoices(currentDetail);
         autoPlayGeneration++;
         autoPlayEpisodeMode = true;
         autoPlayActive = true;

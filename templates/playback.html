@@ -176,11 +176,7 @@
           <div id="player-status" class="flex-1 text-xs leading-5 text-slate-400">播放地址由播放卡片解析，视频流由浏览器直接请求。</div>
           <button id="stop-btn" class="rounded-lg border border-slate-700 px-3 py-2 text-[11px] text-slate-400 transition hover:bg-slate-800 hover:text-white"><i class="fa-solid fa-stop mr-1"></i>停止播放</button>
         </div>
-        <div class="mt-4 grid gap-2 sm:grid-cols-3">
-          <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3"><div class="text-[10px] text-slate-500">播放方式</div><div class="mt-1 text-xs font-medium text-slate-300">Plyr HTML5 播放器</div></div>
-          <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3"><div class="text-[10px] text-slate-500">播放进度</div><div id="playback-progress" class="mt-1 text-xs font-medium text-slate-300">00:00 / --:--</div></div>
-          <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3"><div class="text-[10px] text-slate-500">快捷提示</div><div class="mt-1 text-xs font-medium text-slate-300">倍速、字幕与全屏</div></div>
-        </div>
+        <div id="maccms-episode-panel" class="hidden mt-4 min-w-0 rounded-xl border border-slate-800/80 bg-slate-950/40 p-3 sm:p-4"></div>
         <div class="mt-4 rounded-xl border border-slate-800/70 bg-slate-950/35 p-3 text-[11px] leading-5 text-slate-500"><i class="fa-solid fa-lightbulb mr-1.5 text-amber-300"></i>如果无法播放或拖动进度条，请确认浏览器能访问 OpenList 返回的播放链接；部分编码格式也可能不受浏览器支持。</div>
         <div id="maccms-inline-panel" class="hidden mt-4 min-w-0"></div>
       </div>
