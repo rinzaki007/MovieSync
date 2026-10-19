@@ -94,8 +94,7 @@ def _search_one_source(source: dict[str, Any], title: str) -> dict[str, Any]:
     except (ValueError, TypeError):
         message = "接口响应格式无效"
     except Exception:
-        current_app.logger.exception("MacCMS 搜索失败: %s", source.get("id"))
-        message = "搜索失败，请检查服务日志"
+        message = "搜索失败，请检查接口地址和服务日志"
     return {"source_id": source.get("id", ""), "source_name": source.get("name", "未知站点"),
             "items": [], "error": message}
 
@@ -129,10 +128,8 @@ def search_movies():
         futures = [pool.submit(_search_one_source, source, title) for source in sources]
         for future in as_completed(futures):
             results.append(future.result())
-    results.sort(key=lambda item: next(
-        (index for index, source in enumerate(sources) if source["id"] == item["source_id"]),
-        len(sources),
-    ))
+    order = {source["id"]: index for index, source in enumerate(sources)}
+    results.sort(key=lambda item: order.get(item["source_id"], len(sources)))
     found = sum(len(item["items"]) for item in results)
     return jsonify({
         "success": True,
