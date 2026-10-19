@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from card_templates.maccms import _normalize_sources
+from card_templates.vod_source_manager import _normalize_sources
 from moviesync.web.maccms import _parse_play_sources
 
 

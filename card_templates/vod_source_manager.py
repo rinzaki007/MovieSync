@@ -1,7 +1,7 @@
-"""Manage multiple user-configured MacCMS JSON API sources.
+"""Manage the VOD source card backed by the MacCMS JSON API.
 
-This card only manages and checks source endpoints. Playback/search integration is added
-in a later step after the real API response shapes have been verified.
+The module name describes the card responsibility without tying the filename to
+Apple/Mac branding. The integration and stable card ID remain MacCMS-specific.
 """
 from __future__ import annotations
 

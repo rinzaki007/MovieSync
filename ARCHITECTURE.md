@@ -31,6 +31,8 @@ Configuration / storage       Optional cards
 
 卡片按 manifest、类型和能力声明接入。核心通过统一接口与卡片交互，不应把某个第三方平台的 Cookie、频道、目录或业务规则写死在通用流程中。
 
+内置 MacCMS 兼容资源站管理卡片的模板模块为 `card_templates/vod_source_manager.py`。这是源码模块名；稳定卡片 ID `maccms`、类名 `MacCMSSourceManagerCard`、能力标识和 `/api/maccms` 路径保持不变，模块重命名不会改变运行时身份。
+
 ## 主要目录
 
 ```text
