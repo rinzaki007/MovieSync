@@ -41,6 +41,25 @@
                     <input id="maccms-watch-search-year" type="number" min="1900" max="2099" placeholder="年份（可选）" aria-label="电影年份（可选）" class="w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 outline-none placeholder:text-slate-600">
                     <button type="submit" class="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500"><i class="fa-solid fa-search mr-1"></i>搜索</button>
                 </form>
+                <div id="maccms-watch-progress" class="hidden mx-3 mt-3 rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-3 sm:mx-5 sm:p-4" role="status" aria-live="polite">
+                    <div class="flex items-start gap-3">
+                        <span id="maccms-watch-progress-icon" class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-900/50 text-emerald-300"><i class="fa-solid fa-magnifying-glass"></i></span>
+                        <div class="min-w-0 flex-1">
+                            <div id="maccms-watch-progress-title" class="text-xs font-semibold text-emerald-100">准备在线点播</div>
+                            <p id="maccms-watch-progress-detail" class="mt-1 break-words text-[11px] leading-5 text-slate-400">正在准备搜索…</p>
+                        </div>
+                        <span id="maccms-watch-progress-state" class="shrink-0 text-[10px] text-emerald-300">进行中</span>
+                    </div>
+                    <div class="mt-3 h-1.5 overflow-hidden rounded-full bg-slate-800">
+                        <div id="maccms-watch-progress-bar" class="h-full w-[8%] rounded-full bg-emerald-400 transition-all duration-500"></div>
+                    </div>
+                    <div class="mt-3 grid grid-cols-4 gap-1.5 text-center text-[9px] sm:text-[10px]">
+                        <div data-progress-step="0" class="rounded-md bg-slate-900/70 px-1.5 py-1.5 text-slate-500">影片信息</div>
+                        <div data-progress-step="1" class="rounded-md bg-slate-900/70 px-1.5 py-1.5 text-slate-500">搜索资源站</div>
+                        <div data-progress-step="2" class="rounded-md bg-slate-900/70 px-1.5 py-1.5 text-slate-500">匹配资源</div>
+                        <div data-progress-step="3" class="rounded-md bg-slate-900/70 px-1.5 py-1.5 text-slate-500">尝试播放</div>
+                    </div>
+                </div>
                 <div class="min-h-0 flex-1 overflow-y-auto">
                     <div class="grid gap-4 p-3 sm:p-5 lg:grid-cols-[minmax(0,1.65fr)_minmax(260px,1fr)]">
                         <div class="min-w-0">
@@ -101,6 +120,47 @@
         return modal;
     }
 
+    function setAutoProgress(stage, title, detail = '') {
+        const panel = $('#maccms-watch-progress');
+        if (!panel) return;
+        const stages = { info: 0, search: 1, match: 2, play: 3, searchFailed: 1, matchFailed: 2, playFailed: 3, success: 4, failed: 3 };
+        const index = stages[stage] ?? 0;
+        const failed = stage.endsWith('Failed') || stage === 'failed';
+        panel.classList.remove('hidden', 'border-rose-900/60', 'bg-rose-950/20');
+        panel.classList.toggle('border-emerald-900/50', !failed);
+        panel.classList.toggle('border-rose-900/60', failed);
+        panel.classList.toggle('bg-emerald-950/20', !failed);
+        panel.classList.toggle('bg-rose-950/20', failed);
+        $('#maccms-watch-progress-title').textContent = title;
+        $('#maccms-watch-progress-detail').textContent = detail;
+        $('#maccms-watch-progress-state').textContent = stage === 'success' ? '已完成' : failed ? '未完成' : '进行中';
+        $('#maccms-watch-progress-state').className = 'shrink-0 text-[10px] ' + (failed ? 'text-rose-300' : 'text-emerald-300');
+        const bar = $('#maccms-watch-progress-bar');
+        bar.style.width = (stage === 'success' ? 100 : index === 0 ? 12 : index === 1 ? 35 : index === 2 ? 58 : 82) + '%';
+        bar.classList.toggle('bg-rose-400', failed);
+        bar.classList.toggle('bg-emerald-400', !failed);
+        bar.classList.toggle('animate-pulse', stage !== 'success' && !failed);
+        $('#maccms-watch-progress-icon').innerHTML = stage === 'success'
+            ? '<i class="fa-solid fa-circle-check"></i>'
+            : failed
+                ? '<i class="fa-solid fa-triangle-exclamation"></i>'
+                : '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+        $('#maccms-watch-progress-icon').className = 'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ' +
+            (failed ? 'bg-rose-900/50 text-rose-300' : 'bg-emerald-900/50 text-emerald-300');
+        panel.querySelectorAll('[data-progress-step]').forEach(step => {
+            const stepIndex = Number(step.dataset.progressStep);
+            const complete = stage === 'success' || stepIndex < index;
+            const active = stage !== 'success' && !failed && stepIndex === index;
+            step.classList.toggle('text-emerald-200', complete || active);
+            step.classList.toggle('border', active);
+            step.classList.toggle('border-emerald-700/70', active);
+            step.classList.toggle('text-rose-300', failed && stepIndex === index);
+            step.classList.toggle('text-slate-500', !complete && !active && !(failed && stepIndex === index));
+            if (complete) step.innerHTML = '<i class="fa-solid fa-check mr-1"></i>' + ['影片信息', '搜索资源站', '匹配资源', '尝试播放'][stepIndex];
+            else step.textContent = ['影片信息', '搜索资源站', '匹配资源', '尝试播放'][stepIndex];
+        });
+    }
+
     function resetVideo() {
         if (activeHls) {
             activeHls.destroy();
@@ -150,6 +210,7 @@
         $('#maccms-watch-selected-meta').textContent = '';
         $('#maccms-watch-placeholder').classList.remove('hidden');
         playerMessage.textContent = '选择匹配影片，再手动点击一条线路的播放按钮。';
+        $('#maccms-watch-progress').classList.add('hidden');
         modal.classList.remove('hidden');
         if (!inlineMode) modal.classList.add('flex');
     }
@@ -309,6 +370,7 @@
         $('#maccms-watch-selected-title').textContent = candidate.item.title || '影片详情';
         $('#maccms-watch-selected-meta').textContent = candidateSubtitle(candidate);
         playerMessage.textContent = `正在读取 ${currentSourceName} 的线路信息…`;
+        setAutoProgress('match', '正在读取影片详情', `资源站：${currentSourceName} · 正在获取播放线路`);
         $('#maccms-watch-lines').replaceChildren();
         renderCandidatesFromSelection();
         try {
@@ -320,11 +382,13 @@
             $('#maccms-watch-selected-title').textContent = currentDetail.title || candidate.item.title || '影片详情';
             $('#maccms-watch-selected-meta').textContent = [currentSourceName, currentDetail.year || candidate.item.year].filter(Boolean).join(' · ');
             playerMessage.textContent = '已取得线路信息。选择线路后，点击“播放”开始观看。线路尚未经过实际播放验证。';
+            setAutoProgress('play', '已找到可选线路', '详情已加载，请选择线路并点击播放。');
             $('#maccms-watch-placeholder').classList.remove('hidden');
             renderLineChoices(currentDetail);
         } catch (error) {
             if (requestId !== detailRequest) return;
             playerMessage.textContent = (error.message || '读取播放线路失败。') + ' 可以直接选择其他匹配影片。';
+            setAutoProgress('matchFailed', '读取影片详情失败', (error.message || '请求失败') + '；可以选择其他候选资源。');
             addText($('#maccms-watch-lines'), 'p', 'text-xs leading-5 text-amber-300', '详情读取失败；请尝试同一影片的其他采集站。');
         }
     }
@@ -345,6 +409,7 @@
         resetVideo();
         $('#maccms-watch-placeholder').classList.add('hidden');
         playerMessage.textContent = `正在尝试播放：${title || ''} · ${itemName || ''}`;
+        setAutoProgress('play', '正在尝试播放', [title, itemName].filter(Boolean).join(' · '));
         if (window.MovieSyncPlayback && typeof window.MovieSyncPlayback.playOnline === 'function') {
             try {
                 await window.MovieSyncPlayback.playOnline(url, title, itemName);
@@ -403,6 +468,7 @@
         autoPlayActive = false;
         autoPlayGeneration++;
         openModal(value);
+        setAutoProgress('search', '正在搜索在线资源', `影片：${value}${year ? ' · ' + year : ''}。正在查询已启用的资源站，结果返回后会自动匹配并尝试播放。`);
         $('#maccms-watch-search-input').value = value;
         $('#maccms-watch-search-year').value = String(year || '');
         try {
@@ -411,14 +477,19 @@
             const candidates = renderCandidates(result.results, value, year || '');
             if (candidates.length) {
                 playerMessage.textContent = '已按片名、年份和线路信息排序，正在自动尝试最佳匹配；失败会依次切换后续资源。';
+                setAutoProgress('match', `已找到 ${candidates.length} 条候选资源`, '正在按片名、年份和线路信息匹配，并依次读取线路。');
                 const bestCard = $('#maccms-watch-results').firstElementChild;
                 if (bestCard) bestCard.classList.add('ring-1', 'ring-emerald-900/70');
                 if (autoPlay) startAutoPlayback(candidates);
-            } else playerMessage.textContent = '没有找到候选影片。你可以检查站点设置或尝试更短的片名。';
+            } else {
+                playerMessage.textContent = '没有找到候选影片。你可以检查站点设置或尝试更短的片名。';
+                setAutoProgress('searchFailed', '没有找到匹配资源', '可以换个片名搜索，或检查已启用的采集源。');
+            }
         } catch (error) {
             if (requestId !== searchRequest) return;
             $('#maccms-watch-status').textContent = error.message || '搜索采集源失败。';
             playerMessage.textContent = '搜索失败，请稍后重试或检查采集源配置。';
+            setAutoProgress('searchFailed', '搜索在线资源失败', (error.message || '请求失败') + '；可以稍后重试或手动搜索。');
         }
     }
 
@@ -432,10 +503,11 @@
         if (!autoPlayActive || generation !== autoPlayGeneration) return;
         if (autoPlayUrlIndex >= autoPlayUrls.length) {
             const candidate = autoPlayCandidates[autoPlayCandidateIndex++];
-            if (!candidate) { autoPlayActive = false; playerMessage.textContent = '所有匹配资源都尝试失败了。可以手动选择其他影片或检查采集源。'; $('#maccms-watch-status').textContent = '已尝试所有候选资源，均未能开始播放'; return; }
+            if (!candidate) { autoPlayActive = false; playerMessage.textContent = '所有匹配资源都尝试失败了。可以手动选择其他影片或检查采集源。'; $('#maccms-watch-status').textContent = '已尝试所有候选资源，均未能开始播放'; setAutoProgress('playFailed', '暂时无法自动播放', '已尝试匹配资源。你仍可以手动选择影片、切换线路或点击播放重试。'); return; }
             selectedCandidate = candidate; currentDetail = null; currentSourceName = candidate.source.source_name || '采集站'; activeLineIndex = 0;
             $('#maccms-watch-selected-title').textContent = candidate.item.title || '影片详情'; $('#maccms-watch-selected-meta').textContent = candidateSubtitle(candidate);
             playerMessage.textContent = '正在读取匹配资源：' + (candidate.item.title || '');
+            setAutoProgress('match', '正在读取匹配资源', `资源站：${currentSourceName} · ${candidate.item.title || ''}`);
             try {
                 const params = new URLSearchParams({ source_id: candidate.source.source_id, vod_id: candidate.item.id });
                 const result = await fetchJson('/api/maccms/detail?' + params.toString());
@@ -453,11 +525,12 @@
         }
         const resource = autoPlayUrls[autoPlayUrlIndex++]; if (!resource) return tryNextAutoResource(generation);
         $('#maccms-watch-placeholder').classList.remove('hidden'); playerMessage.textContent = '正在尝试资源 ' + autoPlayUrlIndex + '/' + autoPlayUrls.length + '：' + resource.name;
+        setAutoProgress('play', `正在尝试第 ${autoPlayUrlIndex} / ${autoPlayUrls.length} 条播放资源`, resource.name + ' · 等待播放器确认播放结果');
         try { await playUrl(resource.url, resource.name, resource.title, true); } catch (error) { handleAutoPlaybackFailure(error); }
     }
 
-    function handleAutoPlaybackFailure(error) { if (!autoPlayActive) return; playerMessage.textContent = (error && error.message ? error.message + '；' : '') + '当前资源失败，正在自动切换下一条…'; tryNextAutoResource(autoPlayGeneration); }
-    function handleAutoPlaybackStarted() { if (autoPlayActive) playerMessage.textContent = '资源已开始播放；若线路随后失效，将自动尝试下一条。'; }
+    function handleAutoPlaybackFailure(error) { if (!autoPlayActive) return; playerMessage.textContent = (error && error.message ? error.message + '；' : '') + '当前资源失败，正在自动切换下一条…'; setAutoProgress('play', '当前线路未能播放，正在切换', (error && error.message ? error.message + ' · ' : '') + '正在尝试下一条资源。'); tryNextAutoResource(autoPlayGeneration); }
+    function handleAutoPlaybackStarted() { playerMessage.textContent = '资源已开始播放。'; setAutoProgress('success', '视频已开始播放', '播放已由播放器事件确认；如果之后中断，可以手动切换线路。'); }
 
     async function movieDetailWatch() {
         const movie = Array.isArray(moviesData) && Number.isInteger(activeMovieDetailIndex) ? moviesData[activeMovieDetailIndex] : null;
