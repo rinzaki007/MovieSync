@@ -634,7 +634,7 @@
         window.location.assign('/playback?' + params.toString());
     }
 
-    function openOnline(title = '', year = '', requestedType = '') {
+    function openOnline(title = '', year = '', requestedType = mediaType) {
         mediaType = resolveMediaType(requestedType);
         ensureModal();
         if (inlineMode && window.MovieSyncPlayback && window.MovieSyncPlayback.activateOnline) {
