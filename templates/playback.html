@@ -355,15 +355,6 @@
     });
   });
 
-  const playbackQuery = new URLSearchParams(window.location.search);
-  if (playbackQuery.get('title')) {
-    // Activate the inline online workspace directly; do not click the tab and open/search twice.
-    activatePlaybackSource('online', true);
-    if (window.MovieSyncPlayback && window.MovieSyncPlayback.openOnline) {
-      window.MovieSyncPlayback.openOnline(playbackQuery.get('title'), playbackQuery.get('year') || '');
-    }
-  }
-
   function setSubtitleTracks(subtitles) {
     clearSubtitleTracks();
     if (!Array.isArray(subtitles)) return;
@@ -596,6 +587,17 @@
     playerStatus.textContent = '浏览器无法播放此视频。可能是播放链接不可达、格式不受支持，或上游不支持 Range 请求。';
   });
   loadDirectory('');
+
+  // Run query-driven activation only after every player variable and event handler is initialized.
+  // Calling activatePlaybackSource earlier invokes stopPlaybackForSourceSwitch(), which reads
+  // const bindings declared later in this script and aborts the entire initializer (TDZ).
+  const playbackQuery = new URLSearchParams(window.location.search);
+  if (playbackQuery.get('title')) {
+    activatePlaybackSource('online', true);
+    if (window.MovieSyncPlayback && window.MovieSyncPlayback.openOnline) {
+      window.MovieSyncPlayback.openOnline(playbackQuery.get('title'), playbackQuery.get('year') || '');
+    }
+  }
 })();
 </script>
 </body>
