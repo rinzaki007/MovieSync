@@ -178,8 +178,18 @@ class MacCMSSourceManagerCard(Card):
                 "default": [],
                 "required": False,
                 "item_fields": (
-                    {"key": "name", "label": "站点名称", "placeholder": "例如：影视站 A", "required": True},
-                    {"key": "url", "label": "MacCMS JSON 接口地址", "placeholder": "https://example.com/api.php/provide/vod/", "required": True},
+                    {
+                        "key": "name",
+                        "label": "站点名称",
+                        "placeholder": "例如：影视站 A",
+                        "required": True,
+                    },
+                    {
+                        "key": "url",
+                        "label": "MacCMS JSON 接口地址",
+                        "placeholder": "https://example.com/api.php/provide/vod/",
+                        "required": True,
+                    },
                 ),
                 "description": (
                     "在这里集中添加多个站点。添加后先保存并检查连接；"
