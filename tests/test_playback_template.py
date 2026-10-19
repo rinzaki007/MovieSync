@@ -40,3 +40,12 @@ def test_playback_template_supports_douban_autoplay_and_fallback():
     assert "function startAutoPlayback(candidates)" in script
     assert "function tryNextAutoResource(generation)" in script
     assert "window.MovieSyncPlayback.cancelAutoPlayback = () =>" in script
+    assert 'id="maccms-watch-progress"' in script
+    assert 'data-progress-step="0"' in script
+    assert "function setAutoProgress(stage, title, detail = '')" in script
+    assert "setAutoProgress('search', '正在搜索在线资源'" in script
+    assert "setAutoProgress('match'" in script
+    assert "setAutoProgress('play'" in script
+    assert "setAutoProgress('success', '视频已开始播放'" in script
+    assert "setAutoProgress('searchFailed'" in script
+    assert "setAutoProgress('playFailed'" in script
