@@ -49,7 +49,7 @@ def test_normalize_sources_rejects_duplicate_urls(monkeypatch):
         ])
 
 
-def test_check_reports_json_maccms_response(monkeypatch):
+def test_check_reports_json_vod_response(monkeypatch):
     _public_dns(monkeypatch)
     monkeypatch.setattr(
         vod_source_manager.requests,
@@ -59,7 +59,7 @@ def test_check_reports_json_maccms_response(monkeypatch):
             json=lambda: {"code": 1, "msg": "数据列表", "list": []},
         ),
     )
-    card = vod_source_manager.MacCMSSourceManagerCard()
+    card = vod_source_manager.VodSourceManagerCard()
 
     result = card.check({
         "sources": [
@@ -82,7 +82,7 @@ def test_check_explains_non_json_response(monkeypatch):
             json=lambda: (_ for _ in ()).throw(ValueError("not json")),
         ),
     )
-    card = vod_source_manager.MacCMSSourceManagerCard()
+    card = vod_source_manager.VodSourceManagerCard()
 
     result = card.check({
         "sources": [
@@ -95,8 +95,10 @@ def test_check_explains_non_json_response(monkeypatch):
     assert "不是有效 JSON" in result["sources"][0]["message"]
 
 
-def test_manifest_declares_connection_check():
-    card = vod_source_manager.MacCMSSourceManagerCard()
+def test_manifest_declares_canonical_identity_and_connection_check():
+    card = vod_source_manager.VodSourceManagerCard()
 
-    assert "maccms.check" in card.capabilities
-    assert card.manifest.config_fields[0]["editor"] == "maccms_sources"
+    assert card.card_id == "vod_source_manager"
+    assert card.manifest.id == "vod_source_manager"
+    assert "vod_source_manager.check" in card.capabilities
+    assert card.manifest.config_fields[0]["editor"] == "vod_source_manager_sources"

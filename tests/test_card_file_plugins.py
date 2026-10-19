@@ -700,9 +700,9 @@ def create_card(context): return MacCMSSourceManagerCard()
     manager = CardFilePluginManager(plugin_dir, registry, logging.getLogger("test-maccms-migration"), bundled_dir)
     loaded = manager.load_all()
 
-    assert loaded == ["maccms"]
-    assert registry.get("maccms") is not None
-    assert registry.get("maccms").manifest.name == "Customized legacy VOD source"
+    assert loaded == ["vod_source_manager"]
+    assert registry.get("vod_source_manager") is not None
+    assert registry.get("vod_source_manager").manifest.name == "Customized legacy VOD source"
     assert not (plugin_dir / "maccms.py").exists()
     assert (plugin_dir / "vod_source_manager.py").is_file()
     assert not (marker_dir / "maccms.py.seeded").exists()

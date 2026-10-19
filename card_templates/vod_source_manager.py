@@ -120,7 +120,7 @@ def _check_source(source: dict[str, Any]) -> dict[str, Any]:
             params={"ac": "list", "pg": 1},
             timeout=_TIMEOUT,
             allow_redirects=False,
-            headers={"Accept": "application/json", "User-Agent": "MovieSync-MacCMS-Checker/1.0"},
+            headers={"Accept": "application/json", "User-Agent": "MovieSync-VOD-Checker/1.0"},
         )
         if 300 <= response.status_code < 400:
             return {"id": source["id"], "name": source["name"], "status": "unavailable",
@@ -138,11 +138,11 @@ def _check_source(source: dict[str, Any]) -> dict[str, Any]:
                     "message": "接口返回了 JSON，但顶层不是对象"}
 
         code = payload.get("code")
-        looks_like_maccms = (
+        looks_like_vod_api = (
             "list" in payload or "vod" in payload or "data" in payload
             or (code is not None and str(code) in {"1", "200"})
         )
-        if not looks_like_maccms:
+        if not looks_like_vod_api:
             return {"id": source["id"], "name": source["name"], "status": "invalid",
                     "message": "接口返回 JSON，但未识别到常见影视采集数据字段"}
         return {"id": source["id"], "name": source["name"], "status": "healthy",
@@ -161,20 +161,20 @@ def _check_source(source: dict[str, Any]) -> dict[str, Any]:
                 "status": "unavailable", "message": "检查失败，请查看服务日志"}
 
 
-class MacCMSSourceManagerCard(Card):
+class VodSourceManagerCard(Card):
     manifest = CardManifest(
-        id="maccms",
+        id="vod_source_manager",
         name="影视采集源",
         version="0.1.0",
         type="custom",
         description="集中管理多个兼容型影视采集接口，并检查接口连接状态。",
-        capabilities=("maccms.sources.manage", "maccms.check"),
+        capabilities=("vod_source_manager.sources.manage", "vod_source_manager.check"),
         config_fields=(
             {
                 "key": "sources",
                 "label": "采集站点",
                 "type": "json",
-                "editor": "maccms_sources",
+                "editor": "vod_source_manager_sources",
                 "default": [],
                 "required": False,
                 "item_fields": (
@@ -234,4 +234,4 @@ class MacCMSSourceManagerCard(Card):
 
 def create_card(context):
     """Factory used by MovieSync's bundled single-file card loader."""
-    return MacCMSSourceManagerCard()
+    return VodSourceManagerCard()

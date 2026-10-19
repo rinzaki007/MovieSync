@@ -15,7 +15,7 @@ def test_playback_template_compiles_as_jinja():
     assert "Range 请求" in source
     assert "播放地址已获取，正在尝试开始播放。" in source
     assert 'id="playback-source-switch"' in source
-    assert 'id="maccms-inline-panel"' in source
+    assert 'id="vod_source_manager-inline-panel"' in source
     assert 'id="player-workspace-panel"' in source
     assert "playback-online-layout" in source
     assert "grid-template-columns:minmax(250px,.65fr) minmax(0,1.8fr)!important" in source
@@ -30,7 +30,7 @@ def test_playback_template_compiles_as_jinja():
 def test_playback_template_supports_douban_autoplay_and_fallback():
     root = Path(__file__).resolve().parents[1]
     template = (root / "templates" / "playback.html").read_text(encoding="utf-8")
-    script = (root / "static" / "js" / "maccms-playback.js").read_text(encoding="utf-8")
+    script = (root / "static" / "js" / "vod-source-manager-playback.js").read_text(encoding="utf-8")
     assert "playbackQuery.get('title')" in template
     # Query-driven activation must happen after the shared-player const bindings and setup.
     assert template.index("const playerTitle =") < template.index("if (playbackQuery.get('title'))")
@@ -40,7 +40,7 @@ def test_playback_template_supports_douban_autoplay_and_fallback():
     assert "function startAutoPlayback(candidates)" in script
     assert "function tryNextAutoResource(generation)" in script
     assert "window.MovieSyncPlayback.cancelAutoPlayback = () =>" in script
-    assert 'id="maccms-watch-progress"' in script
+    assert 'id="vod_source_manager-watch-progress"' in script
     assert 'data-progress-step="0"' in script
     assert "function setAutoProgress(stage, title, detail = '')" in script
     assert "setAutoProgress('search', '正在搜索在线资源'" in script

@@ -12,9 +12,9 @@ from threading import Lock
 
 from flask import jsonify, redirect, request, session
 
-from .maccms import register_maccms_api
 from .playback import playback_api, playback_pages
 from .routes import api, pages
+from .vod_source_manager import register_vod_source_manager_api
 
 
 class LoginRateLimiter:
@@ -77,7 +77,7 @@ def register_web(app, services):
     app.register_blueprint(api)
     app.register_blueprint(playback_pages)
     app.register_blueprint(playback_api)
-    register_maccms_api(app)
+    register_vod_source_manager_api(app)
 
     @app.before_request
     def protect_requests():
