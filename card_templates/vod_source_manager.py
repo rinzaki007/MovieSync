@@ -1,7 +1,7 @@
 """Manage the VOD source card backed by the MacCMS JSON API.
 
 The module name describes the card responsibility without tying the filename to
-Apple/Mac branding. The integration and stable card ID remain stable for existing installations.
+Apple/Mac branding. The integration and stable card ID remain unchanged for existing installations.
 """
 from __future__ import annotations
 
@@ -167,7 +167,7 @@ class MacCMSSourceManagerCard(Card):
         name="影视采集源",
         version="0.1.0",
         type="custom",
-        description="集中管理多个兼容型影视采集接口，并检查接口连接状态。", 
+        description="集中管理多个兼容型影视采集接口，并检查接口连接状态。",
         capabilities=("maccms.sources.manage", "maccms.check"),
         config_fields=(
             {
