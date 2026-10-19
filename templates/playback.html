@@ -229,6 +229,8 @@
   }
 
   function stopOnlinePlayback() {
+    // Invalidate pending async setup (including an in-flight HLS script load) before teardown.
+    playbackTaskGeneration++;
     // Detach per-source handlers before pause/load so teardown cannot trigger fallback.
     player.onerror = null;
     player.onplaying = null;
@@ -269,9 +271,27 @@
     catch { throw new Error('播放地址格式无效。'); }
     if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('只支持 HTTP 或 HTTPS 在线播放地址。');
     stopOnlinePlayback();
+    const taskGeneration = playbackTaskGeneration;
+    const isCurrentTask = () => taskGeneration === playbackTaskGeneration;
+    let failureHandled = false;
+    const handleFailure = (message) => {
+      if (!isCurrentTask() || failureHandled) return;
+      // A fatal HLS event and the media element error can describe the same failure.
+      // Advance automatic fallback at most once for this playback attempt.
+      failureHandled = true;
+      playerStatus.textContent = '在线线路加载失败；正在尝试下一条资源。';
+      setPlayerState('播放失败', 'error');
+      if (window.MovieSyncPlayback && window.MovieSyncPlayback.onOnlinePlaybackFailure) {
+        window.MovieSyncPlayback.onOnlinePlaybackFailure(new Error(message));
+      }
+    };
     clearSubtitleTracks();
-    player.onerror = () => { playerStatus.textContent = '在线线路加载失败；正在尝试下一条资源。'; setPlayerState('播放失败', 'error'); if (window.MovieSyncPlayback && window.MovieSyncPlayback.onOnlinePlaybackFailure) window.MovieSyncPlayback.onOnlinePlaybackFailure(new Error('媒体资源加载失败')); };
-    player.onplaying = () => { setPlayerState('正在播放', 'playing'); if (window.MovieSyncPlayback && window.MovieSyncPlayback.onOnlinePlaybackStarted) window.MovieSyncPlayback.onOnlinePlaybackStarted(); };
+    player.onerror = () => handleFailure('媒体资源加载失败');
+    player.onplaying = () => {
+      if (!isCurrentTask()) return;
+      setPlayerState('正在播放', 'playing');
+      if (window.MovieSyncPlayback && window.MovieSyncPlayback.onOnlinePlaybackStarted) window.MovieSyncPlayback.onOnlinePlaybackStarted();
+    };
     playerTitle.textContent = title || itemName || 'MacCMS 在线点播';
     playerPath.textContent = '在线点播 · ' + (itemName || '已选择播放项');
     playerStatus.textContent = '正在尝试播放在线线路；线路尚未经过预先验证。';
@@ -279,29 +299,32 @@
     const isHls = /\.m3u8(?:$|[?#])/i.test(parsed.href);
     if (isHls && !player.canPlayType('application/vnd.apple.mpegurl')) {
       await ensureHls();
+      if (!isCurrentTask()) return false;
       if (!window.Hls.isSupported()) throw new Error('当前浏览器不支持 HLS 播放，可切换其他线路。');
-      onlineHls = new window.Hls();
-      onlineHls.loadSource(parsed.href);
-      onlineHls.attachMedia(player);
-      onlineHls.on(window.Hls.Events.MANIFEST_PARSED, () => {
+      const hls = new window.Hls();
+      onlineHls = hls;
+      hls.loadSource(parsed.href);
+      hls.attachMedia(player);
+      hls.on(window.Hls.Events.MANIFEST_PARSED, () => {
+        if (!isCurrentTask() || onlineHls !== hls) return;
         player.play().catch(() => {
-          playerStatus.textContent = '线路已载入，请点击主播放器上的播放按钮。';
+          if (isCurrentTask()) playerStatus.textContent = '线路已载入，请点击主播放器上的播放按钮。';
         });
       });
-      onlineHls.on(window.Hls.Events.ERROR, (_event, data) => {
-        if (data && data.fatal) {
-          playerStatus.textContent = '在线线路播放失败；正在尝试下一条资源。'; setPlayerState('播放失败', 'error');
-          if (window.MovieSyncPlayback && window.MovieSyncPlayback.onOnlinePlaybackFailure) window.MovieSyncPlayback.onOnlinePlaybackFailure(new Error('HLS 线路播放失败'));
-        }
+      hls.on(window.Hls.Events.ERROR, (_event, data) => {
+        if (data && data.fatal && onlineHls === hls) handleFailure('HLS 线路播放失败');
       });
       return true;
     }
+    if (!isCurrentTask()) return false;
     player.src = parsed.href;
     player.load();
     try {
       await player.play();
+      if (!isCurrentTask()) return false;
       playerStatus.textContent = '正在播放在线线路。';
     } catch {
+      if (!isCurrentTask()) return false;
       playerStatus.textContent = '线路已载入，请点击主播放器上的播放按钮；若仍失败，可切换线路。';
     }
     return true;
@@ -379,10 +402,11 @@
   const playerPath = document.getElementById('player-path');
   const playerStatus = document.getElementById('player-status');
   const playerState = document.getElementById('player-state');
-  const progress = document.getElementById('playback-progress');
   const providerBadge = document.getElementById('provider-badge');
   const history = [];
   let onlineHls = null;
+  let playbackTaskGeneration = 0;
+  let directoryRequestGeneration = 0;
   let currentPath = '';
   let currentItems = [];
   let selectedPath = '';
@@ -397,14 +421,6 @@
     let value = bytes / 1024, index = 0;
     while (value >= 1024 && index < units.length - 1) { value /= 1024; index++; }
     return value.toFixed(1) + ' ' + units[index];
-  }
-  function formatTime(seconds) {
-    if (!Number.isFinite(seconds) || seconds < 0) return '--:--';
-    const total = Math.floor(seconds);
-    const hours = Math.floor(total / 3600);
-    const minutes = Math.floor((total % 3600) / 60);
-    const secs = total % 60;
-    return hours ? [hours, String(minutes).padStart(2,'0'), String(secs).padStart(2,'0')].join(':') : [minutes, String(secs).padStart(2,'0')].join(':');
   }
   function renderItems() {
     const query = searchInput.value.trim().toLocaleLowerCase();
@@ -484,6 +500,8 @@
     }
   }
   async function loadDirectory(path = currentPath, pushHistory = false, forceRefresh = false) {
+    const requestGeneration = ++directoryRequestGeneration;
+    const isLatestRequest = () => requestGeneration === directoryRequestGeneration;
     status.textContent = forceRefresh ? '正在刷新目录…' : '正在读取目录…';
     refreshButton.disabled = true;
     refreshButton.classList.add('opacity-60', 'cursor-wait');
@@ -498,6 +516,7 @@
       const query = params.toString() ? '?' + params.toString() : '';
       const response = await fetch('/api/playback/files' + query, {credentials:'same-origin', cache:'no-store'});
       const result = await response.json();
+      if (!isLatestRequest()) return false;
       if (!response.ok || !result.success) throw new Error(result.message || '读取目录失败');
       if (pushHistory) history.push(currentPath);
       currentPath = path;
@@ -510,7 +529,7 @@
       renderItems();
       return true;
     } catch (error) {
-      currentItems = [];
+      if (!isLatestRequest()) return false;
       status.textContent = error.message || '读取目录失败';
       status.className = 'text-[11px] text-rose-300';
       fileCount.textContent = '';
@@ -518,13 +537,16 @@
       pathLabel.textContent = path || '媒体根目录';
       return false;
     } finally {
-      refreshButton.disabled = false;
-      refreshButton.classList.remove('opacity-60', 'cursor-wait');
-      if (refreshIcon) refreshIcon.classList.remove('fa-spin');
+      if (isLatestRequest()) {
+        refreshButton.disabled = false;
+        refreshButton.classList.remove('opacity-60', 'cursor-wait');
+        if (refreshIcon) refreshIcon.classList.remove('fa-spin');
+      }
     }
   }
   async function playFile(item) {
     stopOnlinePlayback();
+    const playbackTask = playbackTaskGeneration;
     selectedPath = item.path;
     renderItems();
     playerStatus.textContent = '正在获取播放地址…';
@@ -535,6 +557,7 @@
     try {
       const response = await fetch('/api/playback/resolve?path=' + encodeURIComponent(item.path), {credentials:'same-origin'});
       const result = await response.json();
+      if (playbackTask !== playbackTaskGeneration) return;
       if (!response.ok || !result.success) throw new Error(result.message || '获取播放地址失败');
       clearSubtitleTracks();
       setSubtitleTracks(result.subtitles);
@@ -543,16 +566,26 @@
       player.play().catch(() => {});
       playerStatus.textContent = '播放地址已获取，正在尝试开始播放。';
     } catch (error) {
+      if (playbackTask !== playbackTaskGeneration) return;
       playerStatus.textContent = error.message || '获取播放地址失败';
       playerState.textContent = '获取失败';
       playerState.className = 'shrink-0 rounded-full border border-rose-400/20 bg-rose-400/5 px-2.5 py-1.5 text-[10px] text-rose-300';
     }
   }
-  backButton.addEventListener('click', () => { if (history.length) loadDirectory(history.pop()); });
+  backButton.addEventListener('click', async () => {
+    if (!history.length || backButton.disabled) return;
+    const targetPath = history[history.length - 1];
+    const loaded = await loadDirectory(targetPath);
+    if (loaded && history[history.length - 1] === targetPath) history.pop();
+    backButton.disabled = history.length === 0;
+  });
   refreshButton.addEventListener('click', () => loadDirectory(currentPath, false, true));
   searchInput.addEventListener('input', renderItems);
   document.getElementById('stop-btn').addEventListener('click', () => {
     stopOnlinePlayback();
+    if (window.MovieSyncPlayback && window.MovieSyncPlayback.cancelAutoPlayback) {
+      window.MovieSyncPlayback.cancelAutoPlayback();
+    }
     clearSubtitleTracks();
     playerState.textContent = '已停止';
     playerState.className = 'shrink-0 rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-[10px] text-slate-500';
@@ -570,11 +603,7 @@
     }
   });
   player.addEventListener('loadedmetadata', () => {
-    progress.textContent = formatTime(player.currentTime) + ' / ' + formatTime(player.duration);
     if (providerBadge) providerBadge.innerHTML = '<i class="fa-solid fa-circle text-[7px] text-emerald-400"></i>播放卡片已就绪';
-  });
-  player.addEventListener('timeupdate', () => {
-    progress.textContent = formatTime(player.currentTime) + ' / ' + formatTime(player.duration);
   });
   player.addEventListener('error', () => {
     if (!player.currentSrc) return;
