@@ -25,6 +25,21 @@ def test_playback_template_compiles_as_jinja():
     assert "function stopPlaybackForSourceSwitch()" in source
     assert "player.onerror = null;" in source
     assert "window.MovieSyncPlayback.playOnline = playOnline" in source
+    assert 'data-source-description="files"' in source
+    assert 'data-source-description="online"' in source
+    assert 'id="playback-openlist-hint"' in source
+    assert (
+        "#playback-main-grid:not(.playback-online-layout) "
+        "#vod_source_manager-episode-panel{display:none!important}"
+    ) in source
+    assert (
+        "#playback-main-grid:not(.playback-online-layout) "
+        "#vod_source_manager-inline-panel{display:none!important}"
+    ) in source
+    assert "#playback-main-grid.playback-online-layout #playback-openlist-hint{display:none!important}" in source
+    assert "description.dataset.sourceDescription !== source" in source
+    assert "playerTitle.textContent = '在线点播播放器'" in source
+    assert "playerStatus.textContent = '在在线点播面板搜索影片并选择线路播放。'" in source
 
 
 def test_playback_template_supports_douban_autoplay_and_fallback():
@@ -62,3 +77,13 @@ def test_homepage_douban_immediate_watch_navigates_to_playback_center():
     assert "year: movie.year || movie.release_year || ''" in script
     assert "type: category" in script
 
+
+
+def test_playback_source_switch_separates_episode_selector_and_openlist_hint():
+    root = Path(__file__).resolve().parents[1]
+    template = (root / "templates" / "playback.html").read_text(encoding="utf-8")
+
+    assert 'id="playback-openlist-hint"' in template
+    assert "const episodePanel = document.getElementById('vod_source_manager-episode-panel')" in template
+    assert "episodePanel.classList.toggle('hidden', !online || !episodePanel.childElementCount)" in template
+    assert "openlistHint.classList.toggle('hidden', online)" in template
