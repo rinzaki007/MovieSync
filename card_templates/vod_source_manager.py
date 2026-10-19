@@ -120,7 +120,7 @@ def _check_source(source: dict[str, Any]) -> dict[str, Any]:
             params={"ac": "list", "pg": 1},
             timeout=_TIMEOUT,
             allow_redirects=False,
-            headers={"Accept": "application/json", "User-Agent": "MovieSync-MacCMS-Checker/1.0"},
+            headers={"Accept": "application/json", "User-Agent": "MovieSync-VOD-Checker/1.0"},
         )
         if 300 <= response.status_code < 400:
             return {"id": source["id"], "name": source["name"], "status": "unavailable",
