@@ -28,8 +28,14 @@ def test_playback_template_compiles_as_jinja():
     assert 'data-source-description="files"' in source
     assert 'data-source-description="online"' in source
     assert 'id="playback-openlist-hint"' in source
-    assert "#playback-main-grid:not(.playback-online-layout) #vod_source_manager-episode-panel{display:none!important}" in source
-    assert "#playback-main-grid:not(.playback-online-layout) #vod_source_manager-inline-panel{display:none!important}" in source
+    assert (
+        "#playback-main-grid:not(.playback-online-layout) "
+        "#vod_source_manager-episode-panel{display:none!important}"
+    ) in source
+    assert (
+        "#playback-main-grid:not(.playback-online-layout) "
+        "#vod_source_manager-inline-panel{display:none!important}"
+    ) in source
     assert "#playback-main-grid.playback-online-layout #playback-openlist-hint{display:none!important}" in source
     assert "description.dataset.sourceDescription !== source" in source
     assert "playerTitle.textContent = '在线点播播放器'" in source
