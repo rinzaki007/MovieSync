@@ -511,6 +511,24 @@ function closeMovieDetail() {
     activeMovieDetailIndex = null;
 }
 
+
+function movieDetailWatch() {
+    const movie = Array.isArray(moviesData) && Number.isInteger(activeMovieDetailIndex)
+        ? moviesData[activeMovieDetailIndex]
+        : null;
+    if (!movie) return;
+
+    const category = String(movie.tag || currentTag || '电影').trim();
+    const params = new URLSearchParams({
+        title: movie.title || '',
+        year: movie.year || movie.release_year || '',
+        type: category
+    });
+
+    closeMovieDetail();
+    window.location.assign('/playback?' + params.toString());
+}
+
 function movieDetailTransfer() {
     const movie = moviesData[activeMovieDetailIndex];
     if (!movie) return;

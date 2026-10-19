@@ -49,3 +49,16 @@ def test_playback_template_supports_douban_autoplay_and_fallback():
     assert "setAutoProgress('success', '视频已开始播放'" in script
     assert "setAutoProgress('searchFailed'" in script
     assert "setAutoProgress('playFailed'" in script
+
+def test_homepage_douban_immediate_watch_navigates_to_playback_center():
+    root = Path(__file__).resolve().parents[1]
+    homepage = (root / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (root / "static" / "js" / "main.js").read_text(encoding="utf-8")
+
+    assert 'onclick="movieDetailWatch()"' in homepage
+    assert "function movieDetailWatch()" in script
+    assert "window.location.assign('/playback?' + params.toString())" in script
+    assert "title: movie.title || ''" in script
+    assert "year: movie.year || movie.release_year || ''" in script
+    assert "type: category" in script
+
