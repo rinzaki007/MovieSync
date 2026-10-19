@@ -11,6 +11,18 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.css">
   <style>
     .playback-shell{background:linear-gradient(145deg,rgba(15,23,42,.94),rgba(2,6,23,.84));border:1px solid rgba(148,163,184,.14);box-shadow:0 18px 48px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.025)}
+    /* Online playback keeps the shared player visible beside search and source choices. */
+    #playback-main-grid.playback-online-layout{grid-template-columns:minmax(0,1.65fr) minmax(300px,.85fr)!important;align-items:start}
+    #playback-main-grid.playback-online-layout #player-workspace-panel{grid-column:1;grid-row:1}
+    #playback-main-grid.playback-online-layout #maccms-inline-panel{grid-column:2;grid-row:1;margin-top:0}
+    #maccms-inline-panel.maccms-inline-layout .grid{grid-template-columns:minmax(0,1fr)!important}
+    #maccms-inline-panel.maccms-inline-layout>section{max-height:calc(100vh - 150px);overflow:auto}
+    @media(max-width:1023px){
+      #playback-main-grid.playback-online-layout{grid-template-columns:minmax(0,1fr)!important}
+      #playback-main-grid.playback-online-layout #player-workspace-panel,
+      #playback-main-grid.playback-online-layout #maccms-inline-panel{grid-column:1;grid-row:auto}
+      #maccms-inline-panel.maccms-inline-layout>section{max-height:none}
+    }
     .playback-control{background:rgba(2,6,23,.62);border:1px solid rgba(71,85,105,.55)}
     .media-row{border:1px solid transparent;transition:background .15s ease,border-color .15s ease}
     .media-row:hover{background:rgba(51,65,85,.35);border-color:rgba(148,163,184,.16)}
@@ -148,7 +160,7 @@
       <div id="file-list" class="min-h-48 flex-1 space-y-1 overflow-y-auto p-2 sm:p-3"></div>
       <div class="border-t border-slate-800/70 px-4 py-3 text-[10px] leading-5 text-slate-500"><i class="fa-solid fa-circle-info mr-1 text-slate-600"></i>仅显示当前目录内容；视频文件可点击播放，文件夹可继续浏览。</div>
     </section>
-    <section class="playback-shell min-w-0 overflow-hidden rounded-2xl">
+    <section id="player-workspace-panel" class="playback-shell min-w-0 overflow-hidden rounded-2xl">
       <div class="flex items-start justify-between gap-3 border-b border-slate-800/80 p-4">
         <div class="min-w-0"><div class="text-[10px] font-semibold uppercase tracking-[.18em] text-emerald-400">Now Playing</div><h2 id="player-title" class="mt-1.5 break-words text-sm font-semibold text-white">选择一个视频开始播放</h2><p id="player-path" class="mt-1 break-all text-[10px] leading-5 text-slate-500">尚未选择文件</p></div>
         <span id="player-state" class="shrink-0 rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-[10px] text-slate-500"><i class="fa-solid fa-circle mr-1 text-[7px]"></i>待播放</span>
@@ -203,6 +215,14 @@
       exitFullscreen: '退出全屏'
     }
   });
+
+  // Keep the shared Plyr player and online source panel as sibling grid columns.
+  const playbackGrid = document.getElementById('playback-main-grid');
+  const playerWorkspace = document.getElementById('player-workspace-panel');
+  const inlineMacCmsPanel = document.getElementById('maccms-inline-panel');
+  if (playbackGrid && playerWorkspace && inlineMacCmsPanel && inlineMacCmsPanel.parentElement !== playbackGrid) {
+    playbackGrid.appendChild(inlineMacCmsPanel);
+  }
 
   function clearSubtitleTracks() {
     player.querySelectorAll('track[data-moviesync-track]')
@@ -294,7 +314,7 @@
     const grid = document.getElementById('playback-main-grid');
     if (browser) browser.classList.remove('hidden');
     if (panel) panel.classList.add('hidden');
-    if (grid) grid.style.gridTemplateColumns = '';
+    if (grid) { grid.classList.remove('playback-online-layout'); grid.style.gridTemplateColumns = ''; }
     document.querySelectorAll('[data-playback-source]').forEach(button => {
       const active = button.dataset.playbackSource === 'files';
       button.setAttribute('aria-selected', String(active));
@@ -311,7 +331,7 @@
         const grid = document.getElementById('playback-main-grid');
         if (browser) browser.classList.add('hidden');
         if (panel) panel.classList.remove('hidden');
-        if (grid) grid.style.gridTemplateColumns = 'minmax(0, 1fr)';
+        if (grid) { grid.style.gridTemplateColumns = ''; grid.classList.add('playback-online-layout'); }
         document.querySelectorAll('[data-playback-source]').forEach(tab => {
           const active = tab.dataset.playbackSource === 'online';
           tab.setAttribute('aria-selected', String(active));
