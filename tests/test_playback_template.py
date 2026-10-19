@@ -18,6 +18,9 @@ def test_playback_template_compiles_as_jinja():
     assert 'id="maccms-inline-panel"' in source
     assert 'id="player-workspace-panel"' in source
     assert "playback-online-layout" in source
+    assert "#playback-main-grid.playback-online-layout #maccms-inline-panel{grid-column:1;grid-row:1;margin-top:0}" in source
+    assert "function stopPlaybackForSourceSwitch()" in source
+    assert "player.onerror = null;" in source
     assert "window.MovieSyncPlayback.playOnline = playOnline" in source
 
 
@@ -30,3 +33,4 @@ def test_playback_template_supports_douban_autoplay_and_fallback():
     assert "window.location.assign('/playback?'" in script
     assert "function startAutoPlayback(candidates)" in script
     assert "function tryNextAutoResource(generation)" in script
+    assert "window.MovieSyncPlayback.cancelAutoPlayback = () =>" in script
