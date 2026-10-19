@@ -22,7 +22,7 @@ _TIMEOUT = (3.05, 8)
 _SOURCE_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 
-def _public_http_url(value: object) -> str:
+def _public_http_url(value: object, *, resolve_dns: bool = False) -> str:
     """Validate an externally reachable HTTP(S) URL before making an outbound request."""
     url = str(value or "").strip()
     if len(url) > 2048:
@@ -43,18 +43,26 @@ def _public_http_url(value: object) -> str:
 
     hostname = parsed.hostname.rstrip(".").lower()
     try:
-        addresses = {ipaddress.ip_address(hostname)}
+        literal_address = ipaddress.ip_address(hostname)
     except ValueError:
+        literal_address = None
+    if literal_address is not None:
+        if not literal_address.is_global:
+            raise ConfigValidationError("为避免服务器端请求伪造，暂不允许访问本机、内网或非公网地址")
+    elif resolve_dns:
         try:
             addresses = {
                 ipaddress.ip_address(item[4][0])
-                for item in socket.getaddrinfo(hostname, port or (443 if parsed.scheme.lower() == "https" else 80),
-                                               type=socket.SOCK_STREAM)
+                for item in socket.getaddrinfo(
+                    hostname,
+                    port or (443 if parsed.scheme.lower() == "https" else 80),
+                    type=socket.SOCK_STREAM,
+                )
             }
         except (OSError, ValueError) as exc:
             raise ConfigValidationError("接口域名无法解析") from exc
-    if not addresses or any(not address.is_global for address in addresses):
-        raise ConfigValidationError("为避免服务器端请求伪造，暂不允许访问本机、内网或非公网地址")
+        if not addresses or any(not address.is_global for address in addresses):
+            raise ConfigValidationError("为避免服务器端请求伪造，暂不允许访问本机、内网或非公网地址")
     return url
 
 
@@ -104,7 +112,7 @@ def _normalize_sources(value: object) -> list[dict[str, Any]]:
 def _check_source(source: dict[str, Any]) -> dict[str, Any]:
     """Check reachability and a JSON response without following redirects."""
     try:
-        url = _public_http_url(source.get("url"))
+        url = _public_http_url(source.get("url"), resolve_dns=True)
         response = requests.get(
             url,
             params={"ac": "list", "pg": 1},
