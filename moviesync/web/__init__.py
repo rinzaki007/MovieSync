@@ -12,9 +12,9 @@ from threading import Lock
 
 from flask import jsonify, redirect, request, session
 
-from .vod_source_manager import register_vod_source_manager_api
 from .playback import playback_api, playback_pages
 from .routes import api, pages
+from .vod_source_manager import register_vod_source_manager_api
 
 
 class LoginRateLimiter:
