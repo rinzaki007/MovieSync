@@ -16,6 +16,8 @@ def test_playback_template_compiles_as_jinja():
     assert "播放地址已获取，正在尝试开始播放。" in source
     assert 'id="playback-source-switch"' in source
     assert 'id="maccms-inline-panel"' in source
+    assert 'id="player-workspace-panel"' in source
+    assert "playback-online-layout" in source
     assert "window.MovieSyncPlayback.playOnline = playOnline" in source
 
 
