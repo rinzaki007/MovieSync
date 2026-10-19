@@ -2,6 +2,12 @@
 
 本文记录有代表性的功能和维护变化，不追求逐个提交罗列。具体修复细节可通过 Git 历史查看。
 
+## 维护更新 — 内置 VOD 源管理模块命名
+
+- 将 `card_templates/maccms.py` 重命名为 `card_templates/vod_source_manager.py`，让文件名描述点播资源站管理职责，避免与 Apple/Mac 品牌产生联想。
+- 同步更新 API 模块和测试的导入路径；不改变业务逻辑。
+- 稳定卡片 ID `maccms`、类名 `MacCMSSourceManagerCard`、能力标识及 `/api/maccms` 路径保持不变。
+
 ## 当前维护基线
 
 - 完成核心分层与卡片平台解耦，资源来源、影视资料和存储目标可按需扩展。
