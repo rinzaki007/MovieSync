@@ -17,6 +17,8 @@
     let autoPlayUrlIndex = 0;
     let autoPlayActive = false;
     let autoPlayGeneration = 0;
+    let mediaType = 'movie';
+    let autoPlayEpisodeMode = false;
 
     const $ = (selector) => modal.querySelector(selector);
 
@@ -36,9 +38,9 @@
                 <form id="maccms-watch-search-form" class="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-900/50 px-4 py-3 sm:px-5">
                     <label class="flex min-w-[150px] flex-1 items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-3">
                         <i class="fa-solid fa-magnifying-glass text-xs text-slate-500"></i>
-                        <input id="maccms-watch-search-input" type="search" placeholder="搜索电影名称…" class="w-full min-w-0 bg-transparent py-2 text-xs text-slate-200 outline-none placeholder:text-slate-600" required>
+                        <input id="maccms-watch-search-input" type="search" placeholder="搜索影片或剧集名称…" class="w-full min-w-0 bg-transparent py-2 text-xs text-slate-200 outline-none placeholder:text-slate-600" required>
                     </label>
-                    <input id="maccms-watch-search-year" type="number" min="1900" max="2099" placeholder="年份（可选）" aria-label="电影年份（可选）" class="w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 outline-none placeholder:text-slate-600">
+                    <input id="maccms-watch-search-year" type="number" min="1900" max="2099" placeholder="年份（可选）" aria-label="影片年份（可选）" class="w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 outline-none placeholder:text-slate-600">
                     <button type="submit" class="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500"><i class="fa-solid fa-search mr-1"></i>搜索</button>
                 </form>
                 <div id="maccms-watch-progress" class="hidden mx-3 mt-3 rounded-xl border border-emerald-900/50 bg-emerald-950/20 p-3 sm:mx-5 sm:p-4" role="status" aria-live="polite">
@@ -222,6 +224,30 @@
         return result;
     }
 
+    function resolveMediaType(value) {
+        const category = String(value || '').trim().toLowerCase();
+        if (/电视剧|连续剧|剧集|series|tv show/.test(category)) return 'series';
+        if (/动漫|动画|番剧|anime|animation/.test(category)) return 'anime';
+        if (/综艺|真人秀|variety|reality/.test(category)) return 'variety';
+        return 'movie';
+    }
+
+    function isEpisodicMedia() { return mediaType !== 'movie'; }
+
+    function episodeMatchKey(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return null;
+        let match = raw.match(/\bs(\d{1,2})\s*e(?:p)?\s*(\d{1,3})\b/i);
+        if (match) return `s${Number(match[1])}e${Number(match[2])}`;
+        match = raw.match(/第\s*0*(\d{1,4})\s*(?:集|话|話|期|回)/i);
+        if (match) return `ep:${Number(match[1])}`;
+        match = raw.match(/^\s*(?:ep|episode)?\s*0*(\d{1,4})\s*$/i);
+        if (match) return `ep:${Number(match[1])}`;
+        const normalized = normalizeTitle(raw);
+        if (!normalized || /^(正片|播放|播放地址|未知|无标题|默认|main|play|video|episode)$/.test(normalized)) return null;
+        return `name:${normalized}`;
+    }
+
     function normalizeTitle(value) {
         return String(value || '').toLowerCase()
             .replace(/[：:!！?？、，,。.'’"“”()（）\[\]【】\s_-]+/g, '');
@@ -241,7 +267,17 @@
         const year = String(item.year || '').match(/\b(19\d{2}|20\d{2})\b/);
         const wantedYear = String(targetYear || '').match(/\b(19\d{2}|20\d{2})\b/);
         if (year && wantedYear) score += year[1] === wantedYear[1] ? 24 : -12;
-        if (item.category && /电影|movie/i.test(item.category)) score += 4;
+        const category = String(item.category || item.type || '').toLowerCase();
+        const expectedCategory = mediaType === 'series' ? /电视剧|连续剧|剧集|series|tv/i.test(category)
+            : mediaType === 'anime' ? /动漫|动画|番剧|anime|animation/i.test(category)
+                : mediaType === 'variety' ? /综艺|真人秀|variety|reality/i.test(category)
+                    : /电影|movie/i.test(category);
+        const clearlyMovie = /电影|movie/i.test(category);
+        const clearlySeries = /电视剧|连续剧|剧集|series|tv/i.test(category);
+        const clearlyAnime = /动漫|动画|番剧|anime|animation/i.test(category);
+        const clearlyVariety = /综艺|真人秀|variety|reality/i.test(category);
+        if (category && expectedCategory) score += 8;
+        else if (category && (clearlyMovie || clearlySeries || clearlyAnime || clearlyVariety)) score -= 12;
         if (Array.isArray(item.play_sources) && item.play_sources.length) score += 3;
         if (item.remarks) score += 1;
         return score;
@@ -337,7 +373,7 @@
         const activeLine = lines[activeLineIndex] || lines[0];
         const episodes = document.createElement('div');
         episodes.className = 'space-y-2';
-        addText(episodes, 'div', 'text-[10px] text-slate-400', `${activeLine.name || '当前线路'} · ${(activeLine.episodes || []).length} 个播放项`);
+        addText(episodes, 'div', 'text-[10px] text-slate-400', `${activeLine.name || '当前线路'} · ${(activeLine.episodes || []).length} ${isEpisodicMedia() ? '个选集' : '个播放项'}`);
         for (const episode of (activeLine.episodes || [])) {
             if (!/^https?:\/\//i.test(episode.url || '')) continue;
             const row = document.createElement('div');
@@ -349,7 +385,10 @@
             play.dataset.playUrl = episode.url;
             play.className = 'shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-[11px] font-semibold text-white hover:bg-emerald-500';
             play.innerHTML = '<i class="fa-solid fa-play mr-1"></i>播放';
-            play.addEventListener('click', () => playUrl(episode.url, episode.name, detail.title));
+            play.addEventListener('click', () => {
+                if (isEpisodicMedia()) playSelectedEpisode(episode, activeLineIndex);
+                else playUrl(episode.url, episode.name, detail.title);
+            });
             row.appendChild(play);
             episodes.appendChild(row);
         }
@@ -359,6 +398,7 @@
 
     async function chooseMovie(candidate) {
         autoPlayActive = false;
+        autoPlayEpisodeMode = false;
         autoPlayGeneration++;
         const requestId = ++detailRequest;
         selectedCandidate = candidate;
@@ -461,9 +501,11 @@
         });
     }
 
-    async function searchTitle(title, year = '', autoPlay = true) {
+    async function searchTitle(title, year = '', autoPlay = true, requestedMediaType = mediaType) {
+        mediaType = resolveMediaType(requestedMediaType);
+        autoPlayEpisodeMode = false;
         const value = String(title || '').trim();
-        if (!value) { playerMessage.textContent = '请输入电影名称后再搜索。'; return; }
+        if (!value) { playerMessage.textContent = '请输入影片或剧集名称后再搜索。'; return; }
         const requestId = ++searchRequest;
         autoPlayActive = false;
         autoPlayGeneration++;
@@ -476,11 +518,17 @@
             if (requestId !== searchRequest) return;
             const candidates = renderCandidates(result.results, value, year || '');
             if (candidates.length) {
-                playerMessage.textContent = '已按片名、年份和线路信息排序，正在自动尝试最佳匹配；失败会依次切换后续资源。';
-                setAutoProgress('match', `已找到 ${candidates.length} 条候选资源`, '正在按片名、年份和线路信息匹配，并依次读取线路。');
                 const bestCard = $('#maccms-watch-results').firstElementChild;
                 if (bestCard) bestCard.classList.add('ring-1', 'ring-emerald-900/70');
-                if (autoPlay) startAutoPlayback(candidates);
+                if (isEpisodicMedia()) {
+                    playerMessage.textContent = '已找到候选剧集资源，正在读取优先匹配项的线路与选集；不会自动播放，以免误播其他集数。';
+                    setAutoProgress('match', `已找到 ${candidates.length} 条候选资源`, '正在读取优先匹配项的详情，加载完成后可选择线路和集数。');
+                    chooseMovie(candidates[0]);
+                } else {
+                    playerMessage.textContent = '已按片名、年份和线路信息排序，正在自动尝试最佳匹配；失败会依次切换后续资源。';
+                    setAutoProgress('match', `已找到 ${candidates.length} 条候选资源`, '正在按片名、年份和线路信息匹配，并依次读取线路。');
+                    if (autoPlay) startAutoPlayback(candidates);
+                }
             } else {
                 playerMessage.textContent = '没有找到候选影片。你可以检查站点设置或尝试更短的片名。';
                 setAutoProgress('searchFailed', '没有找到匹配资源', '可以换个片名搜索，或检查已启用的采集源。');
@@ -494,6 +542,7 @@
     }
 
     function startAutoPlayback(candidates) {
+        autoPlayEpisodeMode = false;
         autoPlayGeneration++; autoPlayCandidates = candidates.slice(); autoPlayCandidateIndex = 0;
         autoPlayUrls = []; autoPlayUrlIndex = 0; autoPlayActive = true;
         tryNextAutoResource(autoPlayGeneration);
@@ -501,6 +550,12 @@
 
     async function tryNextAutoResource(generation) {
         if (!autoPlayActive || generation !== autoPlayGeneration) return;
+        if (autoPlayEpisodeMode && autoPlayUrlIndex >= autoPlayUrls.length) {
+            autoPlayActive = false;
+            playerMessage.textContent = '本集在可确认的线路中均未能播放。没有自动跳到其他集数；请手动选择本集的其他线路或播放项。';
+            setAutoProgress('playFailed', '本集暂时无法播放', '已停止本集的线路重试，没有跳到下一集。');
+            return;
+        }
         if (autoPlayUrlIndex >= autoPlayUrls.length) {
             const candidate = autoPlayCandidates[autoPlayCandidateIndex++];
             if (!candidate) { autoPlayActive = false; playerMessage.textContent = '所有匹配资源都尝试失败了。可以手动选择其他影片或检查采集源。'; $('#maccms-watch-status').textContent = '已尝试所有候选资源，均未能开始播放'; setAutoProgress('playFailed', '暂时无法自动播放', '已尝试匹配资源。你仍可以手动选择影片、切换线路或点击播放重试。'); return; }
@@ -529,31 +584,67 @@
         try { await playUrl(resource.url, resource.name, resource.title, true); } catch (error) { handleAutoPlaybackFailure(error); }
     }
 
+    function playSelectedEpisode(episode, sourceIndex) {
+        autoPlayGeneration++;
+        autoPlayEpisodeMode = true;
+        autoPlayActive = true;
+        autoPlayCandidates = [];
+        autoPlayCandidateIndex = 0;
+        autoPlayUrlIndex = 0;
+        const lines = currentDetail && Array.isArray(currentDetail.play_sources) ? currentDetail.play_sources : [];
+        const selectedLine = lines[sourceIndex] || lines[0];
+        const episodeName = String(episode.name || '未命名播放项');
+        const title = currentDetail && currentDetail.title || (selectedCandidate && selectedCandidate.item.title) || '';
+        const addResource = (line, item) => {
+            if (!item || !/^https?:\/\//i.test(item.url || '')) return;
+            if (autoPlayUrls.some(resource => resource.url === item.url)) return;
+            autoPlayUrls.push({url: item.url, name: [line.name, item.name].filter(Boolean).join(' · ') || episodeName, title});
+        };
+        autoPlayUrls = [];
+        addResource(selectedLine, episode);
+        const selectedKey = episodeMatchKey(episode.name);
+        if (selectedKey) {
+            lines.forEach((line, index) => {
+                if (index === sourceIndex) return;
+                const matches = (line.episodes || []).filter(item => episodeMatchKey(item.name) === selectedKey && /^https?:\/\//i.test(item.url || ''));
+                if (matches.length === 1) addResource(line, matches[0]);
+            });
+        }
+        if (autoPlayUrls.length > 1) {
+            playerMessage.textContent = `已选择 ${episodeName}，将按顺序尝试其他线路中可确认的同一集。`;
+        } else {
+            playerMessage.textContent = `已选择 ${episodeName}。没有找到可确认的同集备用线路，不会自动尝试其他集数。`;
+        }
+        tryNextAutoResource(autoPlayGeneration);
+    }
+
     function handleAutoPlaybackFailure(error) { if (!autoPlayActive) return; playerMessage.textContent = (error && error.message ? error.message + '；' : '') + '当前资源失败，正在自动切换下一条…'; setAutoProgress('play', '当前线路未能播放，正在切换', (error && error.message ? error.message + ' · ' : '') + '正在尝试下一条资源。'); tryNextAutoResource(autoPlayGeneration); }
-    function handleAutoPlaybackStarted() { playerMessage.textContent = '资源已开始播放。'; setAutoProgress('success', '视频已开始播放', '播放已由播放器事件确认；如果之后中断，可以手动切换线路。'); }
+    function handleAutoPlaybackStarted() { playerMessage.textContent = autoPlayEpisodeMode ? '本集资源已开始播放。' : '资源已开始播放。'; setAutoProgress('success', '视频已开始播放', '播放已由播放器事件确认；如果之后中断，可以手动切换线路。'); }
 
     async function movieDetailWatch() {
         const movie = Array.isArray(moviesData) && Number.isInteger(activeMovieDetailIndex) ? moviesData[activeMovieDetailIndex] : null;
         if (!movie) return;
         const category = String(movie.tag || currentTag || '').trim();
-        if (category && category !== '电影') {
-            showToast('目前先支持电影点播；电视剧、综艺和动漫的线路及集数选择会在后续阶段接入。', 'info');
+        const type = resolveMediaType(category);
+        if (type === 'movie' && category && !/电影|movie/i.test(category)) {
+            showToast('该分类暂未接入在线点播。当前支持电影、电视剧、动漫和综艺。', 'info');
             return;
         }
-        const params = new URLSearchParams({ title: movie.title || '', year: movie.year || movie.release_year || '' });
+        const params = new URLSearchParams({ title: movie.title || '', year: movie.year || movie.release_year || '', type: type });
         window.location.assign('/playback?' + params.toString());
     }
 
-    function openOnline(title = '', year = '') {
+    function openOnline(title = '', year = '', requestedType = mediaType) {
+        mediaType = resolveMediaType(requestedType);
         ensureModal();
         if (inlineMode && window.MovieSyncPlayback && window.MovieSyncPlayback.activateOnline) {
             window.MovieSyncPlayback.activateOnline();
         }
         modal.classList.remove('hidden');
-        if (title) searchTitle(title, year);
+        if (title) searchTitle(title, year, mediaType === 'movie', mediaType);
         else {
             $('#maccms-watch-search-input').focus();
-            playerMessage.textContent = '输入电影名称搜索采集源；选择匹配影片后，再手动选择线路播放。';
+            playerMessage.textContent = '输入影片或剧集名称搜索采集源；匹配后选择线路与播放项。';
         }
     }
 
@@ -562,6 +653,7 @@
     window.MovieSyncPlayback.openOnline = openOnline;
     window.MovieSyncPlayback.cancelAutoPlayback = () => {
         autoPlayActive = false;
+        autoPlayEpisodeMode = false;
         autoPlayGeneration++;
         searchRequest++;
         detailRequest++;
