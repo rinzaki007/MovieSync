@@ -189,7 +189,11 @@ def movie_detail():
             "play_sources": _parse_play_sources(row.get("vod_play_from"), row.get("vod_play_url")),
         }
         if not detail["play_sources"]:
-            return jsonify({"success": False, "message": "该影片没有识别到可用的 HTTP/HTTPS 播放线路", "detail": detail}), 422
+            return jsonify({
+                "success": False,
+                "message": "该影片没有识别到可用的 HTTP/HTTPS 播放线路",
+                "detail": detail,
+            }), 422
         return jsonify({"success": True, "source_name": source["name"], "detail": detail})
     except requests.Timeout:
         message = "连接超时"
