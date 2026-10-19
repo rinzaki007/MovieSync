@@ -168,6 +168,27 @@ class ConfigStore:
             default_category_fids=DEFAULT_CATEGORY_FIDS,
             schema_version=CONFIG_SCHEMA_VERSION,
         )
+        # Consume the legacy key once so runtime code only uses the canonical ID.
+        cards = normalized.get("cards")
+        if isinstance(cards, dict):
+            legacy = cards.pop("maccms", None)
+            if isinstance(legacy, dict):
+                current = cards.get("vod_source_manager")
+                if not isinstance(current, dict):
+                    cards["vod_source_manager"] = legacy
+                else:
+                    legacy_config = legacy.get("config")
+                    current_config = current.get("config")
+                    if isinstance(legacy_config, dict) or isinstance(current_config, dict):
+                        merged_config = dict(legacy_config) if isinstance(legacy_config, dict) else {}
+                        if isinstance(current_config, dict):
+                            merged_config.update(current_config)
+                        current["config"] = merged_config
+                    if "enabled" not in current and "enabled" in legacy:
+                        current["enabled"] = legacy["enabled"]
+                    if "config_version" not in current and "config_version" in legacy:
+                        current["config_version"] = legacy["config_version"]
+                    cards["vod_source_manager"] = current
         # Persist normalized legacy data and the current schema version once.
         if normalized != original_data:
             self.store.write(normalized)
