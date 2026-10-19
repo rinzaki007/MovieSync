@@ -1,6 +1,7 @@
 /* Player-first MacCMS movie playback. Keeps transfer/chase flows untouched. */
 (() => {
     let modal;
+    let inlineMode = false;
     let video;
     let playerMessage;
     let activeHls = null;
@@ -15,15 +16,25 @@
 
     function ensureModal() {
         if (modal) return modal;
-        modal = document.createElement('div');
-        modal.id = 'maccms-watch-modal';
-        modal.className = 'fixed inset-0 z-[120] hidden items-center justify-center bg-black/80 p-2 backdrop-blur-sm sm:p-4';
+        const inlineRoot = document.getElementById('maccms-inline-panel');
+        inlineMode = Boolean(inlineRoot);
+        modal = inlineRoot || document.createElement('div');
+        modal.id = inlineMode ? 'maccms-inline-panel' : 'maccms-watch-modal';
+        modal.className = inlineMode ? 'hidden mt-4 min-w-0' : 'fixed inset-0 z-[120] hidden items-center justify-center bg-black/80 p-2 backdrop-blur-sm sm:p-4';
         modal.innerHTML = `
-            <section class="flex max-h-[96vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl">
+            <section class="${inlineMode ? 'w-full overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-xl' : 'flex max-h-[96vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl'}">
                 <header class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3 sm:px-5">
                     <div class="min-w-0"><div class="text-[10px] uppercase tracking-widest text-emerald-400">MOVIESYNC · MACCMS</div><h3 id="maccms-watch-title" class="mt-1 truncate text-sm font-semibold text-white">立即观看</h3></div>
                     <button type="button" data-watch-close class="rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="关闭"><i class="fa-solid fa-xmark"></i></button>
                 </header>
+                <form id="maccms-watch-search-form" class="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-900/50 px-4 py-3 sm:px-5">
+                    <label class="flex min-w-[150px] flex-1 items-center gap-2 rounded-lg border border-slate-700 bg-slate-950 px-3">
+                        <i class="fa-solid fa-magnifying-glass text-xs text-slate-500"></i>
+                        <input id="maccms-watch-search-input" type="search" placeholder="搜索电影名称…" class="w-full min-w-0 bg-transparent py-2 text-xs text-slate-200 outline-none placeholder:text-slate-600" required>
+                    </label>
+                    <input id="maccms-watch-search-year" type="number" min="1900" max="2099" placeholder="年份（可选）" aria-label="电影年份（可选）" class="w-28 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-xs text-slate-200 outline-none placeholder:text-slate-600">
+                    <button type="submit" class="rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500"><i class="fa-solid fa-search mr-1"></i>搜索</button>
+                </form>
                 <div class="min-h-0 flex-1 overflow-y-auto">
                     <div class="grid gap-4 p-3 sm:p-5 lg:grid-cols-[minmax(0,1.65fr)_minmax(260px,1fr)]">
                         <div class="min-w-0">
@@ -55,8 +66,17 @@
                 </div>
                 <footer class="border-t border-slate-800 px-4 py-2.5 text-[10px] leading-5 text-slate-500 sm:px-5">“优先尝试”仅依据片名、年份和线路信息排序，不代表线路已验证可播放。播放由你点击确认；失败时可直接切换线路。</footer>
             </section>`;
-        document.body.appendChild(modal);
+        if (!inlineMode) document.body.appendChild(modal);
         video = $('#maccms-watch-video');
+        if (inlineMode) {
+            $('#maccms-watch-player-wrap').classList.add('hidden');
+            const closeButton = modal.querySelector('[data-watch-close]');
+            if (closeButton) closeButton.innerHTML = '<i class="fa-solid fa-chevron-up mr-1"></i>收起点播';
+        }
+        $('#maccms-watch-search-form').addEventListener('submit', event => {
+            event.preventDefault();
+            searchTitle($('#maccms-watch-search-input').value, $('#maccms-watch-search-year').value);
+        });
         playerMessage = $('#maccms-watch-player-message');
         $('#maccms-watch-placeholder').addEventListener('click', () => {
             const first = $('#maccms-watch-lines button[data-play-url]');
@@ -94,6 +114,7 @@
         resetVideo();
         modal.classList.add('hidden');
         modal.classList.remove('flex');
+        if (inlineMode && window.MovieSyncPlayback && window.MovieSyncPlayback.showFiles) window.MovieSyncPlayback.showFiles();
     }
 
     function addText(parent, tag, className, value) {
@@ -124,11 +145,11 @@
         $('#maccms-watch-placeholder').classList.remove('hidden');
         playerMessage.textContent = '选择匹配影片，再手动点击一条线路的播放按钮。';
         modal.classList.remove('hidden');
-        modal.classList.add('flex');
+        if (!inlineMode) modal.classList.add('flex');
     }
 
     async function fetchJson(url) {
-        const response = await apiFetch(url);
+        const response = typeof apiFetch === 'function' ? await apiFetch(url) : await fetch(url, { credentials: 'same-origin' });
         const result = await response.json();
         if (!response.ok || !result.success) throw new Error(result.message || '请求失败');
         return result;
@@ -315,6 +336,15 @@
         resetVideo();
         $('#maccms-watch-placeholder').classList.add('hidden');
         playerMessage.textContent = `正在尝试播放：${title || ''} · ${itemName || ''}`;
+        if (window.MovieSyncPlayback && typeof window.MovieSyncPlayback.playOnline === 'function') {
+            try {
+                await window.MovieSyncPlayback.playOnline(url, title, itemName);
+                playerMessage.textContent = `已将线路交给播放中心：${title || ''} · ${itemName || ''}。若未自动播放，请点击主播放器上的播放按钮。`;
+            } catch (error) {
+                playerMessage.textContent = (error.message || '无法启动这条线路。') + ' 可直接切换线路或播放项。';
+            }
+            return;
+        }
         const isHls = /\.m3u8(?:$|[?#])/i.test(url);
         if (isHls && !video.canPlayType('application/vnd.apple.mpegurl')) {
             try {
@@ -356,30 +386,22 @@
         });
     }
 
-    async function movieDetailWatch() {
-        const movie = Array.isArray(moviesData) && Number.isInteger(activeMovieDetailIndex)
-            ? moviesData[activeMovieDetailIndex] : null;
-        if (!movie) return;
-        const category = String(movie.tag || currentTag || '').trim();
-        if (category && category !== '电影') {
-            showToast('目前先支持电影点播；电视剧、综艺和动漫的线路及集数选择会在后续阶段接入。', 'info');
-            return;
-        }
+    async function searchTitle(title, year = '') {
+        const value = String(title || '').trim();
+        if (!value) { playerMessage.textContent = '请输入电影名称后再搜索。'; return; }
         const requestId = ++searchRequest;
-        openModal(movie.title);
-        const targetYear = movie.year || movie.release_year || '';
+        openModal(value);
+        $('#maccms-watch-search-input').value = value;
+        $('#maccms-watch-search-year').value = String(year || '');
         try {
-            const result = await fetchJson('/api/maccms/search?' + new URLSearchParams({ title: movie.title || '' }));
+            const result = await fetchJson('/api/maccms/search?' + new URLSearchParams({ title: value }));
             if (requestId !== searchRequest) return;
-            const candidates = renderCandidates(result.results, movie.title || '', targetYear);
+            const candidates = renderCandidates(result.results, value, year || '');
             if (candidates.length) {
                 playerMessage.textContent = '已按片名、年份及站点返回的线路信息排序。选择影片后，再点击“播放”确认开始播放。';
-                const best = candidates[0];
                 const bestCard = $('#maccms-watch-results').firstElementChild;
                 if (bestCard) bestCard.classList.add('ring-1', 'ring-emerald-900/70');
-            } else {
-                playerMessage.textContent = '没有找到候选影片。你可以检查站点设置或尝试其他片名。';
-            }
+            } else playerMessage.textContent = '没有找到候选影片。你可以检查站点设置或尝试更短的片名。';
         } catch (error) {
             if (requestId !== searchRequest) return;
             $('#maccms-watch-status').textContent = error.message || '搜索采集源失败。';
@@ -387,5 +409,28 @@
         }
     }
 
+    async function movieDetailWatch() {
+        const movie = Array.isArray(moviesData) && Number.isInteger(activeMovieDetailIndex) ? moviesData[activeMovieDetailIndex] : null;
+        if (!movie) return;
+        const category = String(movie.tag || currentTag || '').trim();
+        if (category && category !== '电影') {
+            showToast('目前先支持电影点播；电视剧、综艺和动漫的线路及集数选择会在后续阶段接入。', 'info');
+            return;
+        }
+        await searchTitle(movie.title || '', movie.year || movie.release_year || '');
+    }
+
+    function openOnline(title = '', year = '') {
+        ensureModal();
+        modal.classList.remove('hidden');
+        if (title) searchTitle(title, year);
+        else {
+            $('#maccms-watch-search-input').focus();
+            playerMessage.textContent = '输入电影名称搜索采集源；选择匹配影片后，再手动选择线路播放。';
+        }
+    }
+
     window.movieDetailWatch = movieDetailWatch;
+    window.MovieSyncPlayback = window.MovieSyncPlayback || {};
+    window.MovieSyncPlayback.openOnline = openOnline;
 })();

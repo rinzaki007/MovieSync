@@ -127,8 +127,13 @@
       </div>
     </div>
   </header>
-  <main class="playback-main mx-auto grid w-full max-w-screen-2xl gap-4 p-3 sm:p-5 lg:grid-cols-[minmax(250px,.65fr)_minmax(0,1.8fr)]">
-    <section class="playback-shell flex min-w-0 flex-col overflow-hidden rounded-2xl">
+  <div id="playback-source-switch" class="mx-auto flex w-full max-w-screen-2xl items-center gap-2 px-3 pt-4 sm:px-5" role="tablist" aria-label="播放来源">
+    <button type="button" data-playback-source="files" role="tab" aria-selected="true" class="rounded-xl border border-emerald-600/60 bg-emerald-950/50 px-4 py-2.5 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-900/50"><i class="fa-solid fa-folder-open mr-2"></i>媒体文件</button>
+    <button type="button" data-playback-source="online" role="tab" aria-selected="false" class="rounded-xl border border-slate-700 bg-slate-900/50 px-4 py-2.5 text-xs font-semibold text-slate-300 transition hover:border-slate-600 hover:bg-slate-800"><i class="fa-solid fa-globe mr-2"></i>在线点播</button>
+    <span class="ml-auto hidden text-[10px] text-slate-500 sm:inline">同一播放器 · 来源分开管理</span>
+  </div>
+  <main id="playback-main-grid" class="playback-main mx-auto grid w-full max-w-screen-2xl gap-4 p-3 sm:p-5 lg:grid-cols-[minmax(250px,.65fr)_minmax(0,1.8fr)]">
+    <section id="file-browser-panel" class="playback-shell flex min-w-0 flex-col overflow-hidden rounded-2xl">
       <div class="border-b border-slate-800/80 p-4">
         <div class="flex items-start justify-between gap-3">
           <div><h2 class="text-sm font-semibold text-white"><i class="fa-solid fa-folder-open mr-2 text-amber-300"></i>媒体文件</h2><p id="path-label" class="mt-1.5 break-all text-[11px] leading-5 text-slate-500">正在读取目录…</p></div>
@@ -162,10 +167,12 @@
           <div class="rounded-xl border border-slate-800/80 bg-slate-950/40 p-3"><div class="text-[10px] text-slate-500">快捷提示</div><div class="mt-1 text-xs font-medium text-slate-300">倍速、字幕与全屏</div></div>
         </div>
         <div class="mt-4 rounded-xl border border-slate-800/70 bg-slate-950/35 p-3 text-[11px] leading-5 text-slate-500"><i class="fa-solid fa-lightbulb mr-1.5 text-amber-300"></i>如果无法播放或拖动进度条，请确认浏览器能访问 OpenList 返回的播放链接；部分编码格式也可能不受浏览器支持。</div>
+        <div id="maccms-inline-panel" class="hidden mt-4 min-w-0"></div>
       </div>
     </section>
   </main>
 <script src="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.min.js"></script>
+<script src="{{ url_for('static', filename='js/maccms-playback.js') }}"></script>
 <script>
 (() => {
   const list = document.getElementById('file-list');
@@ -202,6 +209,119 @@
       .forEach(track => track.remove());
   }
 
+  function stopOnlinePlayback() {
+    if (onlineHls) {
+      onlineHls.destroy();
+      onlineHls = null;
+    }
+    player.pause();
+    player.removeAttribute('src');
+    player.load();
+  }
+
+  async function ensureHls() {
+    if (window.Hls) return;
+    await new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js';
+      script.onload = resolve;
+      script.onerror = () => reject(new Error('HLS 播放组件加载失败'));
+      document.head.appendChild(script);
+    });
+  }
+
+  function setPlayerState(label, tone = 'neutral') {
+    playerState.textContent = label;
+    const styles = {
+      neutral: 'shrink-0 rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-[10px] text-slate-500',
+      loading: 'shrink-0 rounded-full border border-amber-400/20 bg-amber-400/5 px-2.5 py-1.5 text-[10px] text-amber-300',
+      playing: 'shrink-0 rounded-full border border-emerald-400/20 bg-emerald-400/5 px-2.5 py-1.5 text-[10px] text-emerald-300',
+      error: 'shrink-0 rounded-full border border-rose-400/20 bg-rose-400/5 px-2.5 py-1.5 text-[10px] text-rose-300'
+    };
+    playerState.className = styles[tone] || styles.neutral;
+  }
+
+  async function playOnline(url, title, itemName) {
+    let parsed;
+    try { parsed = new URL(url, window.location.href); }
+    catch { throw new Error('播放地址格式无效。'); }
+    if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('只支持 HTTP 或 HTTPS 在线播放地址。');
+    stopOnlinePlayback();
+    clearSubtitleTracks();
+    playerTitle.textContent = title || itemName || 'MacCMS 在线点播';
+    playerPath.textContent = '在线点播 · ' + (itemName || '已选择播放项');
+    playerStatus.textContent = '正在尝试播放在线线路；线路尚未经过预先验证。';
+    setPlayerState('加载中', 'loading');
+    const isHls = /\.m3u8(?:$|[?#])/i.test(parsed.href);
+    if (isHls && !player.canPlayType('application/vnd.apple.mpegurl')) {
+      await ensureHls();
+      if (!window.Hls.isSupported()) throw new Error('当前浏览器不支持 HLS 播放，可切换其他线路。');
+      onlineHls = new window.Hls();
+      onlineHls.loadSource(parsed.href);
+      onlineHls.attachMedia(player);
+      onlineHls.on(window.Hls.Events.MANIFEST_PARSED, () => {
+        player.play().catch(() => {
+          playerStatus.textContent = '线路已载入，请点击主播放器上的播放按钮。';
+        });
+      });
+      onlineHls.on(window.Hls.Events.ERROR, (_event, data) => {
+        if (data && data.fatal) {
+          playerStatus.textContent = '在线线路播放失败；请在点播区域切换线路或播放项。';
+          setPlayerState('播放失败', 'error');
+        }
+      });
+      return true;
+    }
+    player.src = parsed.href;
+    player.load();
+    try {
+      await player.play();
+      playerStatus.textContent = '正在播放在线线路。';
+    } catch {
+      playerStatus.textContent = '线路已载入，请点击主播放器上的播放按钮；若仍失败，可切换线路。';
+    }
+    return true;
+  }
+
+  window.MovieSyncPlayback = window.MovieSyncPlayback || {};
+  window.MovieSyncPlayback.playOnline = playOnline;
+  window.MovieSyncPlayback.stopOnlinePlayback = stopOnlinePlayback;
+  window.MovieSyncPlayback.showFiles = () => {
+    const browser = document.getElementById('file-browser-panel');
+    const panel = document.getElementById('maccms-inline-panel');
+    const grid = document.getElementById('playback-main-grid');
+    if (browser) browser.classList.remove('hidden');
+    if (panel) panel.classList.add('hidden');
+    if (grid) grid.style.gridTemplateColumns = '';
+    document.querySelectorAll('[data-playback-source]').forEach(button => {
+      const active = button.dataset.playbackSource === 'files';
+      button.setAttribute('aria-selected', String(active));
+      button.className = active
+        ? 'rounded-xl border border-emerald-600/60 bg-emerald-950/50 px-4 py-2.5 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-900/50'
+        : 'rounded-xl border border-slate-700 bg-slate-900/50 px-4 py-2.5 text-xs font-semibold text-slate-300 transition hover:border-slate-600 hover:bg-slate-800';
+    });
+  };
+  document.querySelectorAll('[data-playback-source]').forEach(button => {
+    button.addEventListener('click', () => {
+      if (button.dataset.playbackSource === 'online') {
+        const browser = document.getElementById('file-browser-panel');
+        const panel = document.getElementById('maccms-inline-panel');
+        const grid = document.getElementById('playback-main-grid');
+        if (browser) browser.classList.add('hidden');
+        if (panel) panel.classList.remove('hidden');
+        if (grid) grid.style.gridTemplateColumns = 'minmax(0, 1fr)';
+        document.querySelectorAll('[data-playback-source]').forEach(tab => {
+          const active = tab.dataset.playbackSource === 'online';
+          tab.setAttribute('aria-selected', String(active));
+          tab.className = active
+            ? 'rounded-xl border border-emerald-600/60 bg-emerald-950/50 px-4 py-2.5 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-900/50'
+            : 'rounded-xl border border-slate-700 bg-slate-900/50 px-4 py-2.5 text-xs font-semibold text-slate-300 transition hover:border-slate-600 hover:bg-slate-800';
+        });
+        if (window.MovieSyncPlayback.openOnline) window.MovieSyncPlayback.openOnline();
+      } else if (window.MovieSyncPlayback.showFiles) window.MovieSyncPlayback.showFiles();
+    });
+  });
+
   function setSubtitleTracks(subtitles) {
     clearSubtitleTracks();
     if (!Array.isArray(subtitles)) return;
@@ -233,6 +353,7 @@
   const progress = document.getElementById('playback-progress');
   const providerBadge = document.getElementById('provider-badge');
   const history = [];
+  let onlineHls = null;
   let currentPath = '';
   let currentItems = [];
   let selectedPath = '';
@@ -374,6 +495,7 @@
     }
   }
   async function playFile(item) {
+    stopOnlinePlayback();
     selectedPath = item.path;
     renderItems();
     playerStatus.textContent = '正在获取播放地址…';
@@ -401,10 +523,8 @@
   refreshButton.addEventListener('click', () => loadDirectory(currentPath, false, true));
   searchInput.addEventListener('input', renderItems);
   document.getElementById('stop-btn').addEventListener('click', () => {
-    player.pause();
+    stopOnlinePlayback();
     clearSubtitleTracks();
-    player.removeAttribute('src');
-    player.load();
     playerState.textContent = '已停止';
     playerState.className = 'shrink-0 rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-[10px] text-slate-500';
     playerStatus.textContent = '播放已停止。';
