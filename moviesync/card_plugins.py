@@ -268,11 +268,25 @@ class CardFilePluginManager:
             else:
                 new_marker_value = f"customized:{legacy_blob}"
 
-            legacy.rename(destination)
+            # Preserve administrator customizations while changing the old card identity.
+            migrated_text = (
+                legacy_text
+                .replace("MacCMSSourceManagerCard", "VodSourceManagerCard")
+                .replace('id="maccms"', 'id="vod_source_manager"')
+                .replace("id='maccms'", "id='vod_source_manager'")
+                .replace('"maccms.sources.manage"', '"vod_source_manager.sources.manage"')
+                .replace('"maccms.check"', '"vod_source_manager.check"')
+                .replace("'maccms.sources.manage'", "'vod_source_manager.sources.manage'")
+                .replace("'maccms.check'", "'vod_source_manager.check'")
+                .replace('"maccms_sources"', '"vod_source_manager_sources"')
+                .replace("'maccms_sources'", "'vod_source_manager_sources'")
+            )
+            destination.write_text(migrated_text, encoding="utf-8")
+            legacy.unlink()
             destination_marker.write_text(new_marker_value, encoding="ascii")
             legacy_marker.unlink(missing_ok=True)
             self.logger.info(
-                "已将旧版内置卡片 maccms.py 迁移为 vod_source_manager.py，保留卡片 ID maccms"
+                "已将旧版内置卡片 maccms.py 迁移为 vod_source_manager.py，并统一卡片 ID"
             )
         except OSError:
             self.logger.exception("迁移旧版 MacCMS 卡片文件失败")
@@ -495,7 +509,7 @@ class CardFilePluginManager:
             raise TypeError("create_card(context) 必须返回 MovieSync Card 实例")
         # The filename identifies the plugin file for upload/uninstall bookkeeping;
         # the manifest ID is the stable runtime identity used by the registry/config.
-        # They intentionally need not match (for example, vod_source_manager.py -> maccms).
+        # The built-in VOD source card now uses vod_source_manager for both.
         expected_types = {
             "resource_source": ResourceSourceCard,
             "storage_target": StorageTargetCard,
