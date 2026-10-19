@@ -595,7 +595,7 @@
   if (playbackQuery.get('title')) {
     activatePlaybackSource('online', true);
     if (window.MovieSyncPlayback && window.MovieSyncPlayback.openOnline) {
-      window.MovieSyncPlayback.openOnline(playbackQuery.get('title'), playbackQuery.get('year') || '');
+      window.MovieSyncPlayback.openOnline(playbackQuery.get('title'), playbackQuery.get('year') || '', playbackQuery.get('type') || 'movie');
     }
   }
 })();
