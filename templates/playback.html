@@ -13,18 +13,18 @@
     .playback-shell{background:linear-gradient(145deg,rgba(15,23,42,.94),rgba(2,6,23,.84));border:1px solid rgba(148,163,184,.14);box-shadow:0 18px 48px rgba(0,0,0,.2),inset 0 1px 0 rgba(255,255,255,.025)}
     /* Both sources use the same resource-left, video-right workspace proportions. */
     #playback-main-grid.playback-online-layout{grid-template-columns:minmax(250px,.65fr) minmax(0,1.8fr)!important;align-items:start}
-    #playback-main-grid.playback-online-layout #maccms-inline-panel{grid-column:1;grid-row:1;margin-top:0;min-width:0}
+    #playback-main-grid.playback-online-layout #vod_source_manager-inline-panel{grid-column:1;grid-row:1;margin-top:0;min-width:0}
     #playback-main-grid.playback-online-layout #player-workspace-panel{grid-column:2;grid-row:1;min-width:0}
-    #maccms-inline-panel.maccms-inline-layout>section{max-height:calc(100vh - 150px);overflow:auto}
-    #maccms-inline-panel.maccms-inline-layout .grid{display:flex;flex-direction:column;gap:.75rem}
-    #maccms-inline-panel.maccms-inline-layout .grid>aside{order:-1}
-    #maccms-inline-panel.maccms-inline-layout #maccms-watch-results{max-height:38vh;overflow-y:auto;padding-right:2px}
+    #vod_source_manager-inline-panel.vod_source_manager-inline-layout>section{max-height:calc(100vh - 150px);overflow:auto}
+    #vod_source_manager-inline-panel.vod_source_manager-inline-layout .grid{display:flex;flex-direction:column;gap:.75rem}
+    #vod_source_manager-inline-panel.vod_source_manager-inline-layout .grid>aside{order:-1}
+    #vod_source_manager-inline-panel.vod_source_manager-inline-layout #vod_source_manager-watch-results{max-height:38vh;overflow-y:auto;padding-right:2px}
     @media(max-width:1023px){
       #playback-main-grid.playback-online-layout{grid-template-columns:minmax(0,1fr)!important}
-      #playback-main-grid.playback-online-layout #maccms-inline-panel{grid-column:1;grid-row:1}
+      #playback-main-grid.playback-online-layout #vod_source_manager-inline-panel{grid-column:1;grid-row:1}
       #playback-main-grid.playback-online-layout #player-workspace-panel{grid-column:1;grid-row:2}
-      #maccms-inline-panel.maccms-inline-layout>section{max-height:none}
-      #maccms-inline-panel.maccms-inline-layout #maccms-watch-results{max-height:none}
+      #vod_source_manager-inline-panel.vod_source_manager-inline-layout>section{max-height:none}
+      #vod_source_manager-inline-panel.vod_source_manager-inline-layout #vod_source_manager-watch-results{max-height:none}
     }
     .playback-control{background:rgba(2,6,23,.62);border:1px solid rgba(71,85,105,.55)}
     .media-row{border:1px solid transparent;transition:background .15s ease,border-color .15s ease}
@@ -176,14 +176,14 @@
           <div id="player-status" class="flex-1 text-xs leading-5 text-slate-400">播放地址由播放卡片解析，视频流由浏览器直接请求。</div>
           <button id="stop-btn" class="rounded-lg border border-slate-700 px-3 py-2 text-[11px] text-slate-400 transition hover:bg-slate-800 hover:text-white"><i class="fa-solid fa-stop mr-1"></i>停止播放</button>
         </div>
-        <div id="maccms-episode-panel" class="hidden mt-4 min-w-0 rounded-xl border border-slate-800/80 bg-slate-950/40 p-3 sm:p-4"></div>
+        <div id="vod_source_manager-episode-panel" class="hidden mt-4 min-w-0 rounded-xl border border-slate-800/80 bg-slate-950/40 p-3 sm:p-4"></div>
         <div class="mt-4 rounded-xl border border-slate-800/70 bg-slate-950/35 p-3 text-[11px] leading-5 text-slate-500"><i class="fa-solid fa-lightbulb mr-1.5 text-amber-300"></i>如果无法播放或拖动进度条，请确认浏览器能访问 OpenList 返回的播放链接；部分编码格式也可能不受浏览器支持。</div>
-        <div id="maccms-inline-panel" class="hidden mt-4 min-w-0"></div>
+        <div id="vod_source_manager-inline-panel" class="hidden mt-4 min-w-0"></div>
       </div>
     </section>
   </main>
 <script src="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.min.js"></script>
-<script src="{{ url_for('static', filename='js/maccms-playback.js') }}"></script>
+<script src="{{ url_for('static', filename='js/vod-source-manager-playback.js') }}"></script>
 <script>
 (() => {
   const list = document.getElementById('file-list');
@@ -218,7 +218,7 @@
   // Keep the shared Plyr player and online source panel as sibling grid columns.
   const playbackGrid = document.getElementById('playback-main-grid');
   const playerWorkspace = document.getElementById('player-workspace-panel');
-  const inlinePlaybackPanel = document.getElementById('maccms-inline-panel');
+  const inlinePlaybackPanel = document.getElementById('vod_source_manager-inline-panel');
   if (playbackGrid && playerWorkspace && inlinePlaybackPanel && inlinePlaybackPanel.parentElement !== playbackGrid) {
     playbackGrid.appendChild(inlinePlaybackPanel);
   }
@@ -347,7 +347,7 @@
     const online = source === 'online';
     if (stopCurrent) stopPlaybackForSourceSwitch();
     const browser = document.getElementById('file-browser-panel');
-    const panel = document.getElementById('maccms-inline-panel');
+    const panel = document.getElementById('vod_source_manager-inline-panel');
     const grid = document.getElementById('playback-main-grid');
     if (browser) browser.classList.toggle('hidden', online);
     if (panel) panel.classList.toggle('hidden', !online);
