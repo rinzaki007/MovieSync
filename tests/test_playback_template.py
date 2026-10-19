@@ -25,6 +25,15 @@ def test_playback_template_compiles_as_jinja():
     assert "function stopPlaybackForSourceSwitch()" in source
     assert "player.onerror = null;" in source
     assert "window.MovieSyncPlayback.playOnline = playOnline" in source
+    assert 'data-source-description="files"' in source
+    assert 'data-source-description="online"' in source
+    assert 'id="playback-openlist-hint"' in source
+    assert "#playback-main-grid:not(.playback-online-layout) #vod_source_manager-episode-panel{display:none!important}" in source
+    assert "#playback-main-grid:not(.playback-online-layout) #vod_source_manager-inline-panel{display:none!important}" in source
+    assert "#playback-main-grid.playback-online-layout #playback-openlist-hint{display:none!important}" in source
+    assert "description.dataset.sourceDescription !== source" in source
+    assert "playerTitle.textContent = '在线点播播放器'" in source
+    assert "playerStatus.textContent = '在在线点播面板搜索影片并选择线路播放。'" in source
 
 
 def test_playback_template_supports_douban_autoplay_and_fallback():
