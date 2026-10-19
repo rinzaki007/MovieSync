@@ -1,4 +1,4 @@
-/* Player-first MacCMS movie playback. Keeps transfer/chase flows untouched. */
+/* Player-first online movie playback. Keeps transfer/chase flows untouched. */
 (() => {
     let modal;
     let inlineMode = false;
@@ -33,7 +33,7 @@
         modal.innerHTML = `
             <section class="${inlineMode ? 'w-full overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-xl' : 'flex max-h-[96vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-950 shadow-2xl'}">
                 <header class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-3 sm:px-5">
-                    <div class="min-w-0"><div class="text-[10px] uppercase tracking-widest text-emerald-400">MOVIESYNC · MACCMS</div><h3 id="maccms-watch-title" class="mt-1 truncate text-sm font-semibold text-white">立即观看</h3></div>
+                    <div class="min-w-0"><div class="text-[10px] uppercase tracking-widest text-emerald-400">MOVIESYNC · 在线点播</div><h3 id="maccms-watch-title" class="mt-1 truncate text-sm font-semibold text-white">立即观看</h3></div>
                     <button type="button" data-watch-close class="rounded-lg px-3 py-2 text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="关闭"><i class="fa-solid fa-xmark"></i></button>
                 </header>
                 <form id="maccms-watch-search-form" class="flex flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-900/50 px-4 py-3 sm:px-5">

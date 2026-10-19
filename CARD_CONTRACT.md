@@ -182,7 +182,7 @@ The built-in Telegram resource source, PanSou resource source, Quark storage tar
 - `pansou.py`: PanSou resource search.
 - `quark.py`: Quark link resolution, destination folders, and transfers.
 - `douban.py`: Douban metadata lookup and search.
-- `vod_source_manager.py`: MacCMS-compatible VOD source management and source health checks; its stable card ID remains `maccms`.
+- `vod_source_manager.py`: Compatible VOD source management and source health checks; its stable card ID remains `maccms`.
 
 Uninstalling one of these files removes that card from the registry and persistent plugin directory, while other cards and core services continue running. Configuration and history are intentionally retained. Re-upload the same reviewed file to restore it. Shared low-level clients remain platform services injected through the factory context; card-specific behavior stays in the card file.
 

@@ -218,9 +218,9 @@
   // Keep the shared Plyr player and online source panel as sibling grid columns.
   const playbackGrid = document.getElementById('playback-main-grid');
   const playerWorkspace = document.getElementById('player-workspace-panel');
-  const inlineMacCmsPanel = document.getElementById('maccms-inline-panel');
-  if (playbackGrid && playerWorkspace && inlineMacCmsPanel && inlineMacCmsPanel.parentElement !== playbackGrid) {
-    playbackGrid.appendChild(inlineMacCmsPanel);
+  const inlinePlaybackPanel = document.getElementById('maccms-inline-panel');
+  if (playbackGrid && playerWorkspace && inlinePlaybackPanel && inlinePlaybackPanel.parentElement !== playbackGrid) {
+    playbackGrid.appendChild(inlinePlaybackPanel);
   }
 
   function clearSubtitleTracks() {
@@ -292,7 +292,7 @@
       setPlayerState('正在播放', 'playing');
       if (window.MovieSyncPlayback && window.MovieSyncPlayback.onOnlinePlaybackStarted) window.MovieSyncPlayback.onOnlinePlaybackStarted();
     };
-    playerTitle.textContent = title || itemName || 'MacCMS 在线点播';
+    playerTitle.textContent = title || itemName || '在线点播';
     playerPath.textContent = '在线点播 · ' + (itemName || '已选择播放项');
     playerStatus.textContent = '正在尝试播放在线线路；线路尚未经过预先验证。';
     setPlayerState('加载中', 'loading');
