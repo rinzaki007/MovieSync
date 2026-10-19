@@ -583,6 +583,9 @@
   searchInput.addEventListener('input', renderItems);
   document.getElementById('stop-btn').addEventListener('click', () => {
     stopOnlinePlayback();
+    if (window.MovieSyncPlayback && window.MovieSyncPlayback.cancelAutoPlayback) {
+      window.MovieSyncPlayback.cancelAutoPlayback();
+    }
     clearSubtitleTracks();
     playerState.textContent = '已停止';
     playerState.className = 'shrink-0 rounded-full border border-slate-700 bg-slate-950/70 px-2.5 py-1.5 text-[10px] text-slate-500';
