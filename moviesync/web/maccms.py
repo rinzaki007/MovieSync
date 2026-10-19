@@ -7,7 +7,7 @@ from typing import Any
 import requests
 from flask import Blueprint, current_app, jsonify, request
 
-from card_templates.video_sources import _normalize_sources, _public_http_url
+from card_templates.vod_source_manager import _normalize_sources, _public_http_url
 
 maccms_api = Blueprint("maccms_api", __name__, url_prefix="/api/maccms")
 _TIMEOUT = (3.05, 8)
