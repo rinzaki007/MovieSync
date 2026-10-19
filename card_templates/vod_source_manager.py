@@ -1,7 +1,7 @@
 """Manage the VOD source card backed by the MacCMS JSON API.
 
 The module name describes the card responsibility without tying the filename to
-Apple/Mac branding. The integration and stable card ID remain MacCMS-specific.
+Apple/Mac branding. The integration and stable card ID remain stable for existing installations.
 """
 from __future__ import annotations
 
@@ -144,7 +144,7 @@ def _check_source(source: dict[str, Any]) -> dict[str, Any]:
         )
         if not looks_like_maccms:
             return {"id": source["id"], "name": source["name"], "status": "invalid",
-                    "message": "接口返回 JSON，但未识别到常见 MacCMS 数据字段"}
+                    "message": "接口返回 JSON，但未识别到常见影视采集数据字段"}
         return {"id": source["id"], "name": source["name"], "status": "healthy",
                 "message": "连接成功，已收到 JSON 接口响应"}
     except ConfigValidationError as exc:
