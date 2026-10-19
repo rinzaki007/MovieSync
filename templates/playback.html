@@ -218,9 +218,9 @@
   // Keep the shared Plyr player and online source panel as sibling grid columns.
   const playbackGrid = document.getElementById('playback-main-grid');
   const playerWorkspace = document.getElementById('player-workspace-panel');
-  const inlineMacCmsPanel = document.getElementById('maccms-inline-panel');
-  if (playbackGrid && playerWorkspace && inlineMacCmsPanel && inlineMacCmsPanel.parentElement !== playbackGrid) {
-    playbackGrid.appendChild(inlineMacCmsPanel);
+  const inlinePlaybackPanel = document.getElementById('maccms-inline-panel');
+  if (playbackGrid && playerWorkspace && inlinePlaybackPanel && inlinePlaybackPanel.parentElement !== playbackGrid) {
+    playbackGrid.appendChild(inlinePlaybackPanel);
   }
 
   function clearSubtitleTracks() {
