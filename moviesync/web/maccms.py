@@ -138,5 +138,68 @@ def search_movies():
     })
 
 
+
+@maccms_api.get("/detail")
+def movie_detail():
+    source_id = str(request.args.get("source_id") or "").strip()
+    vod_id = str(request.args.get("vod_id") or "").strip()
+    if not source_id or len(source_id) > 64 or not vod_id or len(vod_id) > 160:
+        return jsonify({"success": False, "message": "采集源或影片编号无效"}), 400
+
+    services = current_app.extensions["moviesync"]
+    card = services["card_registry"].get("maccms")
+    saved_cards = services["config"].load().get("cards", {})
+    saved = saved_cards.get("maccms", {}) if isinstance(saved_cards, dict) else {}
+    if card is None or not isinstance(saved, dict) or saved.get("enabled", True) is False:
+        return jsonify({"success": False, "message": "影视采集源卡片尚未安装或已停用"}), 400
+    config = saved.get("config", {})
+    try:
+        sources = [item for item in _normalize_sources(config.get("sources", []))
+                   if item["enabled"] and item["id"] == source_id]
+    except (ValueError, TypeError, AttributeError) as exc:
+        return jsonify({"success": False, "message": str(exc), "detail": None}), 400
+    if not sources:
+        return jsonify({"success": False, "message": "这个采集源未启用或不存在"}), 404
+
+    source = sources[0]
+    try:
+        url = _public_http_url(source["url"], resolve_dns=True)
+        response = requests.get(
+            url, params={"ac": "detail", "ids": vod_id}, timeout=_TIMEOUT,
+            allow_redirects=False,
+            headers={"Accept": "application/json", "User-Agent": "MovieSync-MacCMS-Search/1.0"},
+        )
+        if 300 <= response.status_code < 400:
+            return jsonify({"success": False, "message": "接口返回重定向，请填写最终 API 地址", "detail": None}), 502
+        if response.status_code != 200:
+            return jsonify({"success": False, "message": f"接口返回 HTTP {response.status_code}", "detail": None}), 502
+        payload = response.json()
+        rows = payload.get("list") if isinstance(payload, dict) else None
+        if not isinstance(rows, list) and isinstance(payload, dict) and isinstance(payload.get("data"), dict):
+            rows = payload["data"].get("list")
+        if not isinstance(rows, list) or not rows or not isinstance(rows[0], dict):
+            return jsonify({"success": False, "message": "接口没有返回影片详情", "detail": None}), 502
+        row = rows[0]
+        detail = {
+            "id": str(row.get("vod_id") or row.get("id") or vod_id)[:160],
+            "title": str(row.get("vod_name") or row.get("title") or "")[:240],
+            "year": str(row.get("vod_year") or "")[:20],
+            "remarks": str(row.get("vod_remarks") or "")[:160],
+            "poster": str(row.get("vod_pic") or "")[:2048],
+            "play_sources": _parse_play_sources(row.get("vod_play_from"), row.get("vod_play_url")),
+        }
+        if not detail["play_sources"]:
+            return jsonify({"success": False, "message": "该影片没有识别到可用的 HTTP/HTTPS 播放线路", "detail": detail}), 422
+        return jsonify({"success": True, "source_name": source["name"], "detail": detail})
+    except requests.Timeout:
+        message = "连接超时"
+    except requests.RequestException:
+        message = "请求失败，请检查接口地址或站点状态"
+    except (ValueError, TypeError):
+        message = "接口响应格式无效"
+    except Exception:
+        message = "读取影片详情失败，请检查接口地址和服务日志"
+    return jsonify({"success": False, "message": message, "detail": None}), 502
+
 def register_maccms_api(app) -> None:
     app.register_blueprint(maccms_api)
