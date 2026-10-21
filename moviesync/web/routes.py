@@ -1177,6 +1177,53 @@ def search_metadata():
         )
 
 
+@api.post("/more-download-links")
+@require_csrf
+def more_download_links():
+    """Search PanSou for display-only links across cloud drives, magnet and ED2K."""
+    data = request.get_json(silent=True) or {}
+    movie = data.get("movie") if isinstance(data.get("movie"), dict) else {}
+    title = str(movie.get("title") or data.get("title") or "").strip()
+    if not title:
+        return _json_error("请先选择影片")
+    if len(title) > 200:
+        return _json_error("影片名称过长")
+
+    services = _services()
+    resource_sources = services.get("resource_sources")
+    if resource_sources is None:
+        return _json_error("资源来源服务暂不可用", 503)
+    search_movie = {"title": title, "all_resource_types": True}
+    try:
+        resources = resource_sources.search(
+            search_movie, services["config"].load(), source_ids=["pansou"]
+        )
+    except Exception:
+        services["logger"].exception("PanSou 更多下载链接检索失败: %s", title)
+        return _json_error("更多下载链接检索失败，请稍后重试", 502)
+
+    unique = []
+    seen = set()
+    for item in resources if isinstance(resources, list) else []:
+        if not isinstance(item, dict):
+            continue
+        url = str(item.get("url") or "").strip()
+        kind = str(item.get("resource_type") or "unknown").strip().lower()
+        key = (kind, url.lower())
+        if not url or key in seen:
+            continue
+        seen.add(key)
+        unique.append({
+            "title": str(item.get("title") or title)[:500],
+            "url": url,
+            "password": str(item.get("password") or ""),
+            "resource_type": kind,
+            "source_name": str(item.get("source_name") or "PanSou"),
+            "channel": str(item.get("channel") or "")[:200],
+        })
+    return jsonify({"success": True, "resources": unique, "count": len(unique)})
+
+
 @api.post("/search-candidates")
 @require_csrf
 def search_candidates():
