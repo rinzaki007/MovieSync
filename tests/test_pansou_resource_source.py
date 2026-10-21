@@ -116,6 +116,53 @@ def test_pansou_search_polls_and_merges_progressive_results():
     assert {item["resource_id"] for item in results} == {"share123", "share456"}
     assert len([call for call in http.calls if call[1].endswith("/api/search/first")]) == 4
 
+
+def test_pansou_stops_polling_after_two_unchanged_snapshots(monkeypatch):
+    import time
+
+    monkeypatch.setattr(time, "sleep", lambda _: None)
+    payload = {
+        "results": [
+            {"title": "测试电影", "links": [
+                {"type": "quark", "url": "https://pan.quark.cn/s/share123"}
+            ]}
+        ],
+        "merged_by_type": {},
+    }
+    later = {
+        "results": [
+            {"title": "测试电影", "links": [
+                {"type": "quark", "url": "https://pan.quark.cn/s/share456"}
+            ]}
+        ],
+        "merged_by_type": {},
+    }
+    http = FakeHttpClient(search_payloads=[payload, payload, payload, later])
+    source = PanSouResourceSource(http)
+
+    results = source.search(
+        {"title": "测试电影"},
+        {"base_url": "http://pansou.local", "timeout": 45},
+    )
+
+    assert [item["resource_id"] for item in results] == ["share123"]
+    assert len([call for call in http.calls if call[1].endswith("/api/search/first")]) == 3
+
+
+def test_pansou_all_resource_types_excludes_ed2k():
+    http = FakeHttpClient()
+    source = PanSouResourceSource(http)
+
+    source.search(
+        {"title": "测试电影", "all_resource_types": True},
+        {"base_url": "http://pansou.local", "timeout": 45},
+    )
+
+    cloud_types = http.calls[0][3]["params"]["cloud_types"].split(",")
+    assert "magnet" in cloud_types
+    assert "ed2k" not in cloud_types
+
+
 def test_pansou_search_supports_merged_response_and_deduplicates():
     http = FakeHttpClient(
         search_payload={
