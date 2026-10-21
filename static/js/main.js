@@ -565,6 +565,83 @@ function movieDetailChase() {
     window.location.href = '/tasks?' + params.toString();
 }
 
+function closeMoreDownloadLinks() {
+    document.getElementById('more-download-links-modal')?.classList.add('hidden');
+    document.getElementById('more-download-links-modal')?.classList.remove('flex');
+}
+
+async function movieDetailMoreLinks() {
+    const movie = moviesData[activeMovieDetailIndex];
+    if (!movie) return;
+    const modal = document.getElementById('more-download-links-modal');
+    const content = document.getElementById('more-links-content');
+    const titleEl = document.getElementById('more-links-title');
+    if (!modal || !content) return;
+    titleEl.textContent = `更多下载链接 · ${movie.title || '影片'}`;
+    content.innerHTML = '<div class="py-8 text-center text-sm text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>正在搜索 PanSou 的网盘与磁链资源…</div>';
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    try {
+        const response = await apiFetch('/api/more-download-links', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ movie: { title: movie.title || '', tag: movie.tag || currentTag || '' } })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.message || '搜索更多链接失败');
+        const resources = Array.isArray(result.resources) ? result.resources : [];
+        if (!resources.length) {
+            content.innerHTML = '<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-6 text-center text-sm text-slate-400">暂时没有找到更多类型的资源。可以稍后重试，或检查 PanSou 卡片状态。</div>';
+            window.moreDownloadLinkResults = [];
+            return;
+        }
+        const labels = {
+            quark_share: '夸克网盘', aliyun_share: '阿里云盘', baidu_share: '百度网盘',
+            uc_share: 'UC 网盘', tianyi_share: '天翼云盘', mobile_share: '移动云盘',
+            '115_share': '115 网盘', pikpak_share: 'PikPak', xunlei_share: '迅雷云盘',
+            '123_share': '123 云盘', magnet: '磁力链接', ed2k: 'ED2K 链接'
+        };
+        content.innerHTML = resources.map((item, index) => {
+            const url = String(item.url || '');
+            const label = labels[item.resource_type] || item.resource_type || '其他资源';
+            const safeUrl = escapeHtml(url);
+            const safeTitle = escapeHtml(item.title || movie.title || '未命名资源');
+            const safeChannel = escapeHtml(item.channel || item.source_name || 'PanSou');
+            const safePassword = escapeHtml(item.password || '');
+            const openable = /^https?:\/\//i.test(url);
+            return `<article class="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="min-w-0 flex-1">
+                        <div class="mb-1 flex flex-wrap items-center gap-2"><span class="rounded-md bg-amber-500/10 px-2 py-1 text-[10px] text-amber-200">${escapeHtml(label)}</span><span class="text-[10px] text-slate-500">${safeChannel}</span></div>
+                        <h4 class="break-words text-sm font-medium text-slate-100">${safeTitle}</h4>
+                        <p class="mt-2 break-all text-xs leading-5 text-slate-400">${safeUrl}</p>
+                        ${safePassword ? `<p class="mt-1 text-xs text-sky-300">提取码：${safePassword}</p>` : ''}
+                    </div>
+                    <div class="flex shrink-0 gap-2">
+                        <button onclick="copyMoreDownloadLink(${index})" class="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800"><i class="fa-regular fa-copy mr-1"></i>复制</button>
+                        ${openable ? `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="rounded-lg bg-blue-600/80 px-3 py-2 text-xs text-white hover:bg-blue-500">打开</a>` : ''}
+                    </div>
+                </div>
+            </article>`;
+        }).join('');
+        window.moreDownloadLinkResults = resources;
+    } catch (err) {
+        content.innerHTML = `<div class="rounded-xl border border-rose-900/50 bg-rose-950/20 p-5 text-sm text-rose-200">${escapeHtml(err.message || '搜索失败，请稍后重试')}</div>`;
+    }
+}
+
+async function copyMoreDownloadLink(index) {
+    const item = window.moreDownloadLinkResults?.[index];
+    if (!item?.url) return;
+    const text = item.password ? `${item.url}\n提取码：${item.password}` : item.url;
+    try {
+        await navigator.clipboard.writeText(text);
+        showToast('链接已复制', 'success');
+    } catch (err) {
+        window.prompt('请复制以下链接：', text);
+    }
+}
+
 async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null, keepModalOpen = false) {
     const requestId = ++candidateSearchRequestSeq;
     const storageTargetId = String(
