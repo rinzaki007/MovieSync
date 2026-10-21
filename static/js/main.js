@@ -595,39 +595,74 @@ async function movieDetailMoreLinks() {
             window.moreDownloadLinkResults = [];
             return;
         }
-        const labels = {
-            quark_share: '夸克网盘', aliyun_share: '阿里云盘', baidu_share: '百度网盘',
-            uc_share: 'UC 网盘', tianyi_share: '天翼云盘', mobile_share: '移动云盘',
-            '115_share': '115 网盘', pikpak_share: 'PikPak', xunlei_share: '迅雷云盘',
-            '123_share': '123 云盘', magnet: '磁力链接', ed2k: 'ED2K 链接'
-        };
-        content.innerHTML = resources.map((item, index) => {
-            const url = String(item.url || '');
-            const label = labels[item.resource_type] || item.resource_type || '其他资源';
-            const safeUrl = escapeHtml(url);
-            const safeTitle = escapeHtml(item.title || movie.title || '未命名资源');
-            const safeChannel = escapeHtml(item.channel || item.source_name || 'PanSou');
-            const safePassword = escapeHtml(item.password || '');
-            const openable = /^https?:\/\//i.test(url);
-            return `<article class="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-                <div class="flex flex-wrap items-start justify-between gap-3">
-                    <div class="min-w-0 flex-1">
-                        <div class="mb-1 flex flex-wrap items-center gap-2"><span class="rounded-md bg-amber-500/10 px-2 py-1 text-[10px] text-amber-200">${escapeHtml(label)}</span><span class="text-[10px] text-slate-500">${safeChannel}</span></div>
-                        <h4 class="break-words text-sm font-medium text-slate-100">${safeTitle}</h4>
-                        <p class="mt-2 break-all text-xs leading-5 text-slate-400">${safeUrl}</p>
-                        ${safePassword ? `<p class="mt-1 text-xs text-sky-300">提取码：${safePassword}</p>` : ''}
-                    </div>
-                    <div class="flex shrink-0 gap-2">
-                        <button onclick="copyMoreDownloadLink(${index})" class="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800"><i class="fa-regular fa-copy mr-1"></i>复制</button>
-                        ${openable ? `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="rounded-lg bg-blue-600/80 px-3 py-2 text-xs text-white hover:bg-blue-500">打开</a>` : ''}
-                    </div>
-                </div>
-            </article>`;
-        }).join('');
         window.moreDownloadLinkResults = resources;
+        window.moreDownloadLinkFilter = 'all';
+        window.moreDownloadLinkMovieTitle = movie.title || '影片';
+        renderMoreDownloadLinks('all');
     } catch (err) {
         content.innerHTML = `<div class="rounded-xl border border-rose-900/50 bg-rose-950/20 p-5 text-sm text-rose-200">${escapeHtml(err.message || '搜索失败，请稍后重试')}</div>`;
     }
+}
+
+function moreDownloadLinkLabels() {
+    return {
+        quark_share: '夸克网盘', aliyun_share: '阿里云盘', baidu_share: '百度网盘',
+        uc_share: 'UC 网盘', tianyi_share: '天翼云盘', mobile_share: '移动云盘',
+        '115_share': '115 网盘', pikpak_share: 'PikPak', xunlei_share: '迅雷云盘',
+        '123_share': '123 云盘', magnet: '磁力链接', ed2k: 'ED2K 链接'
+    };
+}
+
+function filterMoreDownloadLinks(resourceType) {
+    window.moreDownloadLinkFilter = resourceType || 'all';
+    renderMoreDownloadLinks(window.moreDownloadLinkFilter);
+}
+
+function renderMoreDownloadLinks(selectedType = 'all') {
+    const content = document.getElementById('more-links-content');
+    const resources = Array.isArray(window.moreDownloadLinkResults) ? window.moreDownloadLinkResults : [];
+    if (!content) return;
+    const labels = moreDownloadLinkLabels();
+    const counts = new Map();
+    resources.forEach(item => {
+        const type = String(item.resource_type || 'other');
+        counts.set(type, (counts.get(type) || 0) + 1);
+    });
+    const categories = [
+        { type: 'all', label: '全部', count: resources.length },
+        ...Array.from(counts.keys()).sort((a, b) => (labels[a] || a).localeCompare(labels[b] || b, 'zh-CN'))
+            .map(type => ({ type, label: labels[type] || type || '其他资源', count: counts.get(type) }))
+    ];
+    const tabs = categories.map(category => {
+        const active = selectedType === category.type;
+        return `<button type="button" onclick="filterMoreDownloadLinks('${escapeHtml(category.type)}')" class="shrink-0 rounded-lg border px-3 py-2 text-xs transition ${active ? 'border-amber-500/60 bg-amber-500/15 text-amber-200' : 'border-slate-700 bg-slate-950/50 text-slate-300 hover:border-slate-500 hover:text-white'}">${escapeHtml(category.label)} <span class="ml-1 opacity-70">${category.count}</span></button>`;
+    }).join('');
+    const visible = resources.map((item, index) => ({ item, index }))
+        .filter(({ item }) => selectedType === 'all' || String(item.resource_type || 'other') === selectedType);
+    const cards = visible.map(({ item, index }) => {
+        const url = String(item.url || '');
+        const label = labels[item.resource_type] || item.resource_type || '其他资源';
+        const safeUrl = escapeHtml(url);
+        const safeTitle = escapeHtml(item.title || window.moreDownloadLinkMovieTitle || '未命名资源');
+        const safeChannel = escapeHtml(item.channel || item.source_name || 'PanSou');
+        const safePassword = escapeHtml(item.password || '');
+        const openable = /^https?:\/\//i.test(url);
+        return `<article class="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                    <div class="mb-1 flex flex-wrap items-center gap-2"><span class="rounded-md bg-amber-500/10 px-2 py-1 text-[10px] text-amber-200">${escapeHtml(label)}</span><span class="text-[10px] text-slate-500">${safeChannel}</span></div>
+                    <h4 class="break-words text-sm font-medium text-slate-100">${safeTitle}</h4>
+                    <p class="mt-2 break-all text-xs leading-5 text-slate-400">${safeUrl}</p>
+                    ${safePassword ? `<p class="mt-1 text-xs text-sky-300">提取码：${safePassword}</p>` : ''}
+                </div>
+                <div class="flex shrink-0 gap-2">
+                    <button onclick="copyMoreDownloadLink(${index})" class="rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-slate-800"><i class="fa-regular fa-copy mr-1"></i>复制</button>
+                    ${openable ? `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" class="rounded-lg bg-blue-600/80 px-3 py-2 text-xs text-white hover:bg-blue-500">打开</a>` : ''}
+                </div>
+            </div>
+        </article>`;
+    }).join('');
+    content.innerHTML = `<div class="mb-4"><div class="mb-2 text-xs text-slate-400">按资源类型筛选 · 共 ${resources.length} 条去重链接</div><div class="flex flex-wrap gap-2">${tabs}</div></div>${cards || '<div class="rounded-xl border border-slate-800 bg-slate-950/60 p-6 text-center text-sm text-slate-400">这个分类暂时没有资源。</div>'}`;
 }
 
 async function copyMoreDownloadLink(index) {
