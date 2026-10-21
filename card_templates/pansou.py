@@ -370,7 +370,7 @@ class PanSouResourceSource(ResourceSourceCard):
                         "pikpak": "pikpak", "pikpak网盘": "pikpak",
                         "xunlei": "xunlei", "迅雷": "xunlei", "迅雷云盘": "xunlei",
                         "123": "123", "123云盘": "123",
-                        "magnet": "magnet", "磁力": "magnet", "磁力链接": "magnet",
+                        "magnet": "magnet", "magnet_link": "magnet", "磁力": "magnet", "磁力链接": "magnet",
                         "ed2k": "ed2k", "电驴": "ed2k", "ed2k链接": "ed2k",
                     }
                     cloud_type = aliases.get(link_type)
@@ -407,7 +407,7 @@ class PanSouResourceSource(ResourceSourceCard):
                 "pikpak": "pikpak", "pikpak网盘": "pikpak",
                 "xunlei": "xunlei", "迅雷": "xunlei", "迅雷云盘": "xunlei",
                 "123": "123", "123云盘": "123",
-                "magnet": "magnet", "磁力": "magnet", "磁力链接": "magnet",
+                "magnet": "magnet", "magnet_link": "magnet", "磁力": "magnet", "磁力链接": "magnet",
                 "ed2k": "ed2k", "电驴": "ed2k", "ed2k链接": "ed2k",
             }
             for raw_cloud_type, items in merged.items():
