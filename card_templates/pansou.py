@@ -317,7 +317,7 @@ class PanSouResourceSource(ResourceSourceCard):
             "res": "all",
             "src": "plugin",
             "cloud_types": ",".join(cloud_types),
-            "wait_ms": 1800,
+            "wait_ms": 6000,
         }
         try:
             # Bundled PanSou returns the first cached plugin results as soon as they
