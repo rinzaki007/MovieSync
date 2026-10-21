@@ -9,7 +9,7 @@ class FakeResponse:
 
 
 class FakeHttpClient:
-    def __init__(self, search_payload=None, health_payload=None, progressive_supported=True):
+    def __init__(self, search_payload=None, search_payloads=None, health_payload=None, progressive_supported=True):
         self.search_payload = search_payload or {
             "code": 200,
             "data": {
@@ -34,6 +34,8 @@ class FakeHttpClient:
                 "merged_by_type": {},
             },
         }
+        self.search_payloads = list(search_payloads or [])
+        self.search_payload_index = 0
         self.progressive_supported = progressive_supported
         self.health_payload = health_payload or {
             "status": "ok",
@@ -53,6 +55,10 @@ class FakeHttpClient:
         if url.endswith("/api/search/first") and not self.progressive_supported:
             return FakeResponse(404), {}
         if url.endswith("/api/search") or url.endswith("/api/search/first"):
+            if self.search_payloads:
+                index = min(self.search_payload_index, len(self.search_payloads) - 1)
+                self.search_payload_index += 1
+                return FakeResponse(), self.search_payloads[index]
             return FakeResponse(), self.search_payload
         raise AssertionError(f"Unexpected request: {method} {url}")
 
@@ -79,6 +85,36 @@ def test_pansou_search_normalizes_quark_links_and_skips_other_drives():
     assert kwargs["params"]["cloud_types"] == "quark"
     assert kwargs["params"]["wait_ms"] == 6000
 
+
+
+
+def test_pansou_search_polls_and_merges_progressive_results():
+    first = {
+        "results": [
+            {"title": "测试电影", "links": [
+                {"type": "quark", "url": "https://pan.quark.cn/s/share123"}
+            ]}
+        ],
+        "merged_by_type": {},
+    }
+    later = {
+        "results": [
+            {"title": "测试电影", "links": [
+                {"type": "quark", "url": "https://pan.quark.cn/s/share456"}
+            ]}
+        ],
+        "merged_by_type": {},
+    }
+    http = FakeHttpClient(search_payloads=[first, later, later, later])
+    source = PanSouResourceSource(http)
+
+    results = source.search(
+        {"title": "测试电影"},
+        {"base_url": "http://pansou.local", "timeout": 45},
+    )
+
+    assert {item["resource_id"] for item in results} == {"share123", "share456"}
+    assert len([call for call in http.calls if call[1].endswith("/api/search/first")]) == 4
 
 def test_pansou_search_supports_merged_response_and_deduplicates():
     http = FakeHttpClient(

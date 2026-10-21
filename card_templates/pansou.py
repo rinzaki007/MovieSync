@@ -320,8 +320,9 @@ class PanSouResourceSource(ResourceSourceCard):
             "wait_ms": 6000,
         }
         try:
-            # Bundled PanSou returns the first cached plugin results as soon as they
-            # are available; the search job continues and later requests see updates.
+            # The progressive endpoint may return cached/partial plugin results while
+            # the background search continues. Poll briefly and combine snapshots so
+            # a user does not need to close and reopen the dialog to see later results.
             _, payload = self._request(
                 "GET",
                 f"{base_url}/api/search/first",
@@ -342,6 +343,44 @@ class PanSouResourceSource(ResourceSourceCard):
                 timeout=timeout,
                 params=search_params,
             )
+        else:
+            import time
+
+            snapshots = [payload]
+            poll_params = {**search_params, "wait_ms": 1200}
+            for _ in range(3):
+                time.sleep(1)
+                try:
+                    _, next_payload = self._request(
+                        "GET",
+                        f"{base_url}/api/search/first",
+                        config,
+                        timeout=timeout,
+                        params=poll_params,
+                    )
+                except RuntimeError:
+                    break
+                snapshots.append(next_payload)
+
+            # Merge progressive snapshots before normalizing links. The same link
+            # may appear repeatedly; the existing deduplication below handles that.
+            payload = dict(snapshots[0])
+            payload["results"] = [
+                result
+                for snapshot in snapshots
+                for result in (snapshot.get("results") or [])
+                if isinstance(result, dict)
+            ]
+            merged_by_type: dict[str, list[Any]] = {}
+            for snapshot in snapshots:
+                merged = snapshot.get("merged_by_type")
+                if not isinstance(merged, dict):
+                    continue
+                for raw_type, items in merged.items():
+                    if isinstance(items, list):
+                        merged_by_type.setdefault(str(raw_type), []).extend(items)
+            if merged_by_type:
+                payload["merged_by_type"] = merged_by_type
         results: list[dict[str, Any]] = []
         seen: set[tuple[str, str]] = set()
 
