@@ -195,6 +195,15 @@ class PanSouResourceSource(ResourceSourceCard):
             "aliyun_share": "aliyun",
             "baidu": "baidu",
             "baidu_share": "baidu",
+            "uc": "uc", "uc_share": "uc",
+            "tianyi": "tianyi", "tianyi_share": "tianyi",
+            "mobile": "mobile", "mobile_share": "mobile",
+            "115": "115", "115_share": "115",
+            "pikpak": "pikpak", "pikpak_share": "pikpak",
+            "xunlei": "xunlei", "xunlei_share": "xunlei",
+            "123": "123", "123_share": "123",
+            "magnet": "magnet", "magnet_link": "magnet",
+            "ed2k": "ed2k", "ed2k_link": "ed2k",
         }
         return aliases.get(value, "")
 
@@ -238,8 +247,23 @@ class PanSouResourceSource(ResourceSourceCard):
         link_url = str(item.get("url") or "").strip()
         share_id = cls._share_id(link_url, cloud_type)
         if not share_id:
-            return None
-        resource_type = f"{cloud_type}_share"
+            # Display-only links for providers without a compatible storage card.
+            from urllib.parse import urlparse
+            try:
+                parsed = urlparse(link_url)
+            except ValueError:
+                return None
+            if cloud_type in {"magnet", "ed2k"}:
+                if parsed.scheme.lower() != cloud_type:
+                    return None
+                share_id = link_url
+            elif cloud_type not in {"quark", "aliyun", "baidu"}:
+                if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+                    return None
+                share_id = link_url
+            else:
+                return None
+        resource_type = cloud_type if cloud_type in {"magnet", "ed2k"} else f"{cloud_type}_share"
         normalized = {
             "resource_id": share_id,
             "url": link_url,
@@ -263,9 +287,15 @@ class PanSouResourceSource(ResourceSourceCard):
         if not title or not base_url:
             return []
         requested_types = (
-            movie.get("resource_types")
-            if isinstance(movie, dict) and "storage_target_id" in movie
-            else ["quark_share"]
+            ["quark_share", "aliyun_share", "baidu_share", "uc_share", "tianyi_share",
+             "mobile_share", "115_share", "pikpak_share", "xunlei_share", "123_share",
+             "magnet_link", "ed2k_link"]
+            if isinstance(movie, dict) and movie.get("all_resource_types")
+            else (
+                movie.get("resource_types")
+                if isinstance(movie, dict) and "storage_target_id" in movie
+                else ["quark_share"]
+            )
         )
         if not isinstance(requested_types, (list, tuple, set)):
             requested_types = []
@@ -333,6 +363,15 @@ class PanSouResourceSource(ResourceSourceCard):
                         "quark": "quark", "夸克": "quark",
                         "aliyun": "aliyun", "alipan": "aliyun", "阿里云盘": "aliyun",
                         "baidu": "baidu", "百度": "baidu", "百度网盘": "baidu",
+                        "uc": "uc", "uc网盘": "uc",
+                        "tianyi": "tianyi", "天翼": "tianyi", "天翼云盘": "tianyi",
+                        "mobile": "mobile", "移动": "mobile", "移动云盘": "mobile",
+                        "115": "115", "115网盘": "115",
+                        "pikpak": "pikpak", "pikpak网盘": "pikpak",
+                        "xunlei": "xunlei", "迅雷": "xunlei", "迅雷云盘": "xunlei",
+                        "123": "123", "123云盘": "123",
+                        "magnet": "magnet", "磁力": "magnet", "磁力链接": "magnet",
+                        "ed2k": "ed2k", "电驴": "ed2k", "ed2k链接": "ed2k",
                     }
                     cloud_type = aliases.get(link_type)
                     if not cloud_type:
@@ -361,6 +400,15 @@ class PanSouResourceSource(ResourceSourceCard):
                 "quark": "quark", "夸克": "quark",
                 "aliyun": "aliyun", "alipan": "aliyun", "阿里云盘": "aliyun",
                 "baidu": "baidu", "百度": "baidu", "百度网盘": "baidu",
+                "uc": "uc", "uc网盘": "uc",
+                "tianyi": "tianyi", "天翼": "tianyi", "天翼云盘": "tianyi",
+                "mobile": "mobile", "移动": "mobile", "移动云盘": "mobile",
+                "115": "115", "115网盘": "115",
+                "pikpak": "pikpak", "pikpak网盘": "pikpak",
+                "xunlei": "xunlei", "迅雷": "xunlei", "迅雷云盘": "xunlei",
+                "123": "123", "123云盘": "123",
+                "magnet": "magnet", "磁力": "magnet", "磁力链接": "magnet",
+                "ed2k": "ed2k", "电驴": "ed2k", "ed2k链接": "ed2k",
             }
             for raw_cloud_type, items in merged.items():
                 cloud_type = aliases.get(str(raw_cloud_type).strip().lower())
