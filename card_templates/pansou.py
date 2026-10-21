@@ -277,6 +277,38 @@ class PanSouResourceSource(ResourceSourceCard):
             normalized["pwd_id"] = share_id
         return normalized
 
+    @staticmethod
+    def _snapshot_link_urls(payload: dict[str, Any]) -> set[str]:
+        """Return link URLs present in one progressive-search snapshot."""
+        urls: set[str] = set()
+        raw_results = payload.get("results")
+        if isinstance(raw_results, list):
+            for result in raw_results:
+                if not isinstance(result, dict):
+                    continue
+                links = result.get("links")
+                if not isinstance(links, list):
+                    continue
+                for item in links:
+                    if isinstance(item, dict):
+                        url = str(item.get("url") or item.get("link") or "").strip()
+                        if url:
+                            urls.add(url)
+
+        merged = payload.get("merged_by_type")
+        if isinstance(merged, dict):
+            for items in merged.values():
+                if not isinstance(items, list):
+                    continue
+                for item in items:
+                    if isinstance(item, dict):
+                        url = str(item.get("url") or item.get("link") or "").strip()
+                        if url:
+                            urls.add(url)
+                    elif isinstance(item, str) and item.strip():
+                        urls.add(item.strip())
+        return urls
+
     def search(self, movie: object, config: dict) -> list[dict[str, Any]]:
         title = str(
             movie.get("title", movie.get("name", ""))
@@ -289,7 +321,7 @@ class PanSouResourceSource(ResourceSourceCard):
         requested_types = (
             ["quark_share", "aliyun_share", "baidu_share", "uc_share", "tianyi_share",
              "mobile_share", "115_share", "pikpak_share", "xunlei_share", "123_share",
-             "magnet_link", "ed2k_link"]
+             "magnet_link"]
             if isinstance(movie, dict) and movie.get("all_resource_types")
             else (
                 movie.get("resource_types")
@@ -347,6 +379,8 @@ class PanSouResourceSource(ResourceSourceCard):
             import time
 
             snapshots = [payload]
+            seen_urls = self._snapshot_link_urls(payload)
+            stale_polls = 0
             poll_params = {**search_params, "wait_ms": 1200}
             for _ in range(3):
                 time.sleep(1)
@@ -361,6 +395,18 @@ class PanSouResourceSource(ResourceSourceCard):
                 except RuntimeError:
                     break
                 snapshots.append(next_payload)
+
+                next_urls = self._snapshot_link_urls(next_payload)
+                new_urls = next_urls - seen_urls
+                if new_urls:
+                    seen_urls.update(new_urls)
+                    stale_polls = 0
+                else:
+                    stale_polls += 1
+                    # A single unchanged snapshot can be transient while PanSou
+                    # plugins are still running. Stop only after two stale polls.
+                    if stale_polls >= 2:
+                        break
 
             # Merge progressive snapshots before normalizing links. The same link
             # may appear repeatedly; the existing deduplication below handles that.
