@@ -857,11 +857,13 @@ class SubscriptionManager:
             if not isinstance(example, dict):
                 continue
             reason = str(example.get("reason") or "扫描提示")[:240]
-            normalized = reason.lower()
             if any(marker in reason for marker in ("无法识别", "缺少可确认的季数", "无法可靠识别")):
                 status, label = "unrecognized", "待识别"
             elif any(marker in reason for marker in ("失败", "异常", "格式异常", "未能完整")):
                 status, label = "warning", "需留意"
+                # Exception text may contain cookies, tokens or provider URLs.
+                # Keep detailed failures in server logs and return only safe hints.
+                reason = "资源解析或来源检查存在异常；请查看服务日志获取详细原因"
             else:
                 status, label = "skipped", "已跳过"
             items.append({
