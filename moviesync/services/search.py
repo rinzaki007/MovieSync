@@ -776,11 +776,22 @@ class SearchService:
                         for key in ("title", "name", "resource_name", "share_name", "content", "description")
                         if str(source.get(key) or "").strip()
                     )
+                    source_id = str(source.get("source_id") or "").strip().lower()
+                    # PanSou may attach several different titles and share URLs to one
+                    # aggregated result. Its title is then a description of a bundle,
+                    # not reliable identity evidence for each individual Quark link.
+                    # In that case, don't reject the whole share based on any unrelated
+                    # title mentioned in the aggregate. Clear contrary evidence in the
+                    # actual video filenames still goes through the mismatch filter.
+                    is_pansou_aggregate = (
+                        source_id == "pansou"
+                        and len(re.findall(r"https?://", source_title_evidence, re.IGNORECASE)) >= 2
+                    )
                     if self._has_conflicting_media_title(
                         movie,
                         source_title_evidence,
                         all_videos,
-                        display_title=source_title,
+                        display_title=None if is_pansou_aggregate else source_title,
                     ):
                         self.logger.info(
                             "过滤疑似错误影视候选：目标《%s》，来源标题/文件名证据指向其他作品《%s》",
@@ -790,25 +801,10 @@ class SearchService:
                         seen_resource_keys.add(resource_key)
                         continue
 
-                    media_type = str(movie.get("media_type") or "").strip().lower() if isinstance(movie, dict) else ""
-                    media_tag = str(movie.get("tag") or "").strip()
-                    is_series_query = (
-                        media_type in {"tv", "tv_show", "series", "anime", "variety", "documentary", "short_drama"}
-                        or media_tag in {"电视剧", "剧集", "综艺", "动漫", "动画", "纪录片", "短剧"}
-                    )
-                    source_id = str(source.get("source_id") or "").strip().lower()
-                    if (
-                        source_id == "pansou"
-                        and is_series_query
-                        and not self._has_target_title_evidence(movie, source_title, all_videos)
-                    ):
-                        self.logger.info(
-                            "过滤标题相关性不足的 PanSou 剧集候选：目标《%s》，来源标题《%s》且文件路径未匹配目标名称",
-                            title,
-                            source_title or "未提供标题",
-                        )
-                        seen_resource_keys.add(resource_key)
-                        continue
+                    # Match the broad "More download links" flow: for PanSou, missing
+                    # positive title evidence is not enough on its own to discard a
+                    # resolved share. Keep clear foreign-title filtering above and rely
+                    # on the user's candidate selection for ambiguous episode-only files.
 
                     total_video_count = len(all_videos)
                     videos = all_videos[:MAX_VIDEO_FILES_PER_CANDIDATE]
