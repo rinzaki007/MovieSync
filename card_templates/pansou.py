@@ -491,7 +491,7 @@ class PanSouResourceSource(ResourceSourceCard):
                             ),
                             "",
                         )
-                    if cloud_type not in cloud_types:
+                    if cloud_type not in allowed_cloud_types:
                         continue
                     normalized = self._normalize_link(
                         link, cloud_type=cloud_type, title=result_title, channel=channel
