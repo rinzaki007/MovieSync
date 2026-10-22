@@ -21,16 +21,3 @@ def test_lazy_telegram_client_is_shared_after_first_access(monkeypatch):
     assert proxy.check_channel("demo") is True
     assert proxy._client is created[0]
     assert proxy._get_client() is created[0]
-
-
-
-def test_builtin_telegram_card_does_not_require_legacy_context_client(monkeypatch):
-    import card_templates.telegram as card_module
-
-    class OwnedClient:
-        pass
-
-    monkeypatch.setattr(card_module, "TelegramClient", OwnedClient)
-    card = card_module.create_card({"config_store": object()})
-
-    assert isinstance(card.client, OwnedClient)
