@@ -300,7 +300,7 @@ class DoubanClient:
         def schema_text(key: str) -> str:
             value = schema.get(key)
             if isinstance(value, dict):
-                value = value.get("name") or value.get("value")
+                value = value.get("name") or value.get("value") or value.get("url")
             if isinstance(value, list):
                 value = "、".join(self._schema_people(value))
             return str(value or "").strip()
@@ -330,9 +330,28 @@ class DoubanClient:
             return values
 
         def people(label: str, schema_key: str) -> list[str]:
-            values = info_values(label)
+            target = next(
+                (
+                    element
+                    for element in soup.select("#info .pl")
+                    if element.get_text(" ", strip=True).rstrip(":：") == label
+                ),
+                None,
+            )
             names = []
-            for value in values:
+            if target is not None:
+                for sibling in target.next_siblings:
+                    if isinstance(sibling, Tag) and sibling.name == "span" and "pl" in (sibling.get("class") or []):
+                        break
+                    if not isinstance(sibling, Tag):
+                        continue
+                    for anchor in sibling.select("a") if sibling.name != "a" else [sibling]:
+                        name = anchor.get_text(" ", strip=True)
+                        if name and name not in names:
+                            names.append(name)
+            if names:
+                return names
+            for value in info_values(label):
                 for part in re.split(r"\s*/\s*|、|，", value):
                     part = part.strip()
                     if part and part not in names:
