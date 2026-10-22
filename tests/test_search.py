@@ -632,6 +632,29 @@ def test_candidate_ranking_demotes_tv_shares_when_searching_for_numbered_movie()
     assert matching_score > wrong_score
 
 
+
+def test_candidate_priority_demotes_numbered_title_base_without_episode_markers():
+    from moviesync.services.search import SearchService
+
+    broad = {"title": "潜伏 第1季 1080p"}
+    exact = {"title": "潜伏6 1080p"}
+
+    broad_score = SearchService._candidate_priority(broad, "潜伏6", "")
+    exact_score = SearchService._candidate_priority(exact, "潜伏6", "")
+
+    assert exact_score - broad_score >= 8
+
+
+def test_candidate_priority_ignores_parenthesized_year_when_matching_title():
+    from moviesync.services.search import SearchService
+
+    candidate = {"title": "潜伏6 1080p"}
+    without_year = SearchService._candidate_priority(candidate, "潜伏6", "")
+    with_year = SearchService._candidate_priority(candidate, "潜伏6（2025）", "")
+
+    assert with_year == without_year
+
+
 def test_search_flags_numbered_title_and_episode_format_mismatches():
     import logging
 
