@@ -42,14 +42,14 @@ function captureSourceSearchDiagnostics(result, title, destination) {
     const diagnostics = Array.isArray(page.source_search_diagnostics)
         ? page.source_search_diagnostics
         : [];
-    const failed = diagnostics.find(item => item && item.status === 'error');
-    if (failed) {
-        throw new Error(failed.message || '资源来源内部搜索失败，请查看服务日志');
-    }
     for (const item of diagnostics) {
         if (item && item.id && destination instanceof Map) {
             destination.set(String(item.id), item);
         }
+    }
+    const failed = diagnostics.find(item => item && item.status === 'error');
+    if (failed) {
+        throw new Error(failed.message || '资源来源内部搜索失败，请查看服务日志');
     }
 }
 
@@ -934,11 +934,13 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
                         if (!diagnostic) return null;
                         const count = Number(diagnostic.result_count || 0);
                         const duration = Number(diagnostic.duration_ms || 0);
-                        const resultLabel = diagnostic.status === 'empty'
-                            ? '无结果'
-                            : diagnostic.status === 'partial'
-                                ? `返回 ${count} 条（忽略 ${Number(diagnostic.invalid_items || 0)} 条无效记录）`
-                                : `返回 ${count} 条`;
+                        const resultLabel = diagnostic.status === 'error'
+                            ? '请求失败'
+                            : diagnostic.status === 'empty'
+                                ? '无结果'
+                                : diagnostic.status === 'partial'
+                                    ? `返回 ${count} 条（忽略 ${Number(diagnostic.invalid_items || 0)} 条无效记录）`
+                                    : `返回 ${count} 条`;
                         return `${source.name || source.id}：${resultLabel}，${duration}ms`;
                     })
                     .filter(Boolean);
