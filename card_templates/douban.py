@@ -42,7 +42,10 @@ class DoubanMetadataCard(MetadataProviderCard):
         return self._annotate(self.client.search(query))
 
     def get_detail(self, item_id: str) -> dict[str, Any] | None:
-        detail = self.client.get_detail(item_id)
+        fetch_detail = getattr(self.client, "get_detail", None)
+        if not callable(fetch_detail):
+            return None
+        detail = fetch_detail(item_id)
         if not isinstance(detail, dict):
             return None
         return {**detail, "provider_id": "douban", "provider_name": "豆瓣"}
