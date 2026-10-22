@@ -6,11 +6,19 @@
 
 在能访问 MovieSync HTTP 端口的机器上执行（默认端口按部署实际修改）：
 
+在代码仓库目录中执行：
+
 ```sh
 MOVIESYNC_BASE_URL=http://127.0.0.1:8099 sh scripts/smoke-test.sh
 ```
 
-也可以从局域网的另一台设备执行，把地址改成 NAS 的实际 IP。脚本只使用 `curl`、`grep` 和 `mktemp` 等常见工具，不需要管理员账号，不写应用配置，也不会创建目录或提交转存。
+也可以从局域网的另一台设备执行，把地址改成 NAS 的实际 IP。发布了包含该脚本的新镜像后，还可以直接从容器内部检查：
+
+```sh
+docker exec -e MOVIESYNC_BASE_URL=http://127.0.0.1:5000 MovieSync sh /app/scripts/smoke-test.sh
+```
+
+脚本优先使用 `curl`；容器里没有 curl 时会回退到 Python 3 标准库。它不需要管理员账号，不写应用配置，也不会创建目录或提交转存。
 
 脚本检查：
 
