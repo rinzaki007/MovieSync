@@ -771,7 +771,10 @@ def test_legacy_fid_lines_field_is_exposed_as_textarea_by_config_api():
 
     assert fields[0]["type"] == "textarea"
     assert fields[0]["editor"] == "fid_lines"
-    assert config["category_fids"] == {"电影": "123", "电视剧": "456"}def test_card_management_surfaces_unhealthy_connection_state():
+    assert config["category_fids"] == {"电影": "123", "电视剧": "456"}
+
+
+def test_card_management_surfaces_unhealthy_connection_state():
     from pathlib import Path
 
     template = Path(__file__).resolve().parents[1] / "templates" / "admin.html"
