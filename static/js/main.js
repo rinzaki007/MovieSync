@@ -565,7 +565,12 @@ async function openMovieDetail(idx) {
         const result = await response.json();
         if (requestSeq !== movieDetailRequestSeq || activeMovieDetailIndex !== idx) return;
         if (response.ok && result.success && result.detail && typeof result.detail === 'object') {
-            moviesData[idx] = { ...movie, ...result.detail, tag: movie.tag || currentTag };
+            const merged = { ...movie, ...result.detail, tag: movie.tag || currentTag };
+            for (const [key, value] of Object.entries(result.detail)) {
+                const missing = value == null || value === '' || (Array.isArray(value) && value.length === 0);
+                if (missing && movie[key] != null) merged[key] = movie[key];
+            }
+            moviesData[idx] = merged;
             renderMovieDetail(moviesData[idx]);
             document.getElementById('movie-detail-detail-error')?.classList.add('hidden');
         } else {
