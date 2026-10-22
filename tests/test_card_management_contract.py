@@ -544,7 +544,7 @@ def test_card_list_handles_malformed_persisted_card_config(tmp_path):
     app = create_app({"MOVIESYNC_DATA_DIR": str(tmp_path)}, start_scheduler=False)
     services = app.extensions["moviesync"]
     config = services["config"].load()
-    config["cards"]["douban"]["config"] = []
+    config.setdefault("cards", {}).setdefault("douban", {"enabled": True, "config": {}})["config"] = []
     services["config"].store.write(config)
 
     client = app.test_client()
