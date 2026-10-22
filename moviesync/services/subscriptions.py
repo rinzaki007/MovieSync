@@ -857,15 +857,29 @@ class SubscriptionManager:
             if not isinstance(example, dict):
                 continue
             reason = str(example.get("reason") or "扫描提示")[:240]
+            safe_reason_markers = (
+                "非视频文件", "缺少 fid", "无法追踪或转存", "无法识别季集",
+                "缺少可确认的季数", "无法安全判断追剧起点", "早于追剧起始集",
+                "与优先分享中的同集重复", "已确认保存", "已追踪或重复文件",
+                "该季集已从其他分享转存", "初选文件 ID 未出现在分享解析返回的文件列表中",
+                "初选分享", "忽略非字典", "资源条目缺少分享 ID",
+                "资源解析返回的文件列表不是列表", "资源卡片返回",
+                "频道搜索结果", "所选来源文件夹", "文件列表返回",
+                "没有可扫描的文件", "频道历史搜索", "频道增量搜索",
+                "频道资源搜索", "分享解析失败", "未获取到文件列表",
+            )
             if any(marker in reason for marker in ("无法识别", "缺少可确认的季数", "无法可靠识别")):
                 status, label = "unrecognized", "待识别"
             elif any(marker in reason for marker in ("失败", "异常", "格式异常", "未能完整")):
                 status, label = "warning", "需留意"
-                # Exception text may contain cookies, tokens or provider URLs.
-                # Keep detailed failures in server logs and return only safe hints.
-                reason = "资源解析或来源检查存在异常；请查看服务日志获取详细原因"
-            else:
+            elif any(marker in reason for marker in safe_reason_markers):
                 status, label = "skipped", "已跳过"
+            else:
+                # Examples can contain arbitrary messages returned by a storage
+                # provider. Only known, locally-authored explanations are echoed.
+                status, label = "warning", "需留意"
+            if status == "warning":
+                reason = "资源解析或来源检查存在异常；详细原因已记录到服务日志"
             items.append({
                 "status": status,
                 "label": label,
@@ -947,10 +961,19 @@ class SubscriptionManager:
                     scan_complete=bool(
                         (preview_sub.get("_run_diagnostics") or {}).get("source_scan_complete", False)
                     ),
-                    message=result_message,
+                    message=(
+                        "扫描与筛选已完成"
+                        if ok
+                        else "预演过程中遇到问题；请查看安全提示或服务日志"
+                    ),
                 )
             preview_plan["check_success"] = bool(ok)
-            preview_plan["message"] = str(result_message or preview_plan.get("message") or "")[:500]
+            # Do not expose underlying provider exceptions through the preview API.
+            preview_plan["message"] = (
+                "扫描与筛选已完成"
+                if ok
+                else "预演过程中遇到问题；请查看安全提示或服务日志"
+            )
             preview_plan["pending_save_uncertain"] = False
             return True, "预演完成；此次只读取并分析文件，不会创建目录或转存", preview_plan
         except Exception:
