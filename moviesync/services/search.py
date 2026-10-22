@@ -395,11 +395,17 @@ class SearchService:
             normalized_candidates = set()
             for candidate in file_candidates:
                 normalized = cls._simplify(candidate).replace("_", "").lower()
+                # A filename such as "第02集.mp4" is an episode marker, not a work title.
+                # Otherwise "更新至第02集" can falsely corroborate the unrelated source title.
+                episode_label_only = bool(
+                    re.fullmatch(r"第?\d{1,4}[集话期](?:国语|中字|字幕|高清|超清)?", normalized)
+                )
                 # Chinese title searches often use a translated name while shares use
                 # an English original title. Without metadata aliases, keep such candidates.
                 looks_english = bool(re.search(r"[A-Za-z]", candidate))
                 if (
-                    len(normalized) >= 3
+                    not episode_label_only
+                    and len(normalized) >= 3
                     and normalized not in {cls._simplify(item).replace("_", "").lower() for item in generic}
                     and not any(title in normalized for title in target_titles)
                     and not (target_is_chinese and looks_english and not has_known_alternate_title)
