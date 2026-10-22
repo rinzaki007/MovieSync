@@ -295,3 +295,65 @@ def test_pansou_series_search_drops_candidates_without_title_evidence():
     assert [item["resource_id"] for item in candidates] == ["matching-title"]
 
 
+def test_pansou_series_search_expands_empty_first_page_until_a_match_is_found():
+    import logging
+    from types import SimpleNamespace
+
+    class Sources:
+        def search(self, movie, config):
+            # These shares rank ahead of the target because they contain episode and
+            # resolution markers, but all ten belong to another series.
+            unrelated = [
+                {
+                    "source_id": "pansou",
+                    "source_name": "PanSou",
+                    "resource_id": f"foreign-{index}",
+                    "resource_type": "quark_share",
+                    "title": f"吞噬星空 S01E01 第01集 1080p #{index}",
+                }
+                for index in range(10)
+            ]
+            return unrelated + [
+                {
+                    "source_id": "pansou",
+                    "source_name": "PanSou",
+                    "resource_id": "matching-title",
+                    "resource_type": "quark_share",
+                    "title": "#兰香如故 全47集",
+                }
+            ]
+
+    class Storage:
+        capabilities = ("storage.accepts.quark_share",)
+
+        def get(self, target_id=None):
+            return SimpleNamespace(card_id="quark", capabilities=self.capabilities)
+
+        def resolve_resource(self, resource, target_id=None):
+            return {
+                "target_id": "quark",
+                "files": [
+                    {"fid": f"{resource['resource_id']}-1", "file_name": "第01集.mp4", "size": 1},
+                    {"fid": f"{resource['resource_id']}-2", "file_name": "第02集.mp4", "size": 1},
+                ],
+                "token": "test-token",
+                "error": None,
+            }
+
+    service = SearchService(Sources(), Storage(), logging.getLogger("test"))
+    page_info = {}
+    candidates = service.search_movie_candidates(
+        {
+            "title": "兰香如故",
+            "media_type": "tv",
+            "tag": "电视剧",
+            "storage_target_id": "quark",
+        },
+        {},
+        scan_limit=10,
+        page_info=page_info,
+    )
+
+    assert [item["resource_id"] for item in candidates] == ["matching-title"]
+    assert page_info["next_offset"] == 11
+    assert page_info["has_more"] is False
