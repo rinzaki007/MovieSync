@@ -51,6 +51,16 @@ docker compose pull
 docker compose up -d
 ```
 
+### 部署后验收
+
+更新镜像后，可先运行只读的 HTTP 冒烟检查，再按 [部署后验收清单](DEPLOYMENT_ACCEPTANCE.md) 检查真实资源搜索、分享解析、转存和移动端浏览器。
+
+```sh
+MOVIESYNC_BASE_URL=http://127.0.0.1:8099 sh scripts/smoke-test.sh
+```
+
+脚本仅检查健康端点、关键页面和未登录 API 访问控制，不会登录或触发转存。它不能代替真实第三方服务的端到端验收。
+
 ### 可选服务
 
 - **OpenList**：仅在需要 OpenList 网盘入口或 OpenList 播放卡片时单独部署，并在对应卡片中配置可访问的服务地址和凭据。
@@ -62,7 +72,7 @@ docker compose up -d
 - [在线点播说明](ONLINE_PLAYBACK.md)
 - [架构说明](ARCHITECTURE.md)
 - [卡片开发规范](CARD_DEVELOPMENT.md) · [卡片接口约定](CARD_CONTRACT.md)
-- [智能追剧规则](SMART_FOLLOW_RULES.md) · [更新记录](CHANGELOG.md)
+- [智能追剧规则](SMART_FOLLOW_RULES.md) · [部署后验收清单](DEPLOYMENT_ACCEPTANCE.md) · [更新记录](CHANGELOG.md)
 
 ## 许可证与第三方声明
 
