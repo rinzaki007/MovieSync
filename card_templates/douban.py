@@ -11,10 +11,10 @@ class DoubanMetadataCard(MetadataProviderCard):
     manifest = CardManifest(
         id="douban",
         name="Douban",
-        version="1.0.0",
+        version="1.1.0",
         type="metadata_provider",
         description="豆瓣影视元数据与搜索",
-        capabilities=("metadata.list", "metadata.search"),
+        capabilities=("metadata.list", "metadata.search", "metadata.detail"),
         image_hosts=("doubanio.com", "douban.com"),
         image_referer="https://movie.douban.com/",
     )
@@ -42,7 +42,13 @@ class DoubanMetadataCard(MetadataProviderCard):
         return self._annotate(self.client.search(query))
 
     def get_detail(self, item_id: str) -> dict[str, Any] | None:
-        return None
+        fetch_detail = getattr(self.client, "get_detail", None)
+        if not callable(fetch_detail):
+            return None
+        detail = fetch_detail(item_id)
+        if not isinstance(detail, dict):
+            return None
+        return {**detail, "provider_id": "douban", "provider_name": "豆瓣"}
 
 
 def create_card(context):

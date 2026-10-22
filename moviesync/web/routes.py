@@ -1177,6 +1177,23 @@ def search_metadata():
         )
 
 
+@api.get("/metadata-detail")
+def metadata_detail():
+    """Return details from the explicitly selected metadata provider."""
+    provider_id = str(request.args.get("provider_id") or "douban").strip()[:64]
+    item_id = str(request.args.get("item_id") or request.args.get("id") or "").strip()[:200]
+    if not item_id:
+        return _json_error("缺少影视条目编号", 400)
+    try:
+        detail = _services()["metadata"].get_detail(item_id, provider_id=provider_id)
+        if not isinstance(detail, dict):
+            return _json_error("暂时无法获取这部影视的详细资料", 404)
+        return jsonify({"success": True, "provider_id": provider_id, "detail": detail})
+    except Exception:
+        _services()["logger"].exception("获取影视详情失败: provider=%s", provider_id)
+        return _json_error("获取影视详情失败，请稍后重试", 502)
+
+
 @api.post("/more-download-links")
 @require_csrf
 def more_download_links():

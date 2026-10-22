@@ -489,41 +489,107 @@ function renderGrid() {
 
 let activeMovieDetailIndex = null;
 
-function openMovieDetail(idx) {
-    const movie = moviesData[idx];
-    if (!movie) return;
-    activeMovieDetailIndex = idx;
+let movieDetailRequestSeq = 0;
+
+function renderMovieDetail(movie) {
     const noCoverImage = getNoCoverImage();
     const cover = document.getElementById('movie-detail-cover');
     cover.src = movie.cover ? '/api/proxy-img?url=' + encodeURIComponent(movie.cover) : noCoverImage;
     cover.onerror = () => { cover.onerror = null; cover.src = noCoverImage; };
     document.getElementById('movie-detail-title').textContent = movie.title || '影视详情';
     document.getElementById('movie-detail-name').textContent = movie.title || '未命名影视';
+
     const metaParts = [
-        '<div><span class="text-slate-500">分类：</span>' + escapeHtml(movie.tag || currentTag) + '</div>',
-        movie.year ? '<div><span class="text-slate-500">年份：</span>' + escapeHtml(movie.year) + '</div>' : '',
-        '<div><span class="text-slate-500">评分：</span>' + escapeHtml(movie.rate || '暂无') + '</div>'
+        movie.year ? '<span class="detail-meta-chip">' + escapeHtml(movie.year) + '</span>' : '',
+        movie.rate && movie.rate !== '暂无' ? '<span class="detail-meta-chip"><i class="fa-solid fa-star text-amber-300"></i> ' + escapeHtml(movie.rate) + '</span>' : '',
+        movie.tag || currentTag ? '<span class="detail-meta-chip">' + escapeHtml(movie.tag || currentTag) + '</span>' : '',
+        Array.isArray(movie.countries) && movie.countries.length ? '<span class="detail-meta-chip">' + escapeHtml(movie.countries.slice(0, 3).join(' / ')) + '</span>' : '',
+        Array.isArray(movie.runtime) && movie.runtime.length ? '<span class="detail-meta-chip">' + escapeHtml(movie.runtime[0]) + '</span>' : ''
     ].filter(Boolean);
-    document.getElementById('movie-detail-meta').innerHTML = metaParts.join('') +
-        '<div><span class="text-slate-500">操作：</span>选择资源版本转存，或为剧集开启自动追剧</div>';
+    document.getElementById('movie-detail-meta').innerHTML = metaParts.join('');
+
+    const credits = document.getElementById('movie-detail-credits');
+    const creditRows = [
+        ['导演', movie.directors],
+        ['编剧', movie.writers],
+        ['主演', movie.casts],
+        ['又名', movie.original_title],
+        ['上映', movie.release_dates]
+    ].map(([label, values]) => {
+        const items = Array.isArray(values) ? values : (values ? [values] : []);
+        if (!items.length) return '';
+        return '<div class="detail-credit-row"><span>' + label + '</span><div>' +
+            escapeHtml(items.slice(0, label === '主演' ? 8 : 5).join('、')) + '</div></div>';
+    }).filter(Boolean);
+    credits.innerHTML = creditRows.join('');
+    credits.classList.toggle('hidden', creditRows.length === 0);
+
     const summary = document.getElementById('movie-detail-summary');
     const summaryText = String(movie.summary || '').trim();
-    summary.textContent = summaryText;
-    summary.classList.toggle('hidden', !summaryText);
+    summary.textContent = summaryText || '豆瓣暂未提供剧情简介。';
+    summary.classList.remove('hidden');
+
     const genres = document.getElementById('movie-detail-genres');
     const genreList = Array.isArray(movie.genres) ? movie.genres : [];
     genres.innerHTML = genreList.slice(0, 8).map(item =>
-        '<span class="rounded-md border border-slate-700/60 bg-slate-950/45 px-2 py-1 text-[10px] text-slate-500">' +
+        '<span class="rounded-md border border-slate-700/60 bg-slate-950/45 px-2 py-1 text-[10px] text-slate-300">' +
         escapeHtml(item) + '</span>'
     ).join('');
     genres.classList.toggle('hidden', genreList.length === 0);
     const douban = document.getElementById('movie-detail-douban');
-    douban.href = movie.url || '#';
-    document.getElementById('movie-detail-drawer').classList.remove('hidden');
+    douban.href = /^https:\/\/movie\.douban\.com\/subject\/\d+\/?$/.test(movie.url || '') ? movie.url : '#';
 }
 
+async function openMovieDetail(idx) {
+    const movie = moviesData[idx];
+    if (!movie) return;
+    activeMovieDetailIndex = idx;
+    const requestSeq = ++movieDetailRequestSeq;
+    document.getElementById('movie-detail-drawer').classList.remove('hidden');
+    document.getElementById('movie-detail-drawer').classList.add('flex');
+    document.getElementById('movie-detail-detail-loading')?.classList.remove('hidden');
+    document.getElementById('movie-detail-detail-error')?.classList.add('hidden');
+    renderMovieDetail(movie);
+
+    const itemId = String(movie.id || (String(movie.url || '').match(/\/subject\/(\d+)/) || [])[1] || '').trim();
+    if (!itemId) {
+        document.getElementById('movie-detail-detail-loading')?.classList.add('hidden');
+        return;
+    }
+    try {
+        const params = new URLSearchParams({
+            provider_id: String(movie.provider_id || currentMetadataProviderId || 'douban'),
+            item_id: itemId
+        });
+        const response = await apiFetch('/api/metadata-detail?' + params.toString());
+        const result = await response.json();
+        if (requestSeq !== movieDetailRequestSeq || activeMovieDetailIndex !== idx) return;
+        if (response.ok && result.success && result.detail && typeof result.detail === 'object') {
+            const merged = { ...movie, ...result.detail, tag: movie.tag || currentTag };
+            for (const [key, value] of Object.entries(result.detail)) {
+                const missing = value == null || value === '' || (Array.isArray(value) && value.length === 0);
+                if (missing && movie[key] != null) merged[key] = movie[key];
+            }
+            moviesData[idx] = merged;
+            renderMovieDetail(moviesData[idx]);
+            document.getElementById('movie-detail-detail-error')?.classList.add('hidden');
+        } else {
+            document.getElementById('movie-detail-detail-error')?.classList.remove('hidden');
+        }
+    } catch (err) {
+        if (requestSeq === movieDetailRequestSeq && activeMovieDetailIndex === idx) {
+            document.getElementById('movie-detail-detail-error')?.classList.remove('hidden');
+        }
+    } finally {
+        if (requestSeq === movieDetailRequestSeq) {
+            document.getElementById('movie-detail-detail-loading')?.classList.add('hidden');
+        }
+    }
+}
 function closeMovieDetail() {
+    movieDetailRequestSeq += 1;
     document.getElementById('movie-detail-drawer')?.classList.add('hidden');
+    document.getElementById('movie-detail-drawer')?.classList.remove('flex');
     activeMovieDetailIndex = null;
 }
 
