@@ -887,3 +887,77 @@ def test_resource_source_search_can_filter_to_selected_cards():
 
     assert [item["source_id"] for item in results] == ["source-b"]
     assert manager.search({"title": "Film"}, store.load(), source_ids=["missing"]) == []
+
+
+
+def test_search_with_diagnostics_reports_empty_and_failed_sources_safely():
+    class Store:
+        def load(self):
+            return {
+                "cards": {
+                    "good-source": {"enabled": True, "config": {}},
+                    "empty-source": {"enabled": True, "config": {}},
+                    "broken-source": {"enabled": True, "config": {}},
+                }
+            }
+
+    class GoodSource(ResourceSourceCard):
+        manifest = CardManifest(
+            id="good-source",
+            name="Good Source",
+            type="resource_source",
+            capabilities=("resource.search",),
+        )
+
+        def search(self, movie, config):
+            return [{"pwd_id": "share123", "title": movie["title"]}]
+
+        def check(self, config):
+            return {"status": "healthy", "message": "ok"}
+
+    class EmptySource(ResourceSourceCard):
+        manifest = CardManifest(
+            id="empty-source",
+            name="Empty Source",
+            type="resource_source",
+            capabilities=("resource.search",),
+        )
+
+        def search(self, movie, config):
+            return []
+
+        def check(self, config):
+            return {"status": "healthy", "message": "ok"}
+
+    class BrokenSource(ResourceSourceCard):
+        manifest = CardManifest(
+            id="broken-source",
+            name="Broken Source",
+            type="resource_source",
+            capabilities=("resource.search",),
+        )
+
+        def search(self, movie, config):
+            raise RuntimeError("cookie=DO_NOT_EXPOSE")
+
+        def check(self, config):
+            return {"status": "healthy", "message": "ok"}
+
+    manager = ResourceSourceManager(
+        Store(),
+        FakeLogger(),
+        resource_cards=[GoodSource(), EmptySource(), BrokenSource()],
+    )
+
+    items, diagnostics = manager.search_with_diagnostics({"title": "Film"}, Store().load())
+
+    by_id = {item["id"]: item for item in diagnostics}
+    assert [item["source_id"] for item in items] == ["good-source"]
+    assert by_id["good-source"]["status"] == "success"
+    assert by_id["good-source"]["result_count"] == 1
+    assert by_id["empty-source"]["status"] == "empty"
+    assert by_id["empty-source"]["result_count"] == 0
+    assert by_id["broken-source"]["status"] == "error"
+    assert by_id["broken-source"]["message"] == "资源来源请求失败，请检查卡片配置或查看服务日志"
+    assert "DO_NOT_EXPOSE" not in str(diagnostics)
+    assert all(item["duration_ms"] >= 0 for item in diagnostics)
