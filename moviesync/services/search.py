@@ -782,13 +782,18 @@ class SearchService:
                 "next_offset": safe_offset + consumed,
                 "has_more": safe_offset + consumed < total_discovered,
                 "total_discovered": total_discovered,
-                "source_search_diagnostics": source_search_diagnostics,
-                "source_search_failed": sum(
-                    item.get("status") == "error"
-                    for item in source_search_diagnostics
-                    if isinstance(item, dict)
-                ),
             })
+            # Preserve the exact legacy page-info shape when integrating an
+            # older/custom source manager that doesn't implement diagnostics.
+            if callable(search_with_diagnostics):
+                page_info.update({
+                    "source_search_diagnostics": source_search_diagnostics,
+                    "source_search_failed": sum(
+                        item.get("status") == "error"
+                        for item in source_search_diagnostics
+                        if isinstance(item, dict)
+                    ),
+                })
         self.logger.info(
             "《%s》检索完成，有效候选=%s（已扫描 %s/%s 条）",
             title,
