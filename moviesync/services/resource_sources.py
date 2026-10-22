@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from importlib.metadata import entry_points
