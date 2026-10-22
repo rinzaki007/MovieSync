@@ -662,8 +662,9 @@ def test_generic_card_form_has_channel_chips_and_quark_textarea():
 
 
 def test_filename_recognition_rules_are_global_and_share_the_generic_form_contract():
-    from card_templates.filename_recognition import FilenameRecognitionCard
     from pathlib import Path
+
+    from card_templates.filename_recognition import FilenameRecognitionCard
 
     fields = {
         field["key"]: field
