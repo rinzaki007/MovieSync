@@ -427,6 +427,60 @@ class SearchService:
                 return True
         return False
 
+    @classmethod
+    def _has_target_title_evidence(
+        cls,
+        movie: object,
+        source_title: str,
+        videos: list[dict[str, Any]],
+    ) -> bool:
+        """Require positive title evidence before accepting a PanSou series result.
+
+        PanSou performs broad searches and may return unrelated channel posts. A source
+        title that is missing must not inherit the query title, and an unrelated result
+        without a recognizable foreign title must not be accepted merely because its
+        share resolves to playable video files.
+        """
+        if not isinstance(movie, dict):
+            return False
+
+        target_titles = [
+            str(movie.get(key) or "").strip()
+            for key in ("title", "name", "original_title")
+            if str(movie.get(key) or "").strip()
+        ]
+        for alias_key in ("aliases", "alternative_titles", "aka"):
+            aliases = movie.get(alias_key)
+            if isinstance(aliases, str):
+                target_titles.extend(
+                    part.strip() for part in re.split(r"[,;；、|]", aliases) if part.strip()
+                )
+            elif isinstance(aliases, (list, tuple, set)):
+                target_titles.extend(str(part).strip() for part in aliases if str(part).strip())
+
+        normalized_titles = {
+            cls._simplify(value).replace("_", "").lower()
+            for value in target_titles
+        }
+        normalized_titles = {value for value in normalized_titles if len(value) >= 2}
+        if not normalized_titles:
+            return False
+
+        source_name = cls._simplify(str(source_title or "")).replace("_", "").lower()
+        if any(title in source_name for title in normalized_titles):
+            return True
+
+        for video in videos:
+            # Folder names often contain the series title even when the leaf is just E01.mp4.
+            file_evidence = " ".join(
+                str(video.get(key) or "")
+                for key in ("file_name", "relative_path", "path", "parent_name")
+            )
+            normalized_file = cls._simplify(file_evidence).replace("_", "").lower()
+            if any(title in normalized_file for title in normalized_titles):
+                return True
+        return False
+
     @staticmethod
     def _candidate_priority(
         source: dict,
@@ -695,6 +749,26 @@ class SearchService:
                             "过滤疑似错误影视候选：目标《%s》，来源标题/文件名证据指向其他作品《%s》",
                             title,
                             source_title,
+                        )
+                        seen_resource_keys.add(resource_key)
+                        continue
+
+                    media_type = str(movie.get("media_type") or "").strip().lower() if isinstance(movie, dict) else ""
+                    media_tag = str(movie.get("tag") or "").strip()
+                    is_series_query = (
+                        media_type in {"tv", "tv_show", "series", "anime", "variety", "documentary", "short_drama"}
+                        or media_tag in {"电视剧", "剧集", "综艺", "动漫", "动画", "纪录片", "短剧"}
+                    )
+                    source_id = str(source.get("source_id") or "").strip().lower()
+                    if (
+                        source_id == "pansou"
+                        and is_series_query
+                        and not self._has_target_title_evidence(movie, source_title, all_videos)
+                    ):
+                        self.logger.info(
+                            "过滤标题相关性不足的 PanSou 剧集候选：目标《%s》，来源标题《%s》且文件路径未匹配目标名称",
+                            title,
+                            source_title or "未提供标题",
                         )
                         seen_resource_keys.add(resource_key)
                         continue
