@@ -174,49 +174,106 @@ class ResourceSourceManager:
         *,
         source_ids: Iterable[str] | None = None,
     ) -> list[dict[str, Any]]:
+        """Search enabled sources, preserving the legacy list-only return shape."""
+        items, _diagnostics = self.search_with_diagnostics(
+            movie,
+            config,
+            source_ids=source_ids,
+        )
+        return items
+
+    def search_with_diagnostics(
+        self,
+        movie: object,
+        config: dict,
+        *,
+        source_ids: Iterable[str] | None = None,
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Search sources concurrently and return safe, per-source execution diagnostics.
+
+        Exception details are kept in server logs only. The returned diagnostics are
+        intended for UI display and must never contain provider tokens or raw errors.
+        """
         enabled_sources = self._enabled_sources(config)
         if source_ids is not None:
-            selected_ids = {str(source_id).strip() for source_id in source_ids if str(source_id).strip()}
-            enabled_sources = [source for source in enabled_sources if source.card_id in selected_ids]
+            selected_ids = {
+                str(source_id).strip()
+                for source_id in source_ids
+                if str(source_id).strip()
+            }
+            enabled_sources = [
+                source for source in enabled_sources
+                if source.card_id in selected_ids
+            ]
         if not enabled_sources:
-            return []
+            return [], []
 
-        def search_one(source: ResourceSourceCard) -> list[dict[str, Any]]:
+        def search_one(source: ResourceSourceCard) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+            started_at = time.perf_counter()
+            source_name = self._source_name(source)
+            base = {"id": source.card_id, "name": source_name}
             try:
-                items = source.search(movie, self._card_config(config, source.card_id))
-                if not isinstance(items, list):
+                raw_items = source.search(movie, self._card_config(config, source.card_id))
+                if not isinstance(raw_items, list):
                     raise TypeError("资源卡片 search 必须返回列表")
-                return [
+                invalid_items = sum(not isinstance(item, dict) for item in raw_items)
+                items = [
                     {
                         **item,
                         # Resource identity is owned by the manager, not plugin output.
                         "source_id": source.card_id,
-                        "source_name": self._source_name(source),
+                        "source_name": source_name,
                     }
-                    for item in items
+                    for item in raw_items
                     if isinstance(item, dict)
                 ]
+                status = "empty" if not items else ("partial" if invalid_items else "success")
+                if invalid_items:
+                    message = f"已忽略 {invalid_items} 条格式无效的资源记录"
+                elif items:
+                    message = f"返回 {len(items)} 条资源记录"
+                else:
+                    message = "本次没有发现资源"
+                diagnostic = {
+                    **base,
+                    "status": status,
+                    "result_count": len(items),
+                    "invalid_items": invalid_items,
+                    "duration_ms": max(0, round((time.perf_counter() - started_at) * 1000)),
+                    "message": message,
+                }
+                return items, diagnostic
             except Exception as exc:
                 self.logger.exception(
                     "资源源 %s 搜索异常: %s",
                     source.card_id,
                     exc,
                 )
-                return []
+                diagnostic = {
+                    **base,
+                    "status": "error",
+                    "result_count": 0,
+                    "invalid_items": 0,
+                    "duration_ms": max(0, round((time.perf_counter() - started_at) * 1000)),
+                    "message": "资源来源请求失败，请检查卡片配置或查看服务日志",
+                }
+                return [], diagnostic
 
-        # Resource cards are independent network sources. Search them concurrently
-        # to avoid adding each provider's latency one after another. executor.map
-        # preserves registration order, so candidate ranking remains deterministic.
+        # Resource cards are independent network sources. executor.map preserves
+        # registration order so results and diagnostics remain deterministic.
         with ThreadPoolExecutor(
             max_workers=min(8, len(enabled_sources)),
             thread_name_prefix="moviesync-resource-search",
         ) as executor:
-            source_results = executor.map(search_one, enabled_sources)
-            return [
-                item
-                for items in source_results
-                for item in items
-            ]
+            source_results = list(executor.map(search_one, enabled_sources))
+
+        items = [
+            item
+            for source_items, _diagnostic in source_results
+            for item in source_items
+        ]
+        diagnostics = [diagnostic for _items, diagnostic in source_results]
+        return items, diagnostics
 
     def parse_tv_episode(self, source_id: str, file_name: str) -> tuple[int | None, int | None]:
         """优先使用全局文件名识别规则，兼容旧资源卡片的专属规则。"""
