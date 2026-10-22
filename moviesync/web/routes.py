@@ -1599,6 +1599,7 @@ def get_task_detail(task_id):
             "source_channel": sub.get("channel", ""),
             "tracked_file_count": len(sub.get("tracked_file_keys", []) or []),
         }
+        task = _sanitize_persisted_numbers(task)
         return jsonify({"success": True, "task": task})
     task = _services()["tasks"].get_task(task_id)
     if not task:
