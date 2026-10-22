@@ -438,7 +438,10 @@ def test_resource_source_health_is_saved_and_reported_by_card_id():
         "type": "resource_source",
         "enabled": True,
         "health": saved_health,
-    }]def test_resource_manager_isolates_malformed_channel_search_results():
+    }]
+
+
+def test_resource_manager_isolates_malformed_channel_search_results():
     class Store:
         def load(self):
             return {
