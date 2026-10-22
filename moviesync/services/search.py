@@ -421,10 +421,10 @@ class SearchService:
         # trailing parenthesized year before sequel-number checks; otherwise
         # "潜伏6 (2025)" can be mistaken for a title numbered 2025.
         normalized_movie_title = re.sub(
-            r"[\\(（]\\s*(19\\d{2}|20\\d{2})\\s*[\\)）]", "", movie_title
+            r"[（(]\s*(19\d{2}|20\d{2})\s*[）)]", "", movie_title
         ).strip()
-        simplified_title = re.sub(r"[^\\w\\u4e00-\\u9fa5]", "", normalized_movie_title).lower()
-        simplified_text = re.sub(r"[^\\w\\u4e00-\\u9fa5]", "", text)
+        simplified_title = SearchService._simplify(normalized_movie_title).lower()
+        simplified_text = SearchService._simplify(text)
         if simplified_title and simplified_title in simplified_text:
             score += 3
         # A sequel number is part of the title, not disposable punctuation:
