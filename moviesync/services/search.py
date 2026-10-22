@@ -292,11 +292,13 @@ class SearchService:
         movie: object,
         source_title: str,
         videos: list[dict[str, Any]],
+        *,
+        display_title: str | None = None,
     ) -> bool:
-        """仅在分享标题与实际视频文件名共同指向另一部作品时，过滤明显的错误候选。
+        """过滤明显错误的影视候选，同时尽量保留别名、简称和标题模糊的合集。
 
-        适用于电影、电视剧、综艺和动画。标题不明确时保留候选，避免误杀简称、别名和合集。
-        同时支持常见中文标题与英文原名，并要求分享元数据和视频文件相互佐证，降低误杀风险。
+        当来源标题明确指向另一部中文作品时，即使分享内文件只按集数命名也会过滤；
+        来源标题不明确时，仍要求分享元数据与视频文件相互佐证，降低误杀风险。
         """
         if not isinstance(movie, dict):
             return False
@@ -346,6 +348,33 @@ class SearchService:
         ):
             return False
 
+        # 有些网盘分享的实际文件只叫“第 287 集.mp4”，无法从文件名交叉验证作品。
+        # 若用户看到的来源标题本身明确写了另一部中文作品，也应过滤；纯“更新至第几集”
+        # 或“古装仙侠合集”一类缺少具体作品名的模糊标题仍然保留。
+        if display_title:
+            title_noise = (
+                "晚间更新", "晚上更新", "晚上更", "每日更新", "持续更新", "更新至", "更新中",
+                "更新", "连载", "热播", "全网", "最新", "热门", "精品", "精选", "高分",
+                "必看", "推荐", "影视资源", "影视", "资源", "分享", "合集", "全集", "全套",
+                "全季", "全系列", "完整版", "未删减", "高清", "超清", "蓝光", "国语", "中字",
+                "字幕", "电视剧", "连续剧", "剧集", "动漫", "动画", "国漫", "综艺", "纪录片",
+                "电影", "年番", "番剧", "新番", "片源", "网盘", "转存", "修复", "收藏",
+                "解说", "混剪", "预告", "片花", "短剧", "短视频", "国产", "日韩", "美剧",
+                "韩剧", "日剧", "古装", "仙侠", "悬疑", "都市", "言情", "甜宠", "历史",
+                "现代", "爱情", "情感", "战争", "科幻", "剧情", "喜剧", "奇幻", "武侠",
+                "犯罪", "动作", "恐怖", "青春", "校园", "家庭", "冒险", "传记", "搞笑",
+                "真人秀", "脱口秀", "动画片", "电视剧集",
+            )
+            for term in re.findall(r"[\u4e00-\u9fff]{3,}", str(display_title)):
+                normalized_term = cls._simplify(term).replace("_", "").lower()
+                for marker in sorted(title_noise, key=len, reverse=True):
+                    normalized_marker = cls._simplify(marker).replace("_", "").lower()
+                    if normalized_marker:
+                        normalized_term = normalized_term.replace(normalized_marker, "")
+                # 只把去除常见频道/更新/类型词后仍像具体作品名的词当作强证据。
+                if len(normalized_term) >= 3:
+                    return True
+
         # 同时检查中文作品名片段与清理后的文件标题，兼顾中文剧集和英文原名电影。
         generic = {
             "全集", "高清", "超清", "国语", "中字", "合集", "更新", "资源", "分享",
@@ -366,11 +395,17 @@ class SearchService:
             normalized_candidates = set()
             for candidate in file_candidates:
                 normalized = cls._simplify(candidate).replace("_", "").lower()
+                # A filename such as "第02集.mp4" is an episode marker, not a work title.
+                # Otherwise "更新至第02集" can falsely corroborate the unrelated source title.
+                episode_label_only = bool(
+                    re.fullmatch(r"第?\d{1,4}[集话期](?:国语|中字|字幕|高清|超清)?", normalized)
+                )
                 # Chinese title searches often use a translated name while shares use
                 # an English original title. Without metadata aliases, keep such candidates.
                 looks_english = bool(re.search(r"[A-Za-z]", candidate))
                 if (
-                    len(normalized) >= 3
+                    not episode_label_only
+                    and len(normalized) >= 3
                     and normalized not in {cls._simplify(item).replace("_", "").lower() for item in generic}
                     and not any(title in normalized for title in target_titles)
                     and not (target_is_chinese and looks_english and not has_known_alternate_title)
@@ -650,9 +685,14 @@ class SearchService:
                         for key in ("title", "name", "resource_name", "share_name", "content", "description")
                         if str(source.get(key) or "").strip()
                     )
-                    if self._has_conflicting_media_title(movie, source_title_evidence, all_videos):
+                    if self._has_conflicting_media_title(
+                        movie,
+                        source_title_evidence,
+                        all_videos,
+                        display_title=source_title,
+                    ):
                         self.logger.info(
-                            "过滤疑似错误剧集候选：目标《%s》，分享标题《%s》，视频文件与分享标题指向其他作品",
+                            "过滤疑似错误影视候选：目标《%s》，来源标题/文件名证据指向其他作品《%s》",
                             title,
                             source_title,
                         )
