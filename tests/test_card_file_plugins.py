@@ -177,7 +177,7 @@ def test_removed_bundled_card_copies_are_retired_safely(tmp_path, monkeypatch, f
     plugin_dir.mkdir()
     marker_dir = plugin_dir / ".seeded"
     marker_dir.mkdir()
-    content = f"# prior bundled {filename} bytes\n".encode("utf-8")
+    content = f"# prior bundled {filename} bytes\n".encode()
     plugin_path = plugin_dir / filename
     plugin_path.write_bytes(content)
     # A known old bundled copy can be deleted even when its marker is missing.
@@ -206,7 +206,7 @@ def test_removed_bundled_card_preserves_customized_copy(tmp_path, filename):
     plugin_dir.mkdir()
     marker_dir = plugin_dir / ".seeded"
     marker_dir.mkdir()
-    custom_content = f"# user customized {filename}\n".encode("utf-8")
+    custom_content = f"# user customized {filename}\n".encode()
     plugin_path = plugin_dir / filename
     plugin_path.write_bytes(custom_content)
     marker_value = "customized:" + card_plugins._git_blob_sha(custom_content)
