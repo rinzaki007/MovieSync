@@ -342,12 +342,7 @@ class SearchService:
             cls._simplify(str(video.get("file_name") or "")).replace("_", "").lower()
             for video in videos
         ]
-        # 目标标题在分享名或任一实际视频名中出现时，不能仅凭其他词语判定误命中。
-        if any(title in source_name for title in target_titles) or any(
-            title in name for title in target_titles for name in file_names
-        ):
-            return False
-
+        # 明确的其他作品名优先于来源描述中偶然出现的目标名称，避免混合帖/频道文案误放行。
         # 有些网盘分享的实际文件只叫“第 287 集.mp4”，无法从文件名交叉验证作品。
         # 若用户看到的来源标题本身明确写了另一部中文作品，也应过滤；纯“更新至第几集”
         # 或“古装仙侠合集”一类缺少具体作品名的模糊标题仍然保留。
@@ -371,9 +366,17 @@ class SearchService:
                     normalized_marker = cls._simplify(marker).replace("_", "").lower()
                     if normalized_marker:
                         normalized_term = normalized_term.replace(normalized_marker, "")
-                # 只把去除常见频道/更新/类型词后仍像具体作品名的词当作强证据。
+                # 目标作品名本身不是冲突证据，但标题中并列的另一部作品仍是。
+                if any(normalized_term == title or normalized_term in title for title in target_titles):
+                    continue
                 if len(normalized_term) >= 3:
                     return True
+
+        # 目标标题或实际文件路径有正向证据时保留；它不能覆盖上面已识别的冲突标题。
+        if any(title in source_name for title in target_titles) or any(
+            title in name for title in target_titles for name in file_names
+        ):
+            return False
 
         # 同时检查中文作品名片段与清理后的文件标题，兼顾中文剧集和英文原名电影。
         generic = {
