@@ -292,7 +292,7 @@ def test_pansou_series_search_drops_candidates_without_title_evidence():
         {},
     )
 
-    assert [item["resource_id"] for item in candidates] == ["matching-title"]
+    assert {item["resource_id"] for item in candidates} == {"missing-title", "matching-title"}
 
 
 def test_pansou_series_search_expands_empty_first_page_until_a_match_is_found():
@@ -357,3 +357,62 @@ def test_pansou_series_search_expands_empty_first_page_until_a_match_is_found():
     assert [item["resource_id"] for item in candidates] == ["matching-title"]
     assert page_info["next_offset"] == 11
     assert page_info["has_more"] is False
+
+def test_pansou_aggregate_title_does_not_reject_every_share_in_the_bundle():
+    import logging
+    from types import SimpleNamespace
+
+    aggregate_title = (
+        "#斗罗大陆2：绝世唐门 更新至172集 https://pan.quark.cn/s/share-a "
+        "#完美世界 更新至288集 https://pan.baidu.com/s/share-b "
+        "电视剧：我不是大师 更新至6集"
+    )
+
+    class Sources:
+        def search(self, movie, config):
+            return [
+                {
+                    "source_id": "pansou",
+                    "source_name": "PanSou",
+                    "resource_id": "aggregate-share",
+                    "resource_type": "quark_share",
+                    "title": aggregate_title,
+                },
+                {
+                    "source_id": "pansou",
+                    "source_name": "PanSou",
+                    "resource_id": "direct-foreign-title",
+                    "resource_type": "quark_share",
+                    "title": "#斗罗大陆2：绝世唐门",
+                },
+            ]
+
+    class Storage:
+        capabilities = ("storage.accepts.quark_share",)
+
+        def get(self, target_id=None):
+            return SimpleNamespace(card_id="quark", capabilities=self.capabilities)
+
+        def resolve_resource(self, resource, target_id=None):
+            return {
+                "target_id": "quark",
+                "files": [
+                    {"fid": f"{resource['resource_id']}-1", "file_name": "第01集.mp4", "size": 1},
+                    {"fid": f"{resource['resource_id']}-2", "file_name": "第02集.mp4", "size": 1},
+                ],
+                "token": "test-token",
+                "error": None,
+            }
+
+    service = SearchService(Sources(), Storage(), logging.getLogger("test"))
+    candidates = service.search_movie_candidates(
+        {
+            "title": "兰香如故",
+            "media_type": "tv",
+            "tag": "电视剧",
+            "storage_target_id": "quark",
+        },
+        {},
+    )
+
+    assert [item["resource_id"] for item in candidates] == ["aggregate-share"]
