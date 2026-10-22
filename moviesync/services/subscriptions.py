@@ -1020,11 +1020,11 @@ class SubscriptionManager:
                 resource,
                 resource.get("storage_target_id") or None,
             )
-        except Exception as exc:
+        except Exception:
             diagnostics["resolution_failures"] = 1
             diagnostics["examples"].append({
                 "file": resource.get("resource_id") or resource.get("pwd_id") or "当前分享",
-                "reason": f"资源解析异常：{type(exc).__name__}: {str(exc)[:160]}",
+                "reason": "资源解析执行异常；详细原因已记录到服务日志",
             })
             self.logger.exception("自动追剧资源解析异常")
             return self._finish(sub, False, "解析链接失败：资源卡片执行异常，请查看服务日志")
@@ -1074,11 +1074,17 @@ class SubscriptionManager:
         if err or not files or not fetched_stoken:
             diagnostics["resolution_failures"] = 1
             if err:
+                self.logger.warning(
+                    "自动追剧资源解析返回错误，资源 ID=%s，原因=%s",
+                    resource.get("resource_id") or resource.get("pwd_id") or "",
+                    err,
+                )
                 diagnostics["examples"].append({
                     "file": resource.get("resource_id") or resource.get("pwd_id") or "当前分享",
-                    "reason": str(err)[:200],
+                    "reason": "资源解析返回错误；详细原因已记录到服务日志",
                 })
-            return self._finish(sub, False, f"解析链接失败: {err or '未找到文件'}")
+                return self._finish(sub, False, "解析链接失败：资源卡片返回错误，请查看服务日志")
+            return self._finish(sub, False, "解析链接失败: 未找到文件")
 
         diagnostics["resolved_shares"] = 1
         diagnostics["files_scanned"] = 0
@@ -1510,11 +1516,11 @@ class SubscriptionManager:
                         })
                 else:
                     sources = self.resource_sources.search_channel(source_id, channel, title)
-        except Exception as exc:
+        except Exception:
             diagnostics["source_search_errors"] += 1
             diagnostics["examples"].append({
                 "file": "频道资源搜索",
-                "reason": f"{type(exc).__name__}: {str(exc)[:160]}",
+                "reason": "频道资源搜索执行异常；详细原因已记录到服务日志",
             })
             self.logger.exception("智能追剧频道搜索失败，source_id=%s channel=%s", source_id, channel)
             scan_complete = False
@@ -1545,11 +1551,11 @@ class SubscriptionManager:
                             "file": "频道历史搜索",
                             "reason": "资源卡片返回了非预期的数据结构",
                         })
-                except Exception as exc:
+                except Exception:
                     diagnostics["source_search_errors"] += 1
                     diagnostics["examples"].append({
                         "file": "频道历史搜索",
-                        "reason": f"{type(exc).__name__}: {str(exc)[:160]}",
+                        "reason": "频道历史搜索执行异常；详细原因已记录到服务日志",
                     })
                     self.logger.exception("智能追剧频道历史搜索失败，source_id=%s channel=%s", source_id, channel)
                     history_complete = False
@@ -1794,11 +1800,21 @@ class SubscriptionManager:
                 or ""
             ).strip()
             if resolved.get("error") or not files or not token:
-                reason = str(resolved.get("error") or "未获取到文件列表或分享令牌").strip()
-                self.logger.warning("自动追剧资源解析失败，资源 ID=%s，原因=%s", resource_id, reason)
+                provider_error = resolved.get("error")
+                safe_reason = (
+                    "资源解析返回错误；详细原因已记录到服务日志"
+                    if provider_error
+                    else "未获取到文件列表或分享令牌"
+                )
+                log_reason = str(provider_error or safe_reason).strip()
+                self.logger.warning(
+                    "自动追剧资源解析失败，资源 ID=%s，原因=%s",
+                    resource_id,
+                    log_reason,
+                )
                 resolution_errors.append(f"{resource_id}: 解析失败")
                 diagnostics["resolution_failures"] += 1
-                diagnostics["examples"].append({"file": resource_id, "reason": reason[:200]})
+                diagnostics["examples"].append({"file": resource_id, "reason": safe_reason[:200]})
                 diagnostics["shares"].append({
                     "resource_id": resource_id[:120],
                     "resource_type": resource_type[:60],
@@ -1807,7 +1823,7 @@ class SubscriptionManager:
                     "video_files": 0,
                     "queued_files": 0,
                     "skipped_files": 0,
-                    "error": reason[:200],
+                    "error": safe_reason[:200],
                 })
                 continue
 

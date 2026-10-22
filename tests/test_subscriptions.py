@@ -2422,7 +2422,11 @@ def test_channel_search_failure_is_persisted_and_not_reported_as_full_success(tm
         assert diagnostics["source_search_errors"] == 1
         assert diagnostics["transferred_files"] == 2
         assert diagnostics["success"] is False
-        assert any("temporary search outage" in item["reason"] for item in diagnostics["examples"])
+        assert any(
+            "详细原因已记录到服务日志" in item["reason"]
+            for item in diagnostics["examples"]
+        )
+        assert "temporary search outage" not in str(diagnostics)
     finally:
         manager.stop_scheduler()
 
@@ -2962,3 +2966,102 @@ def test_subscription_preview_redacts_provider_error_details(tmp_path):
     assert saved["status"] == "waiting"
     assert "last_diagnostics" not in saved
     manager.shutdown()
+
+
+def test_subscription_resolver_errors_are_redacted_from_persisted_details(tmp_path):
+    secret = "SUPER_SECRET_PROVIDER_TOKEN"
+
+    class SensitiveStorage(DynamicStorageTargets):
+        def __init__(self):
+            super().__init__()
+            self.failure_mode = "exception"
+
+        def resolve_resource(self, resource, target_id=None):
+            if self.failure_mode == "exception":
+                raise RuntimeError(f"cookie={secret}")
+            return {
+                "target_id": target_id or "demo-storage",
+                "files": [],
+                "token": None,
+                "error": f"cookie={secret}",
+            }
+
+    storage = SensitiveStorage()
+    manager = SubscriptionManager(
+        tmp_path / "subscriptions-sensitive-errors.json",
+        storage,
+        FakeResourceSources(),
+        FakeLogger(),
+    )
+    try:
+        for mode in ("exception", "error"):
+            storage.failure_mode = mode
+            sub = manager.add_subscription(
+                title=f"Sensitive error {mode}",
+                pwd_id=f"share-{mode}",
+                storage_target_id="demo-storage",
+            )
+            ok, message = manager.check_subscription_now(sub["id"])
+
+            assert ok is False
+            saved = next(
+                item for item in manager.get_subscriptions()
+                if item["id"] == sub["id"]
+            )
+            persisted = {
+                "message": message,
+                "last_error": saved.get("last_error"),
+                "last_diagnostics": saved.get("last_diagnostics"),
+                "run_history": saved.get("run_history"),
+            }
+            assert secret not in str(persisted)
+            assert "查看服务日志" in message
+    finally:
+        manager.stop_scheduler()
+
+
+def test_channel_resolution_error_is_redacted_from_persisted_diagnostics(tmp_path):
+    secret = "SUPER_SECRET_CHANNEL_TOKEN"
+
+    class SensitiveChannelStorage(ChannelStorageTargets):
+        def resolve_resource(self, resource, target_id=None):
+            return {
+                "target_id": target_id or "demo-storage",
+                "files": [],
+                "token": None,
+                "error": f"cookie={secret}",
+            }
+
+    manager = SubscriptionManager(
+        tmp_path / "subscriptions-channel-sensitive-error.json",
+        SensitiveChannelStorage(),
+        FakeResourceSources(),
+        FakeLogger(),
+    )
+    try:
+        sub = manager.add_subscription(
+            title="Sensitive channel error",
+            pwd_id="share1",
+            storage_target_id="demo-storage",
+            source_id="telegram",
+            channel="demo",
+            files=[{"fid": "ep1", "file_name": "Show.S01E01.mkv"}],
+        )
+        ok, message = manager.check_subscription_now(sub["id"])
+
+        assert ok is False
+        saved = next(
+            item for item in manager.get_subscriptions()
+            if item["id"] == sub["id"]
+        )
+        persisted = {
+            "message": message,
+            "last_error": saved.get("last_error"),
+            "last_diagnostics": saved.get("last_diagnostics"),
+            "run_history": saved.get("run_history"),
+        }
+        assert secret not in str(persisted)
+        assert "查看服务日志" in message
+    finally:
+        manager.stop_scheduler()
+
