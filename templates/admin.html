@@ -1704,7 +1704,7 @@
                 document.getElementById("generic-card-health").classList.add("hidden");
                 document.getElementById("generic-card-dialog").classList.toggle(
                     "generic-card-dialog-wide",
-                    (card.fields || []).some(field => field.editor === "channel_chips")
+                    (result.fields || []).some(field => field.editor === "channel_chips")
                 );
                 if (cardId === "vod_source_manager") document.getElementById("generic-card-dialog").classList.add("generic-card-dialog-wide");
                 document.getElementById("generic-card-modal").classList.remove("hidden");
