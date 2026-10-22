@@ -686,7 +686,7 @@ class SearchService:
                         display_title=source_title,
                     ):
                         self.logger.info(
-                            "过滤疑似错误剧集候选：目标《%s》，分享标题《%s》，视频文件与分享标题指向其他作品",
+                            "过滤疑似错误影视候选：目标《%s》，来源标题/文件名证据指向其他作品《%s》",
                             title,
                             source_title,
                         )
