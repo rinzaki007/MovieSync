@@ -520,7 +520,18 @@ class SearchService:
                 "storage_target_id": selected_target_id,
                 "resource_types": resource_types,
             })
-        if source_ids is None:
+        source_search_diagnostics: list[dict[str, Any]] = []
+        search_with_diagnostics = getattr(self.resource_sources, "search_with_diagnostics", None)
+        if callable(search_with_diagnostics):
+            if source_ids is None:
+                discovered, source_search_diagnostics = search_with_diagnostics(search_context, config)
+            else:
+                discovered, source_search_diagnostics = search_with_diagnostics(
+                    search_context,
+                    config,
+                    source_ids=source_ids,
+                )
+        elif source_ids is None:
             discovered = self.resource_sources.search(search_context, config)
         else:
             discovered = self.resource_sources.search(search_context, config, source_ids=source_ids)
@@ -771,6 +782,12 @@ class SearchService:
                 "next_offset": safe_offset + consumed,
                 "has_more": safe_offset + consumed < total_discovered,
                 "total_discovered": total_discovered,
+                "source_search_diagnostics": source_search_diagnostics,
+                "source_search_failed": sum(
+                    item.get("status") == "error"
+                    for item in source_search_diagnostics
+                    if isinstance(item, dict)
+                ),
             })
         self.logger.info(
             "《%s》检索完成，有效候选=%s（已扫描 %s/%s 条）",
