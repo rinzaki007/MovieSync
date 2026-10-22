@@ -714,3 +714,73 @@ def test_search_exposes_source_diagnostics_through_page_info():
     assert page_info["source_search_failed"] == 1
     assert page_info["source_search_diagnostics"][0]["id"] == "broken-source"
     assert page_info["source_search_diagnostics"][0]["status"] == "error"
+
+
+def test_search_does_not_cache_failed_share_resolution(tmp_path):
+    import logging
+
+    class RecoveringStorage(FakeStorageTargets):
+        def __init__(self):
+            self.resolve_count = 0
+
+        def resolve_resource(self, resource, target_id=None):
+            self.resolve_count += 1
+            if self.resolve_count == 1:
+                return {
+                    "target_id": target_id or "quark",
+                    "files": [],
+                    "token": None,
+                    "error": "temporary provider outage",
+                }
+            return {
+                "target_id": target_id or "quark",
+                "files": [{"fid": "f1", "file_name": "Show.S01E01.mkv"}],
+                "token": "fresh-token",
+                "error": None,
+            }
+
+    storage = RecoveringStorage()
+    service = SearchService(FakeResourceSources(), storage, logging.getLogger("test"))
+    resource = {"pwd_id": "retry-after-error", "storage_target_id": "quark"}
+
+    first = service._get_resource_files(resource)
+    second = service._get_resource_files(resource)
+
+    assert first[0] == []
+    assert first[2] == "temporary provider outage"
+    assert [item["fid"] for item in second[0]] == ["f1"]
+    assert second[1] == "fresh-token"
+    assert storage.resolve_count == 2
+
+
+def test_search_does_not_cache_empty_share_listing(tmp_path):
+    import logging
+
+    class RecoveringStorage(FakeStorageTargets):
+        def __init__(self):
+            self.resolve_count = 0
+
+        def resolve_resource(self, resource, target_id=None):
+            self.resolve_count += 1
+            files = [] if self.resolve_count == 1 else [
+                {"fid": "f1", "file_name": "Show.S01E01.mkv"}
+            ]
+            return {
+                "target_id": target_id or "quark",
+                "files": files,
+                "token": "token",
+                "error": None,
+            }
+
+    storage = RecoveringStorage()
+    service = SearchService(FakeResourceSources(), storage, logging.getLogger("test"))
+    resource = {"pwd_id": "retry-after-empty", "storage_target_id": "quark"}
+
+    first = service._get_resource_files(resource)
+    second = service._get_resource_files(resource)
+
+    assert first[0] == []
+    assert [item["fid"] for item in second[0]] == ["f1"]
+    assert second[1] == "token"
+    assert storage.resolve_count == 2
+

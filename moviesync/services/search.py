@@ -272,15 +272,17 @@ class SearchService:
         error = resolved.get("error")
         target_id = resolved.get("target_id") or storage_target_id
 
-        # 只缓存不含临时 token 的解析结果，并限制缓存总量。
-        with self._share_lock:
-            self._share_cache[cache_key] = (now, (files, error, target_id))
-            while len(self._share_cache) > MAX_SHARE_CACHE_ENTRIES:
-                oldest_key = min(
-                    self._share_cache,
-                    key=lambda key: self._share_cache[key][0],
-                )
-                self._share_cache.pop(oldest_key, None)
+        # 只缓存成功解析出的非空文件列表。不缓存临时错误或空结果，
+        # 这样来源短暂故障后，用户重试不会在 TTL 内反复命中旧失败。
+        if not error and files:
+            with self._share_lock:
+                self._share_cache[cache_key] = (now, (files, error, target_id))
+                while len(self._share_cache) > MAX_SHARE_CACHE_ENTRIES:
+                    oldest_key = min(
+                        self._share_cache,
+                        key=lambda key: self._share_cache[key][0],
+                    )
+                    self._share_cache.pop(oldest_key, None)
 
         return files, token, error, target_id
 
