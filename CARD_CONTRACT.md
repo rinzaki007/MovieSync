@@ -181,7 +181,10 @@ The built-in PanSou resource source, Quark storage target, and Douban metadata p
 - `pansou.py`: PanSou resource search.
 - `quark.py`: Quark link resolution, destination folders, and transfers.
 - `douban.py`: Douban metadata lookup and search.
+- `filename_recognition.py`: Global filename and episode-recognition rules.
 - `vod_source_manager.py`: Compatible VOD source management and source health checks; its stable card ID is `vod_source_manager`.
+
+The bundled TMDB metadata card and Telegram channel-search card were retired on 2026-10-22; PanSou remains the bundled resource-search source. Upgrade migration removes only recognized, unchanged copies of those retired built-ins. Modified or unrecognized files are preserved. The low-level Telegram client remains for compatibility with older extensions and backups; this does not mean a Telegram resource card is still bundled.
 
 Uninstalling one of these files removes that card from the registry and persistent plugin directory, while other cards and core services continue running. Configuration and history are intentionally retained. Re-upload the same reviewed file to restore it. Shared low-level clients remain platform services injected through the factory context; card-specific behavior stays in the card file.
 
