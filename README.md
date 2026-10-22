@@ -59,7 +59,7 @@ docker compose up -d
 MOVIESYNC_BASE_URL=http://127.0.0.1:8099 sh scripts/smoke-test.sh
 ```
 
-脚本仅检查健康端点、关键页面和未登录 API 访问控制，不会登录或触发转存。它不能代替真实第三方服务的端到端验收。
+也可在包含该脚本的新镜像发布后，从容器内部执行 `docker exec -e MOVIESYNC_BASE_URL=http://127.0.0.1:5000 MovieSync sh /app/scripts/smoke-test.sh`。脚本仅检查健康端点、关键页面和未登录 API 访问控制，不会登录或触发转存；它不能代替真实第三方服务的端到端验收。
 
 ### 可选服务
 
