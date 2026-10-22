@@ -126,9 +126,7 @@ def test_fresh_install_does_not_seed_cards_by_default(tmp_path, monkeypatch):
         services["card_registry"].get(card_id) is None
         for card_id in (
             "douban",
-            "tmdb",
             "pansou",
-            "telegram",
             "quark",
             "filename_recognition",
         )
@@ -149,32 +147,77 @@ def test_pansou_is_seeded_as_a_removable_file_card(tmp_path):
     assert services["card_registry"].get("pansou") is None
 
     restarted = create_app({"MOVIESYNC_DATA_DIR": str(tmp_path)}, start_scheduler=False)
-    assert restarted.extensions["moviesync"]["card_registry"].get("pansou") is None
-
-
-def test_builtin_cards_are_independent_single_file_plugins(tmp_path):
+    assert restarted.extensions["moviesync"]["card_registry"].get("pansou") is Nonedef test_remaining_builtin_cards_are_independent_single_file_plugins(tmp_path):
     from moviesync.app import create_app
 
     app = create_app({"MOVIESYNC_DATA_DIR": str(tmp_path)}, start_scheduler=False)
     services = app.extensions["moviesync"]
     registry = services["card_registry"]
-    plugin_manager = services["file_card_plugins"]
 
-    assert registry.get("telegram") is not None
     assert registry.get("pansou") is not None
     assert registry.get("quark") is not None
     assert registry.get("douban") is not None
-    assert all((tmp_path / "cards" / name).is_file() for name in (
-        "telegram.py", "pansou.py", "quark.py", "douban.py"
-    ))
-
-    removed = plugin_manager.uninstall("telegram.py")
-
-    assert removed["card_id"] == "telegram"
+    assert registry.get("tmdb") is None
     assert registry.get("telegram") is None
-    assert registry.get("pansou") is not None
-    assert registry.get("quark") is not None
-    assert registry.get("douban") is not None
+    assert all((tmp_path / "cards" / name).is_file() for name in (
+        "pansou.py", "quark.py", "douban.py"
+    ))
+    assert not (tmp_path / "cards" / "tmdb.py").exists()
+    assert not (tmp_path / "cards" / "telegram.py").exists()
+
+
+@pytest.mark.parametrize("filename", ["tmdb.py", "telegram.py"])
+def test_removed_bundled_card_copies_are_retired_safely(tmp_path, monkeypatch, filename):
+    bundled_dir = tmp_path / "bundled"
+    bundled_dir.mkdir()
+    plugin_dir = tmp_path / "cards"
+    plugin_dir.mkdir()
+    marker_dir = plugin_dir / ".seeded"
+    marker_dir.mkdir()
+    content = f"# prior bundled {filename} bytes\n".encode("utf-8")
+    plugin_path = plugin_dir / filename
+    plugin_path.write_bytes(content)
+    # A known old bundled copy can be deleted even when its marker is missing.
+    monkeypatch.setitem(
+        card_plugins._RETIRED_BUNDLED_CARD_BLOBS,
+        filename,
+        {card_plugins._git_blob_sha(content)},
+    )
+
+    CardFilePluginManager(
+        plugin_dir,
+        CardRegistry(),
+        logging.getLogger("test-retired-card"),
+        bundled_dir,
+    )
+
+    assert not plugin_path.exists()
+    assert not (marker_dir / f"{filename}.seeded").exists()
+
+
+@pytest.mark.parametrize("filename", ["tmdb.py", "telegram.py"])
+def test_removed_bundled_card_preserves_customized_copy(tmp_path, filename):
+    bundled_dir = tmp_path / "bundled"
+    bundled_dir.mkdir()
+    plugin_dir = tmp_path / "cards"
+    plugin_dir.mkdir()
+    marker_dir = plugin_dir / ".seeded"
+    marker_dir.mkdir()
+    custom_content = f"# user customized {filename}\n".encode("utf-8")
+    plugin_path = plugin_dir / filename
+    plugin_path.write_bytes(custom_content)
+    marker_value = "customized:" + card_plugins._git_blob_sha(custom_content)
+    (marker_dir / f"{filename}.seeded").write_text(marker_value, encoding="ascii")
+
+    CardFilePluginManager(
+        plugin_dir,
+        CardRegistry(),
+        logging.getLogger("test-retired-card-custom"),
+        bundled_dir,
+    )
+
+    assert plugin_path.read_bytes() == custom_content
+    assert (marker_dir / f"{filename}.seeded").read_text(encoding="ascii") == marker_value
 
 
 def test_uninstall_keeps_card_registered_by_another_owner(tmp_path):
@@ -200,7 +243,7 @@ def test_uninstall_keeps_card_registered_by_another_owner(tmp_path):
 
 @pytest.mark.parametrize(
     ("reference_field", "card_id"),
-    [("source_id", "telegram"), ("storage_target_id", "quark")],
+    [("source_id", "pansou"), ("storage_target_id", "quark")],
 )
 def test_uninstall_rejects_cards_referenced_by_subscriptions(
     tmp_path, reference_field, card_id
@@ -277,19 +320,6 @@ def test_cards_api_does_not_treat_quark_default_fid_as_configuration(tmp_path):
     quark = next(item for item in cards if item["id"] == "quark")
     assert quark["configured"] is False
     assert quark["health"]["status"] == "idle"
-
-
-def test_cards_api_does_not_treat_telegram_regex_defaults_as_configuration(tmp_path):
-    from moviesync.app import create_app
-
-    app = create_app({"MOVIESYNC_DATA_DIR": str(tmp_path)}, start_scheduler=False)
-    client = app.test_client()
-    client.post("/api/setup", json={"username": "admin", "password": "password123"})
-    cards = client.get("/api/cards").get_json()["cards"]
-    telegram = next(item for item in cards if item["id"] == "telegram")
-    assert telegram["configured"] is False
-    assert telegram["health"]["status"] == "unknown"
-
 
 
 def test_legacy_persistent_douban_card_factory_is_migrated_safely(tmp_path):
@@ -563,58 +593,6 @@ def create_card(context):
     assert field["editor"] == "fid_lines"
     # The persistent Python card is intentionally left untouched.
     assert '"type": "json"' in (plugin_dir / "quark.py").read_text(encoding="utf-8")
-
-
-def test_legacy_telegram_filename_rules_are_removed_from_form_manifest(tmp_path):
-    plugin_dir = tmp_path / "data-cards"
-    bundled_dir = tmp_path / "bundled-cards"
-    plugin_dir.mkdir()
-    bundled_dir.mkdir()
-
-    legacy_source = '''from moviesync.cards import CardManifest, ResourceSourceCard
-
-class TelegramCard(ResourceSourceCard):
-    manifest = CardManifest(id="telegram", name="Telegram", type="resource_source",
-        config_fields=(
-            {"key": "channels", "label": "资源频道", "type": "json"},
-            {"key": "magic_regex", "label": "文件名识别增强", "type": "json"},
-        ))
-    def search(self, movie, config):
-        return []
-
-def create_card(context):
-    return TelegramCard()
-'''
-    bundled_source = '''from moviesync.cards import CardManifest, ResourceSourceCard
-
-class TelegramCard(ResourceSourceCard):
-    manifest = CardManifest(id="telegram", name="Telegram", type="resource_source",
-        config_fields=(
-            {"key": "channels", "label": "资源频道", "type": "json",
-             "editor": "channel_chips", "default": []},
-        ))
-    def search(self, movie, config):
-        return []
-
-def create_card(context):
-    return TelegramCard()
-'''
-    legacy_path = plugin_dir / "telegram.py"
-    legacy_path.write_text(legacy_source, encoding="utf-8")
-    (bundled_dir / "telegram.py").write_text(bundled_source, encoding="utf-8")
-
-    manager = CardFilePluginManager(
-        plugin_dir, CardRegistry(), logging.getLogger("test-telegram-legacy-ui"), bundled_dir
-    )
-    card = manager.load_file("telegram.py")
-    field_keys = [field["key"] for field in card.manifest.config_fields]
-
-    assert field_keys == ["channels"]
-    assert card.manifest.config_fields[0]["editor"] == "channel_chips"
-    # The legacy card source remains untouched; only its exposed form is migrated.
-    assert '"key": "magic_regex"' in legacy_path.read_text(encoding="utf-8")
-
-
 
 
 def test_uninstall_closes_the_loaded_card(tmp_path):
