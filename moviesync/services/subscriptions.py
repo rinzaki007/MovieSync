@@ -817,9 +817,176 @@ class SubscriptionManager:
             "examples": [],
         }
 
+    @staticmethod
+    def _populate_preview_plan(
+        preview_result: dict,
+        sub: dict,
+        queued_items=None,
+        *,
+        scan_complete: bool | None = None,
+        message: str = "",
+    ) -> None:
+        """Build a bounded, read-only preview from the scan diagnostics."""
+        diagnostics = sub.get("_run_diagnostics")
+        diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+        queued_items = queued_items if isinstance(queued_items, list) else []
+        items = []
+        truncated = False
+        max_items = 200
+
+        for item in queued_items:
+            if not isinstance(item, dict):
+                continue
+            if len(items) >= max_items:
+                truncated = True
+                break
+            items.append({
+                "status": "queued",
+                "label": "待转存",
+                "file": str(item.get("file") or item.get("file_name") or item.get("fid") or "未知文件")[:240],
+                "fid": str(item.get("fid") or "")[:128],
+                "resource_id": str(item.get("resource_id") or "")[:120],
+                "season": item.get("season"),
+                "episode": item.get("episode"),
+            })
+
+        for example in (diagnostics.get("examples") or []):
+            if len(items) >= max_items:
+                truncated = True
+                break
+            if not isinstance(example, dict):
+                continue
+            reason = str(example.get("reason") or "扫描提示")[:240]
+            safe_reason_markers = (
+                "非视频文件", "缺少 fid", "无法追踪或转存", "无法识别季集",
+                "缺少可确认的季数", "无法安全判断追剧起点", "早于追剧起始集",
+                "与优先分享中的同集重复", "已确认保存", "已追踪或重复文件",
+                "该季集已从其他分享转存", "初选文件 ID 未出现在分享解析返回的文件列表中",
+                "初选分享", "忽略非字典", "资源条目缺少分享 ID",
+                "资源解析返回的文件列表不是列表", "资源卡片返回",
+                "频道搜索结果", "所选来源文件夹", "文件列表返回",
+                "没有可扫描的文件", "频道历史搜索", "频道增量搜索",
+                "频道资源搜索", "分享解析失败", "未获取到文件列表",
+            )
+            is_known_safe_reason = any(marker in reason for marker in safe_reason_markers)
+            if not is_known_safe_reason:
+                # Examples can contain arbitrary messages returned by a storage
+                # provider. Only known, locally-authored explanations are echoed.
+                status, label = "warning", "需留意"
+                reason = "资源解析或来源检查存在异常；详细原因已记录到服务日志"
+            elif any(marker in reason for marker in ("无法识别", "缺少可确认的季数", "无法可靠识别")):
+                status, label = "unrecognized", "待识别"
+            else:
+                status, label = "skipped", "已跳过"
+            items.append({
+                "status": status,
+                "label": label,
+                "file": str(example.get("file") or "扫描提示")[:240],
+                "reason": reason,
+            })
+
+        summary_keys = (
+            "source_candidates", "unique_shares", "resolved_shares",
+            "resolution_failures", "files_scanned", "video_files",
+            "non_video_files", "missing_file_id", "invalid_file_entries",
+            "invalid_source_entries", "duplicate_source_entries",
+            "source_search_errors", "initial_files_missing", "already_saved",
+            "already_tracked", "unrecognized", "filtered_old",
+            "duplicate_episodes", "queued_files",
+        )
+        summary = {key: int(diagnostics.get(key) or 0) for key in summary_keys}
+        if scan_complete is None:
+            scan_complete = bool(diagnostics.get("source_scan_complete", False))
+        incomplete = bool(
+            not scan_complete
+            or summary["source_search_errors"]
+            or summary["resolution_failures"]
+            or summary["missing_file_id"]
+            or summary["invalid_file_entries"]
+        )
+        preview_result.update({
+            "title": str(sub.get("title") or "未命名追剧任务")[:200],
+            "summary": summary,
+            "queued_files": summary["queued_files"],
+            "files_scanned": summary["files_scanned"],
+            "scan_complete": bool(scan_complete),
+            "incomplete": incomplete,
+            "items": items,
+            "items_truncated": truncated,
+            "message": str(message or "")[:500],
+            "read_only": True,
+        })
+
+    def preview_subscription_now(self, sub_id: str) -> tuple[bool, str, dict]:
+        """Preview what a subscription would transfer without saving or transferring files."""
+        sub_id = str(sub_id or "").strip()
+        if not sub_id:
+            return False, "未提供订阅 ID", {}
+
+        with self.lock:
+            subscriptions = self._load_subscriptions()
+            original = next(
+                (item for item in subscriptions if str(item.get("id")) == sub_id),
+                None,
+            )
+            if original is None:
+                return False, "未找到订阅任务", {}
+            if sub_id in self.running_ids or original.get("status") == "running":
+                return False, "该追剧任务正在执行，暂时无法预演", {}
+            if original.get("pending_save_uncertain"):
+                return False, "该任务存在待确认转存结果，请先核对网盘并处理待确认状态，再执行预演", {}
+            # Reserve the real subscription ID to prevent a scheduled/manual run
+            # from overlapping the read-only preview while network listings load.
+            self.running_ids.add(sub_id)
+            preview_sub = deepcopy(original)
+            preview_sub["id"] = "__moviesync_preview_" + uuid.uuid4().hex
+            preview_sub["status"] = "waiting"
+            preview_sub["phase"] = "preview"
+            preview_sub["_run_diagnostics"] = self._new_run_diagnostics()
+            preview_sub["_run_diagnostics"]["started_at"] = time.time()
+
+        preview_plan: dict = {}
+        try:
+            ok, result_message = self._check(
+                preview_sub,
+                preview=True,
+                preview_result=preview_plan,
+            )
+            if "summary" not in preview_plan:
+                self._populate_preview_plan(
+                    preview_plan,
+                    preview_sub,
+                    scan_complete=bool(
+                        (preview_sub.get("_run_diagnostics") or {}).get("source_scan_complete", False)
+                    ),
+                    message=(
+                        "扫描与筛选已完成"
+                        if ok
+                        else "预演过程中遇到问题；请查看安全提示或服务日志"
+                    ),
+                )
+            preview_plan["check_success"] = bool(ok)
+            # Do not expose underlying provider exceptions through the preview API.
+            preview_plan["message"] = (
+                "扫描与筛选已完成"
+                if ok
+                else "预演过程中遇到问题；请查看安全提示或服务日志"
+            )
+            preview_plan["pending_save_uncertain"] = False
+            return True, "预演完成；此次只读取并分析文件，不会创建目录或转存", preview_plan
+        except Exception:
+            self.logger.exception("智能追剧预演失败: sub_id=%s", sub_id)
+            return False, "预演失败，请检查资源来源/存储卡片状态或查看服务日志", preview_plan
+        finally:
+            with self.lock:
+                self.running_ids.discard(sub_id)
+
     def _check(
         self,
         sub: dict,
+        *,
+        preview: bool = False,
+        preview_result: dict | None = None,
     ) -> tuple[bool, str]:
         # Every subscription path must initialize diagnostics before doing work.
         # The channel-based path adds detailed counters; legacy/direct-share
@@ -832,7 +999,11 @@ class SubscriptionManager:
         # and can queue every video in a share. Always use the guarded channel path when
         # both channel identity fields are present, regardless of the legacy mode value.
         if sub.get("source_id") and sub.get("channel"):
-            return self._check_channel_subscription(sub)
+            return self._check_channel_subscription(
+                sub,
+                preview=preview,
+                preview_result=preview_result,
+            )
 
         resource = {
             **({"pwd_id": str(sub.get("pwd_id") or "").strip()} if sub.get("pwd_id") else {}),
@@ -1151,6 +1322,37 @@ class SubscriptionManager:
 
         diagnostics["queued_files"] = len(selected)
         self._persist_diagnostics_snapshot(sub, phase="scan")
+        if preview:
+            files_by_fid = {
+                str(item.get("fid") or "").strip(): item
+                for item in files
+                if isinstance(item, dict) and str(item.get("fid") or "").strip()
+            }
+            queued_preview = []
+            for queued in selected:
+                fid = str(queued.get("fid") or "").strip()
+                item = files_by_fid.get(fid, {})
+                file_name = str(item.get("file_name") or item.get("name") or "").strip()
+                season, episode = _parse_source_episode(
+                    self.resource_sources,
+                    str(sub.get("source_id") or "").strip(),
+                    file_name,
+                ) if file_name else (None, None)
+                queued_preview.append({
+                    "fid": fid,
+                    "file": file_name or fid,
+                    "resource_id": resource.get("resource_id") or resource.get("pwd_id") or "",
+                    "season": season,
+                    "episode": episode,
+                })
+            self._populate_preview_plan(
+                preview_result if preview_result is not None else {},
+                sub,
+                queued_preview,
+                scan_complete=bool(diagnostics.get("source_scan_complete", False)),
+                message=f"预计转存 {len(selected)} 个文件",
+            )
+            return True, f"预演完成，预计转存 {len(selected)} 个文件"
         if not selected:
             if diagnostics["invalid_file_entries"] or diagnostics["missing_file_id"]:
                 return self._finish(
@@ -1268,7 +1470,13 @@ class SubscriptionManager:
             if changed:
                 self.store.write(subscriptions)
 
-    def _check_channel_subscription(self, sub: dict) -> tuple[bool, str]:
+    def _check_channel_subscription(
+        self,
+        sub: dict,
+        *,
+        preview: bool = False,
+        preview_result: dict | None = None,
+    ) -> tuple[bool, str]:
         source_id = str(sub.get("source_id") or "").strip()
         channel = str(sub.get("channel") or "").strip()
         title = str(sub.get("title") or "").strip()
@@ -1422,6 +1630,15 @@ class SubscriptionManager:
         diagnostics["unique_shares"] = len(sources)
 
         if not sources:
+            if preview:
+                plan = preview_result if preview_result is not None else {}
+                self._populate_preview_plan(
+                    plan,
+                    sub,
+                    scan_complete=bool(scan_complete and (history_complete or sub.get("channel_history_complete"))),
+                    message="频道暂未发现新资源",
+                )
+                return True, "预演完成：频道暂未发现新资源"
             if scan_complete:
                 self._save_channel_scan_cursor(sub, scan_cursor)
             self._save_channel_history_cursor(sub, history_cursor, history_complete)
@@ -1917,7 +2134,15 @@ class SubscriptionManager:
                     "files": [],
                     "keys": [],
                     "episode_sources": {},
+                    "preview_files": [],
                 })["files"].append({"fid": fid})
+                grouped[group_key]["preview_files"].append({
+                    "fid": fid,
+                    "file": file_name or fid,
+                    "resource_id": resource_id,
+                    "season": season,
+                    "episode": episode,
+                })
                 grouped[group_key]["keys"].append(key)
                 if share_diag is not None:
                     share_diag["queued_files"] += 1
@@ -1936,6 +2161,14 @@ class SubscriptionManager:
                     )
 
         if not grouped:
+            if preview:
+                self._populate_preview_plan(
+                    preview_result if preview_result is not None else {},
+                    sub,
+                    scan_complete=bool(scan_complete and (history_complete or sub.get("channel_history_complete"))),
+                    message="本次未发现符合追更条件的新文件",
+                )
+                return True, "预演完成：本次未发现符合追更条件的新文件"
             if resolution_errors:
                 return self._finish(
                     sub,
@@ -1957,6 +2190,24 @@ class SubscriptionManager:
                 self._save_channel_scan_cursor(sub, scan_cursor)
             self._save_channel_history_cursor(sub, history_cursor, history_complete)
             return self._finish(sub, True, f"《{title}》暂无新更新", success_keys=[])
+
+        if preview:
+            diagnostics["source_scan_complete"] = bool(
+                scan_complete and (history_complete or sub.get("channel_history_complete"))
+            )
+            queued_preview = [
+                item
+                for group in grouped.values()
+                for item in group.get("preview_files", [])
+            ]
+            self._populate_preview_plan(
+                preview_result if preview_result is not None else {},
+                sub,
+                queued_preview,
+                scan_complete=diagnostics["source_scan_complete"],
+                message=f"预计转存 {diagnostics['queued_files']} 个文件",
+            )
+            return True, f"预演完成，预计转存 {diagnostics['queued_files']} 个文件"
 
         target_fid = _normalize_fid(sub.get("target_fid"))
         # Folder IDs belong to a specific storage target. A channel can contain

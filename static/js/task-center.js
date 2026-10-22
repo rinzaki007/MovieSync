@@ -368,7 +368,7 @@ function renderTasks() {
                 '<div class="flex shrink-0 flex-wrap content-start justify-end gap-2">' +
                 '<button data-action="detail" data-id="' + escapeTask(task.id) + '" class="rounded-xl border border-slate-700/70 bg-slate-950/55 px-3 py-2 text-[11px] text-slate-300 hover:bg-slate-800/80"><i class="fa-solid fa-circle-info mr-1"></i>详情</button>' +
                 (task.type === 'subscription' && task.pending_save_uncertain ? '<button data-action="confirm-saved" data-id="' + escapeTask(task.subscription_id) + '" class="rounded-xl border border-emerald-800/70 bg-emerald-950/35 px-3 py-2 text-[11px] text-emerald-300 hover:bg-emerald-900/60">确认已转存</button><button data-action="retry-pending" data-id="' + escapeTask(task.subscription_id) + '" class="rounded-xl border border-amber-800/70 bg-amber-950/35 px-3 py-2 text-[11px] text-amber-300 hover:bg-amber-900/60">确认未转存，重试</button>' : '') +
-                (task.type === 'subscription' && !task.pending_save_uncertain ? '<button data-action="run-sub" data-id="' + escapeTask(task.subscription_id) + '" class="rounded-xl bg-purple-600/90 px-3 py-2 text-[11px] font-medium text-white shadow-lg shadow-purple-600/15 hover:bg-purple-500"><i class="fa-solid fa-play mr-1"></i>立即检查</button>' : '') +
+                (task.type === 'subscription' && !task.pending_save_uncertain && task.status !== 'running' ? '<button data-action="preview-sub" data-id="' + escapeTask(task.subscription_id) + '" class="rounded-xl border border-sky-800/70 bg-sky-950/35 px-3 py-2 text-[11px] text-sky-300 hover:bg-sky-900/50"><i class="fa-solid fa-eye mr-1"></i>执行预演</button><button data-action="run-sub" data-id="' + escapeTask(task.subscription_id) + '" class="rounded-xl bg-purple-600/90 px-3 py-2 text-[11px] font-medium text-white shadow-lg shadow-purple-600/15 hover:bg-purple-500"><i class="fa-solid fa-play mr-1"></i>立即检查</button>' : '') +
                 ((task.type === 'subscription' || task.status === 'success' || task.status === 'failed' || task.status === 'error') ? '<button data-action="delete" data-id="' + escapeTask(task.id) + '" class="rounded-xl border border-slate-700/70 bg-slate-950/55 px-3 py-2 text-[11px] text-slate-400 hover:bg-slate-800 hover:text-rose-300"><i class="fa-solid fa-trash mr-1"></i>删除</button>' : '') +
                 (retryable ? '<button data-action="retry" data-id="' + escapeTask(task.id) + '" class="rounded-xl border border-amber-800/70 bg-amber-950/35 px-3 py-2 text-[11px] text-amber-300 hover:bg-amber-900/60"><i class="fa-solid fa-rotate-right mr-1"></i>失败重试</button>' : '') +
                 '</div></div>' + renderTransferActions(task);
@@ -378,6 +378,7 @@ function renderTasks() {
 
     document.querySelectorAll('[data-action="detail"]').forEach(btn => btn.onclick = () => openTaskDetail(btn.dataset.id));
     document.querySelectorAll('[data-action="run-sub"]').forEach(btn => btn.onclick = () => runSubscription(btn.dataset.id));
+    document.querySelectorAll('[data-action="preview-sub"]').forEach(btn => btn.onclick = () => previewSubscription(btn.dataset.id));
     document.querySelectorAll('[data-action="confirm-saved"]').forEach(btn => btn.onclick = () => resolvePendingSubscription(btn.dataset.id, 'saved'));
     document.querySelectorAll('[data-action="retry-pending"]').forEach(btn => btn.onclick = () => resolvePendingSubscription(btn.dataset.id, 'not_saved'));
     document.querySelectorAll('[data-action="retry"]').forEach(btn => btn.onclick = () => retryTask(btn.dataset.id));
@@ -431,6 +432,55 @@ function renderTaskProgressBar(task) {
         '<span class="text-slate-400">' + escapeTask(task.phase_label || task.message || '等待执行') + '</span>' +
         '<span class="shrink-0 text-slate-600">' + (task.status === 'success' ? '已完成' : failed ? '执行失败' : task.status === 'running' ? '处理中' : '等待执行') + '</span>' +
         '</div></div>';
+}
+
+function renderSubscriptionPreview(task) {
+    if (task.type !== 'subscription' || !task.preview_plan || typeof task.preview_plan !== 'object') return '';
+    const plan = task.preview_plan;
+    const summary = plan.summary || {};
+    const metricList = [
+        ['预计转存', plan.queued_files ?? summary.queued_files],
+        ['扫描文件', summary.files_scanned],
+        ['视频文件', summary.video_files],
+        ['已保存跳过', summary.already_saved],
+        ['已追踪跳过', summary.already_tracked],
+        ['早于起点', summary.filtered_old],
+        ['重复集', summary.duplicate_episodes],
+        ['无法识别', summary.unrecognized],
+        ['缺少文件 ID', summary.missing_file_id],
+        ['解析失败', summary.resolution_failures]
+    ];
+    const items = Array.isArray(plan.items) ? plan.items : [];
+    const statusClass = status => status === 'queued'
+        ? 'text-emerald-300 border-emerald-900/70 bg-emerald-950/20'
+        : status === 'unrecognized'
+            ? 'text-amber-300 border-amber-900/70 bg-amber-950/20'
+            : status === 'warning'
+                ? 'text-rose-300 border-rose-900/70 bg-rose-950/20'
+                : 'text-slate-300 border-slate-800 bg-slate-900/50';
+    const itemsHtml = items.length
+        ? '<div class="mt-3 max-h-80 space-y-2 overflow-y-auto">' + items.slice(0, 80).map(item =>
+            '<div class="flex items-start gap-2 rounded-lg border border-slate-800 bg-slate-900/50 p-2.5">' +
+                '<span class="shrink-0 rounded-md border px-2 py-1 text-[10px] ' + statusClass(item.status) + '">' + escapeTask(item.label || '说明') + '</span>' +
+                '<div class="min-w-0 flex-1"><div class="break-all text-[11px] text-slate-200">' + escapeTask(item.file || '未知文件') + '</div>' +
+                '<div class="mt-1 break-words text-[10px] leading-4 text-slate-500">' + escapeTask(item.reason || (item.status === 'queued' ? '符合当前追更条件' : '扫描提示')) + '</div></div>' +
+            '</div>'
+        ).join('') + '</div>'
+        : '<div class="mt-3 rounded-lg border border-slate-800 bg-slate-900/50 p-4 text-[11px] text-slate-500">本次没有可展示的文件明细。</div>';
+    const warning = plan.incomplete
+        ? '<div class="mt-3 rounded-lg border border-amber-900/60 bg-amber-950/20 p-3 text-[11px] leading-5 text-amber-200">本次扫描存在不完整或异常信号，预演结果可能漏掉部分资源。建议先检查下方的无法识别、解析失败和来源异常信息，再决定是否执行。</div>'
+        : '<div class="mt-3 text-[11px] text-emerald-300">当前扫描未发现明显的不完整信号。预演只分析，不会创建目录、转存文件或更新追剧记录。</div>';
+    return '<section class="rounded-xl border border-sky-900/60 bg-slate-950 p-4">' +
+        '<div class="flex flex-wrap items-center justify-between gap-2"><div><div class="text-xs font-semibold text-slate-100"><i class="fa-solid fa-eye mr-1 text-sky-300"></i>执行预演</div><div class="mt-1 text-[10px] text-slate-500">只读检查 · 不会创建目录或转存</div></div>' +
+        '<span class="rounded-full border px-2 py-1 text-[10px] ' + (plan.incomplete ? 'border-amber-900 text-amber-300' : 'border-emerald-900 text-emerald-300') + '">' + (plan.scan_complete ? '扫描完整' : '扫描完整性未确认') + '</span></div>' +
+        '<div class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">' + metricList.map(([label, value]) =>
+            '<div class="rounded-lg border border-slate-800 bg-slate-900/70 p-2.5"><div class="text-[10px] text-slate-500">' + label + '</div><div class="mt-1 text-lg font-semibold text-slate-100">' + Number(value || 0) + '</div></div>'
+        ).join('') + '</div>' +
+        warning +
+        '<div class="mt-4 flex flex-wrap items-center justify-between gap-2"><div class="text-[11px] font-semibold text-slate-200">文件判断明细</div><div class="text-[10px] text-slate-500">显示 ' + Math.min(items.length, 80) + ' / ' + items.length + ' 条' + (plan.items_truncated ? '（服务端明细已截断）' : '') + '</div></div>' +
+        itemsHtml +
+        (plan.items_truncated || items.length > 80 ? '<div class="mt-2 text-[10px] text-slate-500">明细数量较多，仅显示前 80 条，汇总计数仍按完整扫描计算。</div>' : '') +
+        '</section>';
 }
 
 function renderSubscriptionDiagnostics(task) {
@@ -578,6 +628,7 @@ function renderTaskDetail(task) {
         '<div class="rounded-xl border border-slate-800 bg-slate-950 p-4"><div class="text-[10px] text-slate-500">执行统计</div><div class="mt-2 space-y-1 text-[11px] text-slate-300"><div>成功：' + Number(task.success_count || 0) + '</div><div>跳过：' + Number(task.skipped_count || 0) + '</div><div>失败：' + Number(task.failed_count || 0) + '</div></div></div>' +
         '</div>' +
         '<div class="rounded-xl border border-slate-800 bg-slate-950 p-4"><div class="text-xs font-semibold text-slate-200">当前状态</div><div class="mt-2 text-[11px] leading-5 ' + (task.status === 'failed' ? 'text-rose-400' : 'text-slate-400') + '">' + escapeTask(task.message || '') + '</div></div>' +
+        renderSubscriptionPreview(task) +
         renderSubscriptionDiagnostics(task) +
         (task.type === 'subscription' ? '<section class="rounded-xl border border-slate-800 bg-slate-950 p-4"><div class="text-xs font-semibold text-slate-200">追剧任务参数</div><div class="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">' +
             [['资源来源卡片', task.source_id], ['来源频道', task.channel_name || task.channel], ['原分享 ID', task.resource_id], ['分享类型', task.resource_type], ['存储卡片', task.storage_target_id], ['保存目录 FID', task.target_fid || '0'], ['追更模式', task.tracking_mode === 'all' ? '从选中集开始追更后续集数' : (task.tracking_mode || '旧版模式')], ['起始季 / 集', (Number(task.start_season || 0) ? '第 ' + Number(task.start_season) + ' 季 · ' : '') + (Number(task.start_ep || 0) ? '第 ' + Number(task.start_ep) + ' 集' : '未指定')], ['检查频率', '每 ' + Number(task.interval_hours || 6) + ' 小时'], ['下次检查', task.next_run_at ? new Date(Number(task.next_run_at) * 1000).toLocaleString() : '等待调度']]
@@ -1168,6 +1219,27 @@ async function resolvePendingSubscription(id, action) {
         taskToast(err.message || '处理待确认转存失败');
     } finally {
         await loadTasks();
+    }
+}
+
+async function previewSubscription(id) {
+    try {
+        const resp = await apiFetchTask('/api/subscriptions/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id })
+        });
+        const res = await resp.json();
+        if (!res.success) throw new Error(res.message || '执行预演失败');
+        const task = tasks.find(item =>
+            item.type === 'subscription' && String(item.subscription_id) === String(id)
+        );
+        if (!task) throw new Error('任务列表已更新，请刷新后重新预演');
+        renderTaskDetail({ ...task, preview_plan: res.plan });
+        document.getElementById('task-detail-drawer').classList.remove('hidden');
+        taskToast(res.message || '预演完成');
+    } catch (err) {
+        taskToast(err.message || '执行预演失败');
     }
 }
 

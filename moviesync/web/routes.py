@@ -1826,6 +1826,24 @@ def run_subscription_now():
     )
 
 
+@api.post("/subscriptions/preview")
+@require_csrf
+def preview_subscription_now():
+    data = request.get_json(silent=True) or {}
+    sub_id = str(data.get("id") or "").strip()
+    if not sub_id:
+        return _json_error("未提供订阅 ID")
+
+    success, message, plan = _services()["subscriptions"].preview_subscription_now(sub_id)
+    if not success:
+        return _json_error(message, 409 if "正在执行" in message or "待确认" in message else 404)
+    return jsonify({
+        "success": True,
+        "message": message,
+        "plan": plan,
+    })
+
+
 @api.post("/subscriptions/resolve-pending")
 @require_csrf
 def resolve_pending_subscription():
