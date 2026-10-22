@@ -147,7 +147,10 @@ def test_pansou_is_seeded_as_a_removable_file_card(tmp_path):
     assert services["card_registry"].get("pansou") is None
 
     restarted = create_app({"MOVIESYNC_DATA_DIR": str(tmp_path)}, start_scheduler=False)
-    assert restarted.extensions["moviesync"]["card_registry"].get("pansou") is Nonedef test_remaining_builtin_cards_are_independent_single_file_plugins(tmp_path):
+    assert restarted.extensions["moviesync"]["card_registry"].get("pansou") is None
+
+
+def test_remaining_builtin_cards_are_independent_single_file_plugins(tmp_path):
     from moviesync.app import create_app
 
     app = create_app({"MOVIESYNC_DATA_DIR": str(tmp_path)}, start_scheduler=False)
