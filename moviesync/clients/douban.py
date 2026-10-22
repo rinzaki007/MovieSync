@@ -367,7 +367,11 @@ class DoubanClient:
             cover = cover_node.get("src") or cover_node.get("data-src") or cover_node.get("content") or ""
         cover = self._normalize_cover_url(cover or schema_text("image"))
 
-        rating_node = soup.select_one('strong[property="v:average"]') or soup.select_one('[itemprop="ratingValue"]')
+        rating_node = (
+            soup.select_one('strong[property="v:average"]')
+            or soup.select_one('[property="v:average"]')
+            or soup.select_one('[itemprop="ratingValue"]')
+        )
         rating = (rating_node.get_text(" ", strip=True) if rating_node else "") or schema_text("ratingValue")
         summary_node = soup.select_one('span[property="v:summary"]') or soup.select_one("#link-report .all") or soup.select_one("#link-report")
         summary = summary_node.get_text(" ", strip=True) if summary_node else ""
