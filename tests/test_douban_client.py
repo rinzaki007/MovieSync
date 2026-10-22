@@ -78,7 +78,7 @@ def test_douban_detail_extracts_subject_fields():
             assert url == "https://movie.douban.com/subject/12345/"
             return HtmlResponse()
 
-    client.http.session = FakeSession()
+    client.http = type("FakeHttpWithSession", (), {"session": FakeSession()})()
     detail = client.get_detail("12345")
     assert detail["id"] == "12345"
     assert detail["title"] == "示例电影"
