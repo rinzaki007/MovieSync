@@ -2925,3 +2925,40 @@ def test_channel_subscription_preview_reuses_follow_selection_without_side_effec
     assert "last_diagnostics" not in saved
     assert saved["saved_episodes"] == []
     manager.shutdown()
+
+
+
+def test_subscription_preview_redacts_provider_error_details(tmp_path):
+    class SensitiveErrorStorage(DynamicStorageTargets):
+        def resolve_resource(self, resource, target_id=None):
+            return {
+                "target_id": target_id or "demo-storage",
+                "files": [],
+                "token": None,
+                "error": "cookie=SUPER_SECRET_TOKEN",
+            }
+
+    storage = SensitiveErrorStorage()
+    manager = SubscriptionManager(
+        tmp_path / "subscriptions-preview-sensitive-error.json",
+        storage,
+        FakeResourceSources(),
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-sensitive",
+        storage_target_id="demo-storage",
+    )
+
+    preview_ok, message, plan = manager.preview_subscription_now(sub["id"])
+
+    assert preview_ok is True
+    assert "SUPER_SECRET_TOKEN" not in message
+    assert "SUPER_SECRET_TOKEN" not in str(plan)
+    assert "服务日志" in str(plan)
+    assert storage.transfers == []
+    saved = manager.get_subscriptions()[0]
+    assert saved["status"] == "waiting"
+    assert "last_diagnostics" not in saved
+    manager.shutdown()
