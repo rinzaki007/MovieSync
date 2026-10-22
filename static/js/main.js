@@ -37,6 +37,17 @@ function startCandidateSearchProgress(requestId) {
     candidateSearchProgressTimer = window.setInterval(update, 1000);
 }
 
+function assertSourceSearchSucceeded(result, title) {
+    const page = result?.candidate_pages?.[title] || {};
+    const diagnostics = Array.isArray(page.source_search_diagnostics)
+        ? page.source_search_diagnostics
+        : [];
+    const failed = diagnostics.find(item => item && item.status === 'error');
+    if (failed) {
+        throw new Error(failed.message || '资源来源内部搜索失败，请查看服务日志');
+    }
+}
+
 function stopCandidateSearchProgress(requestId) {
     if (requestId !== candidateSearchRequestSeq) return;
     if (candidateSearchProgressTimer) {
@@ -824,6 +835,7 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
                         while (hasMore && requestId === candidateSearchRequestSeq) {
                             const result = await requestPage(offset, [source.id]);
                             if (requestId !== candidateSearchRequestSeq) return;
+                            assertSourceSearchSucceeded(result, title);
                             if (!firstSourceResponse) {
                                 firstSourceResponse = true;
                                 stopCandidateSearchProgress(requestId);
@@ -864,6 +876,7 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
                                 while (pollHasMore && requestId === candidateSearchRequestSeq) {
                                     const result = await requestPage(pollOffset, [source.id]);
                                     if (requestId !== candidateSearchRequestSeq) return;
+                                    assertSourceSearchSucceeded(result, title);
                                     const before = (candidatesMap[title] || []).length;
                                     mergePage(result.candidates_map || {});
                                     const pageInfo = result.candidate_pages?.[title] || {};
@@ -908,7 +921,10 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
                     () => worker()
                 ));
                 if (requestId !== candidateSearchRequestSeq) return;
-                candidateSearchProgressText = `搜索完成：查询 ${completedSources}/${sources.length} 个资源来源，共找到 ${(candidatesMap[title] || []).length} 个可用资源。${failedSources ? ` ${failedSources} 个来源失败。` : ''}`;
+                const failureDetails = sourceFailures.length
+                    ? `失败来源：${sourceFailures.slice(0, 3).join('；')}${sourceFailures.length > 3 ? `；另有 ${sourceFailures.length - 3} 个来源失败` : ''}`
+                    : '';
+                candidateSearchProgressText = `搜索完成：查询 ${completedSources}/${sources.length} 个资源来源，共找到 ${(candidatesMap[title] || []).length} 个可用资源。${failedSources ? ` ${failedSources} 个来源失败。 ${failureDetails}` : ''}`;
                 refreshModalPreservingSelection();
                 if (sourceFailures.length) console.debug('部分资源来源搜索失败:', sourceFailures);
                 if (!(candidatesMap[title] || []).length) {
