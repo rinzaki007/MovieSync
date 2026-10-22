@@ -641,19 +641,53 @@ class SearchService:
             reverse=True,
         )
         safe_offset = max(0, int(offset or 0))
+        safe_limit: int | None = None
         if scan_limit is not None:
             safe_limit = max(1, min(20, int(scan_limit)))
             page_sources = discovered[safe_offset : safe_offset + safe_limit]
         else:
             page_sources = discovered[safe_offset:]
+
+        media_type_for_scan = (
+            str(movie.get("media_type") or "").strip().lower()
+            if isinstance(movie, dict)
+            else ""
+        )
+        media_tag_for_scan = str(movie.get("tag") or "").strip() if isinstance(movie, dict) else ""
+        is_series_query_for_scan = (
+            media_type_for_scan in {
+                "tv", "tv_show", "series", "anime", "variety", "documentary", "short_drama"
+            }
+            or media_tag_for_scan in {"电视剧", "剧集", "综艺", "动漫", "动画", "纪录片", "短剧"}
+        )
+        # PanSou's first results can be broad: if the initial page consists only of
+        # unrelated or unresolvable shares, an empty page must not prevent the user
+        # from ever reaching a valid match. Expand only empty first pages for series
+        # searches, and keep a hard cap so ordinary searches retain their fast path.
+        allow_empty_page_expansion = bool(
+            safe_limit is not None
+            and safe_offset == 0
+            and is_series_query_for_scan
+            and any(
+                str(source.get("source_id") or "").strip().lower() == "pansou"
+                for source in discovered
+            )
+        )
+        auto_scan_end = (
+            min(total_discovered, safe_offset + min(50, safe_limit * 5))
+            if allow_empty_page_expansion and safe_limit is not None
+            else safe_offset + len(page_sources)
+        )
         candidates: list[dict] = []
         seen_resource_keys: set[tuple[str, str]] = set()
 
         # 分享解析涉及网盘网络请求，按小批次并发执行。批次内仍按原始顺序
         # 消费结果，保证候选排序稳定，并在达到上限后立即停止后续请求。
         batch_size = 10
+        scanned_count = 0
+        batch_start = 0
         with ThreadPoolExecutor(max_workers=batch_size) as executor:
-            for batch_start in range(0, len(page_sources), batch_size):
+            while batch_start < len(page_sources):
                 batch = page_sources[batch_start : batch_start + batch_size]
 
                 def resolve_source(source):
@@ -893,10 +927,29 @@ class SearchService:
                             + f" | {_format_size(total_size)}"
                         ),
                     })
+                batch_start += len(batch)
+                scanned_count += len(batch)
                 if len(candidates) >= MAX_CANDIDATES_PER_MOVIE:
                     break
+                if (
+                    allow_empty_page_expansion
+                    and not candidates
+                    and batch_start >= len(page_sources)
+                    and safe_offset + len(page_sources) < auto_scan_end
+                ):
+                    if batch_start == safe_limit:
+                        self.logger.info(
+                            "PanSou 剧集首批扫描 %s 条未形成候选，继续扩展检索（最多扫描 %s 条）",
+                            safe_limit,
+                            auto_scan_end - safe_offset,
+                        )
+                    expanded_end = min(
+                        auto_scan_end,
+                        safe_offset + len(page_sources) + safe_limit,
+                    )
+                    page_sources = discovered[safe_offset:expanded_end]
         if page_info is not None:
-            consumed = min(len(page_sources), max(0, total_discovered - safe_offset))
+            consumed = min(scanned_count, max(0, total_discovered - safe_offset))
             page_info.update({
                 "next_offset": safe_offset + consumed,
                 "has_more": safe_offset + consumed < total_discovered,
@@ -917,7 +970,7 @@ class SearchService:
             "《%s》检索完成，有效候选=%s（已扫描 %s/%s 条）",
             title,
             len(candidates),
-            min(total_discovered, safe_offset + len(page_sources)),
+            min(total_discovered, safe_offset + scanned_count),
             total_discovered,
         )
         return candidates
