@@ -658,7 +658,10 @@ def test_generic_card_form_has_channel_chips_and_quark_textarea():
     assert "data-card-add-channel" in admin
     assert "data-card-remove-channel" in admin
     assert 'type === "textarea"' in admin
-    assert 'for key in ("type", "editor", "item_fields", "placeholder", "description", "label")' in plugin_managerdef test_filename_recognition_rules_are_global_and_share_the_generic_form_contract():
+    assert 'for key in ("type", "editor", "item_fields", "placeholder", "description", "label")' in plugin_manager
+
+
+def test_filename_recognition_rules_are_global_and_share_the_generic_form_contract():
     from card_templates.filename_recognition import FilenameRecognitionCard
     from pathlib import Path
 
