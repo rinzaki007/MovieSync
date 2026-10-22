@@ -6,7 +6,10 @@
 from __future__ import annotations
 
 import json
+import re
 from urllib.parse import quote, urlsplit
+
+from bs4 import BeautifulSoup, Tag
 
 from .http import ApiError, HttpClient
 
@@ -221,6 +224,178 @@ class DoubanClient:
                     return candidate
         return ""
 
+    @staticmethod
+    def _detail_subject_id(value: object) -> str:
+        """Accept only a numeric subject ID or a canonical Douban subject URL."""
+        raw = str(value or "").strip()
+        if re.fullmatch(r"\d{1,16}", raw):
+            return raw
+        try:
+            parsed = urlsplit(raw)
+        except ValueError:
+            return ""
+        if (parsed.hostname or "").lower() not in {"movie.douban.com", "m.douban.com"}:
+            return ""
+        match = re.fullmatch(r"/subject/(\d+)/?", parsed.path)
+        return match.group(1) if match else ""
+
+    @staticmethod
+    def _schema_people(value: object) -> list[str]:
+        if isinstance(value, dict):
+            value = [value]
+        if not isinstance(value, list):
+            return []
+        names = []
+        for person in value:
+            name = person.get("name") if isinstance(person, dict) else person
+            name = str(name or "").strip()
+            if name and name not in names:
+                names.append(name)
+        return names
+
+    @staticmethod
+    def _schema_objects(value: object) -> list[dict]:
+        if isinstance(value, dict):
+            return [value]
+        return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+
+    def get_detail(self, item_id: str) -> dict | None:
+        """Fetch public subject details from the Douban subject page.
+
+        The listing endpoints do not consistently include credits. The public
+        subject HTML provides JSON-LD plus stable info/summary markup; no API key
+        or third-party metadata service is required.
+        """
+        subject_id = self._detail_subject_id(item_id)
+        if not subject_id:
+            return None
+
+        url = f"https://movie.douban.com/subject/{subject_id}/"
+        try:
+            response = self.http.session.get(url, timeout=10)
+        except Exception as exc:
+            raise ApiError(f"获取豆瓣影视详情失败：{exc}") from exc
+        if response.status_code != 200:
+            return None
+
+        soup = BeautifulSoup(response.text, "html.parser")
+        schema = {}
+        for script in soup.select('script[type="application/ld+json"]'):
+            try:
+                payload = json.loads(script.string or script.get_text())
+            except (TypeError, ValueError):
+                continue
+            candidates = self._schema_objects(payload)
+            if isinstance(payload, dict) and isinstance(payload.get("@graph"), list):
+                candidates.extend(self._schema_objects(payload.get("@graph")))
+            for candidate in candidates:
+                kind = candidate.get("@type", "")
+                kinds = kind if isinstance(kind, list) else [kind]
+                if any(str(value).lower() in {"movie", "tvseries", "creativework"} for value in kinds):
+                    schema = candidate
+                    break
+            if schema:
+                break
+
+        def schema_text(key: str) -> str:
+            value = schema.get(key)
+            if isinstance(value, dict):
+                value = value.get("name") or value.get("value")
+            if isinstance(value, list):
+                value = "、".join(self._schema_people(value))
+            return str(value or "").strip()
+
+        def info_values(label: str) -> list[str]:
+            target = None
+            for element in soup.select("#info .pl"):
+                current = element.get_text(" ", strip=True).rstrip(":：")
+                if current == label:
+                    target = element
+                    break
+            if target is None:
+                return []
+            values = []
+            for sibling in target.next_siblings:
+                if isinstance(sibling, Tag) and sibling.name == "span" and "pl" in (sibling.get("class") or []):
+                    break
+                if isinstance(sibling, Tag):
+                    text = sibling.get_text(" ", strip=True)
+                    if sibling.name == "br":
+                        continue
+                else:
+                    text = str(sibling).strip()
+                text = re.sub(r"\s+", " ", text).strip(" :：\n\t")
+                if text and text not in values:
+                    values.append(text)
+            return values
+
+        def people(label: str, schema_key: str) -> list[str]:
+            values = info_values(label)
+            names = []
+            for value in values:
+                for part in re.split(r"\s*/\s*|、|，", value):
+                    part = part.strip()
+                    if part and part not in names:
+                        names.append(part)
+            return names or self._schema_people(schema.get(schema_key))
+
+        title_node = soup.select_one('#content h1 span[property="v:itemreviewed"]') or soup.select_one("#content h1 span")
+        title = (title_node.get_text(" ", strip=True) if title_node else "") or schema_text("name")
+        title = re.sub(r"\s*\(\d{4}\)\s*$", "", title).strip()
+        cover_node = soup.select_one("#mainpic img") or soup.select_one('meta[property="og:image"]')
+        cover = ""
+        if cover_node:
+            cover = cover_node.get("src") or cover_node.get("data-src") or cover_node.get("content") or ""
+        cover = self._normalize_cover_url(cover or schema_text("image"))
+
+        rating_node = soup.select_one('strong[property="v:average"]') or soup.select_one('[itemprop="ratingValue"]')
+        rating = (rating_node.get_text(" ", strip=True) if rating_node else "") or schema_text("ratingValue")
+        summary_node = soup.select_one('span[property="v:summary"]') or soup.select_one("#link-report .all") or soup.select_one("#link-report")
+        summary = summary_node.get_text(" ", strip=True) if summary_node else ""
+        summary = re.sub(r"\s+", " ", summary).strip() or schema_text("description")
+
+        genres = []
+        for node in soup.select('span[property="v:genre"]'):
+            value = node.get_text(" ", strip=True)
+            if value and value not in genres:
+                genres.append(value)
+        if not genres:
+            raw_genres = schema.get("genre", [])
+            genres = [str(value).strip() for value in (raw_genres if isinstance(raw_genres, list) else [raw_genres]) if str(value).strip()]
+
+        release_dates = [node.get_text(" ", strip=True) for node in soup.select('span[property="v:initialReleaseDate"]') if node.get_text(" ", strip=True)]
+        year_match = re.search(r"\b(19|20)\d{2}\b", " ".join(release_dates) or schema_text("datePublished"))
+        year = year_match.group(0) if year_match else ""
+        info_year = info_values("上映日期")
+        if not year and info_year:
+            match = re.search(r"\b(19|20)\d{2}\b", " ".join(info_year))
+            year = match.group(0) if match else ""
+
+        directors = people("导演", "director")
+        writers = people("编剧", "creator")
+        casts = people("主演", "actor")
+        countries = info_values("制片国家/地区")
+        runtime = info_values("片长")
+        original_title = info_values("又名")
+
+        return {
+            "id": subject_id,
+            "title": title,
+            "cover": cover,
+            "rate": str(rating or "").strip() or "暂无",
+            "year": year,
+            "summary": summary,
+            "genres": genres,
+            "directors": directors,
+            "writers": writers,
+            "casts": casts,
+            "countries": countries,
+            "release_dates": release_dates or info_year,
+            "runtime": runtime,
+            "original_title": original_title,
+            "url": url,
+        }
+
     def search(self, query: str) -> list[dict]:
         query = str(query or "").strip()
         if not query:
@@ -241,6 +416,7 @@ class DoubanClient:
 
         return [
             {
+                "id": str(item.get("id")),
                 "title": item.get("title"),
                 "cover": self._extract_cover_url(item.get("img", "")),
                 "rate": item.get("rate") or item.get("rating") or "暂无",
@@ -340,7 +516,9 @@ class DoubanClient:
         if not isinstance(genres, list):
             genres = []
 
+        subject_id = str(subject_id or "")
         return {
+            "id": subject_id,
             "title": title,
             "cover": DoubanClient._normalize_cover_url(cover),
             "rate": str(rating),
