@@ -1,5 +1,4 @@
 from card_templates.douban import DoubanMetadataCard
-from card_templates.telegram import TelegramResourceSource
 from moviesync.cards import CardRegistry
 
 
@@ -18,13 +17,26 @@ def test_filename_recognition_admin_shows_builtin_catalog_and_preview():
 
 
 def test_card_management_uses_registry_manifests():
+    from moviesync.cards import CardManifest, ResourceSourceCard
+
+    class CustomSource(ResourceSourceCard):
+        manifest = CardManifest(
+            id="custom-source",
+            name="Custom Source",
+            type="resource_source",
+            capabilities=("resource.search",),
+        )
+
+        def search(self, movie, config):
+            return []
+
     registry = CardRegistry()
     registry.register(DoubanMetadataCard(object()))
-    registry.register(TelegramResourceSource(object()))
+    registry.register(CustomSource())
 
     cards = registry.manifests()
 
-    assert {item["id"] for item in cards} == {"douban", "telegram"}
+    assert {item["id"] for item in cards} == {"douban", "custom-source"}
     assert {item["type"] for item in cards} == {"metadata_provider", "resource_source"}
 
 
@@ -118,8 +130,6 @@ def test_generic_builtin_card_config_rejects_invalid_values_without_writing(tmp_
 
     config_store = services["config"]
     original_quark = config_store.get_quark_config()
-    original_telegram = config_store.get_telegram_config()
-
     response = client.post(
         "/api/cards/quark/config",
         json={"config": {"default_fid": "../invalid"}},
@@ -135,22 +145,6 @@ def test_generic_builtin_card_config_rejects_invalid_values_without_writing(tmp_
     )
     assert response.status_code == 400
     assert config_store.get_quark_config() == original_quark
-
-    response = client.post(
-        "/api/cards/telegram/config",
-        json={"config": {"channels": [{"id": "bad id"}]}},
-        headers=headers,
-    )
-    assert response.status_code == 400
-    assert config_store.get_telegram_config() == original_telegram
-
-    response = client.post(
-        "/api/cards/telegram/config",
-        json={"config": {"magic_regex": {"pattern": "(", "replace": "\\1"}}},
-        headers=headers,
-    )
-    assert response.status_code == 400
-    assert config_store.get_telegram_config() == original_telegram
 
 
 def test_generic_card_config_runs_card_validator_and_persists_normalized_values(tmp_path):
@@ -550,7 +544,7 @@ def test_card_list_handles_malformed_persisted_card_config(tmp_path):
     app = create_app({"MOVIESYNC_DATA_DIR": str(tmp_path)}, start_scheduler=False)
     services = app.extensions["moviesync"]
     config = services["config"].load()
-    config["cards"]["telegram"]["config"] = []
+    config.setdefault("cards", {}).setdefault("douban", {"enabled": True, "config": {}})["config"] = []
     services["config"].store.write(config)
 
     client = app.test_client()
@@ -559,11 +553,9 @@ def test_card_list_handles_malformed_persisted_card_config(tmp_path):
 
     assert response.status_code == 200
     body = response.get_json()
-    telegram = next(card for card in body["cards"] if card["id"] == "telegram")
-    assert telegram["configured"] is False
-    assert isinstance(telegram["health"], dict)
-    assert telegram["health"]["status"] == "unknown"
-    assert telegram["health"]["message"] == "尚未检查"
+    douban = next(card for card in body["cards"] if card["id"] == "douban")
+    assert douban["configured"] is False
+    assert isinstance(douban["health"], dict)
 
 
 def test_private_key_config_empty_submission_preserves_saved_secret(tmp_path):
@@ -624,49 +616,16 @@ def test_get_card_config_reads_arbitrary_card_without_card_specific_accessors(tm
 
     store = ConfigStore(tmp_path / "config.json", tmp_path / "legacy")
     store.save_card_config(
-        "tmdb",
-        {"api_key": "test-key", "language": "zh-CN"},
+        "example-provider",
+        {"endpoint": "https://example.test", "language": "zh-CN"},
         enabled=True,
     )
 
-    assert store.get_card_config("tmdb") == {
-        "api_key": "test-key",
+    assert store.get_card_config("example-provider") == {
+        "endpoint": "https://example.test",
         "language": "zh-CN",
     }
     assert store.get_card_config("not-installed") == {}
-
-
-def test_builtin_metadata_provider_can_be_disabled_before_required_config_is_set(tmp_path):
-    from moviesync.app import create_app
-
-    app = create_app({"MOVIESYNC_DATA_DIR": str(tmp_path)}, start_scheduler=False)
-    services = app.extensions["moviesync"]
-    client = app.test_client()
-    client.post("/api/setup", json={"username": "admin", "password": "password123"})
-    with client.session_transaction() as session:
-        csrf = session["csrf_token"]
-
-    # TMDB is a required-token provider, but its independent card can be disabled
-    # before a token has been entered.
-    response = client.post(
-        "/api/cards/tmdb/config",
-        json={"enabled": False, "config": {}},
-        headers={"X-CSRF-Token": csrf},
-    )
-    assert response.status_code == 200
-    assert response.get_json()["enabled"] is False
-    assert services["config"].load()["cards"]["tmdb"]["enabled"] is False
-
-    # Re-enabling without a token must still be rejected.
-    response = client.post(
-        "/api/cards/tmdb/config",
-        json={"enabled": True, "config": {}},
-        headers={"X-CSRF-Token": csrf},
-    )
-    assert response.status_code == 400
-    assert "API Read Access Token" in response.get_json()["message"]
-    assert services["config"].load()["cards"]["tmdb"]["enabled"] is False
-
 
 
 def test_quark_category_fids_use_four_structured_inputs_and_keep_legacy_support():
@@ -688,7 +647,7 @@ def test_quark_category_fids_use_four_structured_inputs_and_keep_legacy_support(
     assert parsed["category_fids"]["电视剧"] == "456"
 
 
-def test_generic_card_form_has_compact_telegram_channel_chips_and_quark_textarea():
+def test_generic_card_form_has_channel_chips_and_quark_textarea():
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
@@ -702,31 +661,28 @@ def test_generic_card_form_has_compact_telegram_channel_chips_and_quark_textarea
     assert 'for key in ("type", "editor", "item_fields", "placeholder", "description", "label")' in plugin_manager
 
 
-def test_telegram_channels_use_form_editor_and_filename_rules_are_global():
-    from card_templates.filename_recognition import FilenameRecognitionCard
-    from card_templates.telegram import TelegramResourceSource
+def test_filename_recognition_rules_are_global_and_share_the_generic_form_contract():
+    from pathlib import Path
 
-    fields = {field["key"]: field for field in TelegramResourceSource.manifest.config_fields}
-    channels = fields["channels"]
-    global_fields = {
+    from card_templates.filename_recognition import FilenameRecognitionCard
+
+    fields = {
         field["key"]: field
         for field in FilenameRecognitionCard.manifest.config_fields
     }
+    template = (Path(__file__).resolve().parents[1] / "templates" / "admin.html").read_text(
+        encoding="utf-8"
+    )
 
-    assert channels["type"] == "json"
-    assert channels["editor"] == "channel_chips"
-    assert [field["key"] for field in channels["item_fields"]] == ["id", "name"]
-    assert "JSON 数组" not in channels["description"]
-    assert "magic_regex" not in fields
     assert FilenameRecognitionCard.manifest.type == "filename_processor"
-    assert list(global_fields) == ["rules"]
-    assert global_fields["rules"]["editor"] == "rule_list"
-    assert [field["key"] for field in global_fields["rules"]["item_fields"]] == [
-        "pattern",
-        "replace",
-        "source_ids",
+    assert list(fields) == ["rules"]
+    assert fields["rules"]["editor"] == "rule_list"
+    assert [field["key"] for field in fields["rules"]["item_fields"]] == [
+        "pattern", "replace", "source_ids"
     ]
-
+    assert 'field.editor === "channel_chips"' in template
+    assert "data-card-add-channel" in template
+    assert "data-card-remove-channel" in template
 
 
 def test_fid_lines_textarea_saves_through_legacy_object_validator(tmp_path):
@@ -817,17 +773,6 @@ def test_legacy_fid_lines_field_is_exposed_as_textarea_by_config_api():
     assert fields[0]["type"] == "textarea"
     assert fields[0]["editor"] == "fid_lines"
     assert config["category_fids"] == {"电影": "123", "电视剧": "456"}
-
-
-
-def test_telegram_channel_config_uses_full_width_and_wide_dialog():
-    from pathlib import Path
-
-    template = (Path(__file__).resolve().parents[1] / "templates" / "admin.html").read_text(encoding="utf-8")
-
-    assert 'field.editor === "channel_chips" ? " md:col-span-2" : ""' in template
-    assert '.generic-card-dialog-wide{' in template
-    assert 'classList.toggle("generic-card-dialog-wide", cardId === "telegram")' in template
 
 
 def test_card_management_surfaces_unhealthy_connection_state():

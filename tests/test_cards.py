@@ -56,23 +56,6 @@ def test_card_manifest_rejects_invalid_id():
         CardManifest(id="Bad ID", name="Bad")
 
 
-
-def test_telegram_resource_source_uses_card_interface():
-    from card_templates.telegram import TelegramResourceSource
-
-    class FakeTelegramClient:
-        pass
-
-    card = TelegramResourceSource(FakeTelegramClient())
-
-    assert isinstance(card, Card)
-    assert card.card_id == "telegram"
-    assert card.card_type == "resource_source"
-    assert "resource.search" in card.capabilities
-    assert card.manifest.to_dict()["name"] == "Telegram"
-
-
-
 def test_quark_storage_card_uses_storage_target_interface():
     from card_templates.quark import QuarkStorageCard
     from moviesync.cards import StorageTargetCard
@@ -90,14 +73,11 @@ def test_quark_storage_card_uses_storage_target_interface():
     assert card.check()["status"] == "unconfigured"
 
 
-def test_registry_contains_unified_card_manifest_contract():
+def test_metadata_card_uses_unified_card_manifest_contract():
     from card_templates.douban import DoubanMetadataCard
-    from card_templates.telegram import TelegramResourceSource
 
     assert DoubanMetadataCard.manifest.type == "metadata_provider"
-    assert TelegramResourceSource.manifest.type == "resource_source"
     assert "metadata.search" in DoubanMetadataCard.manifest.capabilities
-    assert "resource.search" in TelegramResourceSource.manifest.capabilities
 
 
 
@@ -380,32 +360,6 @@ def test_card_registry_does_not_downgrade_newer_saved_config():
 def test_card_manifest_requires_positive_config_version():
     with pytest.raises(ValueError, match="config_version"):
         CardManifest(id="bad-version", name="Bad Version", config_version=0)
-
-
-
-def test_bundled_telegram_card_owns_its_client(monkeypatch):
-    import card_templates.telegram as telegram_module
-
-    created = []
-
-    class FakeTelegramClient:
-        def __init__(self):
-            created.append(self)
-            self.http = type(
-                "Http",
-                (),
-                {"session": type("Session", (), {"close": lambda self: created.append("closed")})()},
-            )()
-
-    monkeypatch.setattr(telegram_module, "TelegramClient", FakeTelegramClient)
-    injected_legacy_client = object()
-
-    card = telegram_module.create_card({"telegram": injected_legacy_client})
-
-    assert card.client is created[0]
-    assert card.client is not injected_legacy_client
-    card.close()
-    assert created == [card.client, "closed"]
 
 
 def test_legacy_telegram_adapter_constructs_client_only_on_demand(monkeypatch):

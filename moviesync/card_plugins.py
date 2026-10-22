@@ -29,9 +29,6 @@ from .cards import (
 # These hashes allow safe migration of old empty-marker installs without replacing
 # administrator-edited files.
 _LEGACY_BUNDLED_CARD_BLOBS = {
-    "tmdb.py": {
-        "76292d41d3af54ffbd17fe31de4512427af87b10",
-    },
     # Historical bundled Quark cards that predate destination-directory listing.
     # These are exact Git blob IDs, so even a stale customized marker can be
     # corrected safely when the persistent file is byte-for-byte a known template.
@@ -59,6 +56,12 @@ _LEGACY_BUNDLED_CARD_BLOBS = {
 _RETIRED_BUNDLED_CARD_BLOBS = {
     "aliyun.py": {"504fe978f795cd825544ffb2abefc49b2def9a55"},
     "quark_playback.py": {"d9211e0422e29b11e2d10a94f8a41ffd5a80a37e"},
+    # Remove only known built-in copies of cards that no longer ship.
+    "tmdb.py": {
+        "02d28bc0037d07a35bc33c5a1fd0637663f3abb9",
+        "76292d41d3af54ffbd17fe31de4512427af87b10",
+    },
+    "telegram.py": {"3f1411c768a38234c722a68162698d96d356bfa3"},
 }
 
 
@@ -417,18 +420,6 @@ class CardFilePluginManager:
                             field[key] = canonical[key]
                             changed = True
                 merged_fields.append(field)
-
-            # Filename normalization now belongs to its own optional card. Older
-            # Telegram manifests may still expose this retired field; hide it from
-            # the Telegram form without touching the user's saved config or code.
-            if card.card_id == "telegram":
-                filtered_fields = [
-                    field for field in merged_fields
-                    if str(field.get("key") or "") != "magic_regex"
-                ]
-                if len(filtered_fields) != len(merged_fields):
-                    merged_fields = filtered_fields
-                    changed = True
 
             if changed:
                 card.manifest = replace(card.manifest, config_fields=tuple(merged_fields))

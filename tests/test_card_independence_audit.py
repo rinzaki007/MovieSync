@@ -13,8 +13,6 @@ BUILTIN_CARD_IDS = (
     "filename_recognition",
     "pansou",
     "quark",
-    "telegram",
-    "tmdb",
 )
 
 
