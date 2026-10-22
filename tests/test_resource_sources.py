@@ -1001,3 +1001,31 @@ def test_search_with_diagnostics_marks_all_invalid_records_as_partial():
     assert diagnostics[0]["invalid_items"] == 2
     assert diagnostics[0]["message"] == "已忽略 2 条格式无效的资源记录"
 
+
+def test_filename_processor_invalid_priority_uses_safe_default():
+    class Store:
+        def load(self):
+            return {
+                "cards": {
+                    "invalid-priority": {"enabled": True, "config": {}},
+                }
+            }
+
+    class InvalidPriorityProcessor(FilenameProcessorCard):
+        manifest = CardManifest(
+            id="invalid-priority",
+            name="Invalid Priority",
+            type="filename_processor",
+            capabilities=("filename.parse",),
+        )
+        rule_priority = "not-a-number"
+
+        def parse_episode(self, file_name, config):
+            return (3, 8)
+
+    registry = CardRegistry()
+    registry.register(InvalidPriorityProcessor())
+    manager = ResourceSourceManager(Store(), FakeLogger(), registry=registry)
+
+    assert manager.parse_tv_episode("unknown-source", "sample.mkv") == (3, 8)
+
