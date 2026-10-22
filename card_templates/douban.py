@@ -11,7 +11,7 @@ class DoubanMetadataCard(MetadataProviderCard):
     manifest = CardManifest(
         id="douban",
         name="Douban",
-        version="1.0.0",
+        version="1.1.0",
         type="metadata_provider",
         description="豆瓣影视元数据与搜索",
         capabilities=("metadata.list", "metadata.search", "metadata.detail"),
