@@ -4,8 +4,8 @@ MovieSync 是一个面向 Docker、NAS 和家庭服务器的自托管影视管�
 
 ## 主要功能
 
-- **影视信息**：通过豆瓣等卡片获取影视信息；可选接入 TMDB。
-- **资源搜索**：通过 PanSou、Telegram 等资源卡片查找影视资源。
+- **影视信息**：通过豆瓣等影视信息卡片获取影视信息。
+- **资源搜索**：通过 PanSou 等资源卡片查找影视资源，也可按需安装第三方来源卡片。
 - **网盘转存**：选择资源、存储目标和保存目录，集中查看任务状态与日志。
 - **自动追剧**：设置起追集数，跟进后续内容并避免重复转存。
 - **播放中心**：从影视卡片直达在线点播；也可通过兼容的播放卡片播放已转存文件。在线点播需配置可用的兼容资源站。
@@ -67,9 +67,5 @@ docker compose up -d
 ## 许可证与第三方声明
 
 MovieSync 以 [MIT License](LICENSE) 发布。使用、修改和再分发时，请保留许可证及版权声明。
-
-如启用 TMDB 卡片，需遵守 [TMDB API 使用条款](https://www.themoviedb.org/api-terms-of-use) 和[官方署名要求](https://www.themoviedb.org/about/logos-attribution)，并保留以下声明：
-
-> This product uses the TMDB API but is not endorsed or certified by TMDB.
 
 第三方卡片、数据源及服务可能适用各自的许可证和使用条款，请在启用前自行确认。MovieSync 不提供或托管影视资源；使用者应自行确认资源来源与使用方式符合当地法律、版权要求及第三方平台规则。
