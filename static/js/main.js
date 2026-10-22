@@ -37,6 +37,22 @@ function startCandidateSearchProgress(requestId) {
     candidateSearchProgressTimer = window.setInterval(update, 1000);
 }
 
+function captureSourceSearchDiagnostics(result, title, destination) {
+    const page = result?.candidate_pages?.[title] || {};
+    const diagnostics = Array.isArray(page.source_search_diagnostics)
+        ? page.source_search_diagnostics
+        : [];
+    for (const item of diagnostics) {
+        if (item && item.id && destination instanceof Map) {
+            destination.set(String(item.id), item);
+        }
+    }
+    const failed = diagnostics.find(item => item && item.status === 'error');
+    if (failed) {
+        throw new Error(failed.message || '资源来源内部搜索失败，请查看服务日志');
+    }
+}
+
 function stopCandidateSearchProgress(requestId) {
     if (requestId !== candidateSearchRequestSeq) return;
     if (candidateSearchProgressTimer) {
@@ -806,6 +822,7 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
                 let firstSourceResponse = false;
                 const sourceNames = new Map(sources.map(source => [source.id, source.name || source.id]));
                 const sourceFailures = [];
+                const sourceDiagnostics = new Map();
 
                 const updateSourceProgress = (activeName = '') => {
                     const count = (candidatesMap[title] || []).length;
@@ -824,6 +841,7 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
                         while (hasMore && requestId === candidateSearchRequestSeq) {
                             const result = await requestPage(offset, [source.id]);
                             if (requestId !== candidateSearchRequestSeq) return;
+                            captureSourceSearchDiagnostics(result, title, sourceDiagnostics);
                             if (!firstSourceResponse) {
                                 firstSourceResponse = true;
                                 stopCandidateSearchProgress(requestId);
@@ -864,6 +882,7 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
                                 while (pollHasMore && requestId === candidateSearchRequestSeq) {
                                     const result = await requestPage(pollOffset, [source.id]);
                                     if (requestId !== candidateSearchRequestSeq) return;
+                                    captureSourceSearchDiagnostics(result, title, sourceDiagnostics);
                                     const before = (candidatesMap[title] || []).length;
                                     mergePage(result.candidates_map || {});
                                     const pageInfo = result.candidate_pages?.[title] || {};
@@ -908,7 +927,30 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
                     () => worker()
                 ));
                 if (requestId !== candidateSearchRequestSeq) return;
-                candidateSearchProgressText = `搜索完成：查询 ${completedSources}/${sources.length} 个资源来源，共找到 ${(candidatesMap[title] || []).length} 个可用资源。${failedSources ? ` ${failedSources} 个来源失败。` : ''}`;
+                const sourceSummary = sources
+                    .slice(0, 4)
+                    .map(source => {
+                        const diagnostic = sourceDiagnostics.get(source.id);
+                        if (!diagnostic) return null;
+                        const count = Number(diagnostic.result_count || 0);
+                        const duration = Number(diagnostic.duration_ms || 0);
+                        const resultLabel = diagnostic.status === 'error'
+                            ? '请求失败'
+                            : diagnostic.status === 'empty'
+                                ? '无结果'
+                                : diagnostic.status === 'partial'
+                                    ? `返回 ${count} 条（忽略 ${Number(diagnostic.invalid_items || 0)} 条无效记录）`
+                                    : `返回 ${count} 条`;
+                        return `${source.name || source.id}：${resultLabel}，${duration}ms`;
+                    })
+                    .filter(Boolean);
+                const sourceSummaryText = sourceSummary.length
+                    ? `来源诊断（原始记录）：${sourceSummary.join('；')}${sources.length > 4 ? `；另有 ${sources.length - 4} 个来源未展开` : ''}`
+                    : '';
+                const failureDetails = sourceFailures.length
+                    ? `失败来源：${sourceFailures.slice(0, 3).join('；')}${sourceFailures.length > 3 ? `；另有 ${sourceFailures.length - 3} 个来源失败` : ''}`
+                    : '';
+                candidateSearchProgressText = `搜索完成：查询 ${completedSources}/${sources.length} 个资源来源，共找到 ${(candidatesMap[title] || []).length} 个可用资源。${failedSources ? ` ${failedSources} 个来源失败。 ${failureDetails}` : ''}${sourceSummaryText ? ` ${sourceSummaryText}` : ''}`;
                 refreshModalPreservingSelection();
                 if (sourceFailures.length) console.debug('部分资源来源搜索失败:', sourceFailures);
                 if (!(candidatesMap[title] || []).length) {
