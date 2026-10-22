@@ -2422,7 +2422,11 @@ def test_channel_search_failure_is_persisted_and_not_reported_as_full_success(tm
         assert diagnostics["source_search_errors"] == 1
         assert diagnostics["transferred_files"] == 2
         assert diagnostics["success"] is False
-        assert any("temporary search outage" in item["reason"] for item in diagnostics["examples"])
+        assert any(
+            "详细原因已记录到服务日志" in item["reason"]
+            for item in diagnostics["examples"]
+        )
+        assert "temporary search outage" not in str(diagnostics)
     finally:
         manager.stop_scheduler()
 
