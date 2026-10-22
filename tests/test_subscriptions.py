@@ -2819,3 +2819,109 @@ def test_subscription_scopes_initial_and_future_scan_to_selected_folder(tmp_path
     saved = next(item for item in manager.get_subscriptions() if item["id"] == sub["id"])
     assert saved["source_folder_path"] == "1080p"
     manager.stop_scheduler()
+
+
+
+def test_subscription_preview_does_not_create_folder_or_transfer(tmp_path):
+    class PreviewStorage(DynamicStorageTargets):
+        def __init__(self):
+            super().__init__()
+            self.folder_calls = 0
+
+        def create_folder(self, name, parent_id="0", target_id=None):
+            self.folder_calls += 1
+            return super().create_folder(name, parent_id, target_id)
+
+    storage = PreviewStorage()
+    storage.files = [
+        {"fid": "ep1", "file_name": "Show.S01E01.mkv"},
+        {"fid": "ep2", "file_name": "Show.S01E02.mkv"},
+        {"fid": "poster", "file_name": "poster.jpg"},
+        {"fid": "unknown", "file_name": "unclassified.mkv"},
+    ]
+    manager = SubscriptionManager(
+        tmp_path / "subscriptions-preview.json",
+        storage,
+        FakeResourceSources(),
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share-preview",
+        storage_target_id="demo-storage",
+        source_id="telegram",
+        files=[{"fid": "ep1", "file_name": "Show.S01E01.mkv"}],
+    )
+
+    preview_ok, message, plan = manager.preview_subscription_now(sub["id"])
+
+    assert preview_ok is True
+    assert "只读取" in message
+    assert plan["read_only"] is True
+    assert plan["queued_files"] == 2
+    assert plan["summary"]["unrecognized"] == 1
+    assert plan["summary"]["non_video_files"] == 1
+    assert {item["fid"] for item in plan["items"] if item["status"] == "queued"} == {"ep1", "ep2"}
+    assert storage.transfers == []
+    assert storage.folder_calls == 0
+
+    saved = manager.get_subscriptions()[0]
+    assert saved["status"] == "waiting"
+    assert "last_diagnostics" not in saved
+    assert saved["saved_episodes"] == []
+    manager.shutdown()
+
+
+def test_channel_subscription_preview_reuses_follow_selection_without_side_effects(tmp_path):
+    class PreviewChannelStorage(ChannelStorageTargets):
+        def __init__(self):
+            super().__init__()
+            self.folder_calls = 0
+
+        def create_folder(self, name, parent_id="0", target_id=None):
+            self.folder_calls += 1
+            return "preview-folder"
+
+    storage = PreviewChannelStorage()
+    storage.shares = {
+        "share44": [{"fid": "ep44", "file_name": "Show.S01E44.mkv"}],
+        "share45": [{"fid": "ep45", "file_name": "Show.S01E45.mkv"}],
+        "share10": [{"fid": "ep10", "file_name": "Show.S01E10.mkv"}],
+    }
+    sources = FakeResourceSources()
+    sources.shares = [
+        {"channel": "demo", "pwd_id": "share10"},
+        {"channel": "demo", "pwd_id": "share44"},
+        {"channel": "demo", "pwd_id": "share45"},
+    ]
+    manager = SubscriptionManager(
+        tmp_path / "subscriptions-channel-preview.json",
+        storage,
+        sources,
+        FakeLogger(),
+    )
+    sub = manager.add_subscription(
+        title="Show",
+        pwd_id="share44",
+        target_fid="0",
+        storage_target_id="demo-storage",
+        source_id="telegram",
+        channel="demo",
+        files=[{"fid": "ep44", "file_name": "Show.S01E44.mkv"}],
+    )
+
+    preview_ok, _message, plan = manager.preview_subscription_now(sub["id"])
+
+    assert preview_ok is True
+    assert plan["queued_files"] == 2
+    queued_names = {item["file"] for item in plan["items"] if item["status"] == "queued"}
+    assert queued_names == {"Show.S01E44.mkv", "Show.S01E45.mkv"}
+    assert plan["summary"]["filtered_old"] == 1
+    assert storage.transfers == []
+    assert storage.folder_calls == 0
+
+    saved = manager.get_subscriptions()[0]
+    assert saved["status"] == "waiting"
+    assert "last_diagnostics" not in saved
+    assert saved["saved_episodes"] == []
+    manager.shutdown()
