@@ -112,18 +112,18 @@
                             <h3 id="movie-detail-name" class="text-xl font-bold leading-tight text-white sm:text-2xl"></h3>
                             <div id="movie-detail-meta" class="mt-3 flex flex-wrap gap-2 text-xs text-slate-300"></div>
                             <div id="movie-detail-genres" class="mt-3 flex flex-wrap gap-1.5"></div>
+                            <div id="movie-detail-detail-loading" class="hidden mt-4 flex items-center gap-2 rounded-xl border border-blue-900/50 bg-blue-950/30 px-3 py-2 text-xs text-blue-200">
+                                <i class="fa-solid fa-spinner fa-spin"></i> 正在获取豆瓣完整资料…
+                            </div>
+                            <div id="movie-detail-detail-error" class="hidden mt-3 rounded-xl border border-amber-900/50 bg-amber-950/20 px-3 py-2 text-xs leading-5 text-amber-200">
+                                豆瓣详情暂时获取不到，先显示列表已有的信息；资源操作仍然可以使用。
+                            </div>
+                            <div id="movie-detail-credits" class="mt-5 space-y-3"></div>
                             <a id="movie-detail-douban" href="#" target="_blank" rel="noopener noreferrer" class="mt-4 inline-flex items-center gap-2 rounded-xl border border-emerald-800/70 bg-emerald-950/40 px-3 py-2 text-xs font-medium text-emerald-300 hover:bg-emerald-900/50">
                                 <i class="fa-solid fa-arrow-up-right-from-square"></i> 在豆瓣打开
                             </a>
                         </div>
                     </div>
-                    <div id="movie-detail-detail-loading" class="hidden mt-5 flex items-center gap-2 rounded-xl border border-blue-900/50 bg-blue-950/30 px-3 py-2 text-xs text-blue-200">
-                        <i class="fa-solid fa-spinner fa-spin"></i> 正在获取豆瓣完整资料…
-                    </div>
-                    <div id="movie-detail-detail-error" class="hidden mt-3 rounded-xl border border-amber-900/50 bg-amber-950/20 px-3 py-2 text-xs leading-5 text-amber-200">
-                        豆瓣详情暂时获取不到，先显示列表已有的信息；资源操作仍然可以使用。
-                    </div>
-                    <div id="movie-detail-credits" class="mt-5 space-y-3"></div>
                     <section class="mt-6 border-t border-slate-800 pt-5">
                         <h4 class="text-sm font-semibold text-slate-200">剧情简介</h4>
                         <p id="movie-detail-summary" class="mt-2 whitespace-pre-line text-sm leading-7 text-slate-400"></p>
