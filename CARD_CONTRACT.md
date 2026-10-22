@@ -29,7 +29,7 @@
 
 ## 文件名与集数识别
 
-共享基础解析器位于 `moviesync/services/filename_rules.py`，统一入口为 `parse_tv_episode()`。所有资源搜索来源（例如 PanSou、Telegram 及未来新增的资源卡片）都必须交给统一的文件名识别流程；来源卡片负责发现资源，不应自行维护一套必需的集数识别规则。
+共享基础解析器位于 `moviesync/services/filename_rules.py`，统一入口为 `parse_tv_episode()`。所有资源搜索来源（例如 PanSou 和后续安装的资源卡片）都必须交给统一的文件名识别流程；来源卡片负责发现资源，不应自行维护一套必需的集数识别规则。
 
 - 「文件名识别」卡片集中维护全局规则，按配置顺序尝试；规则默认对所有资源来源生效。
 - 只有遇到确实无法用全局规则合理覆盖的特殊命名时，才可选填 `source_ids` 限定规则适用范围。来源限定是例外，不是每张资源卡片的必需实现。
@@ -56,7 +56,7 @@
 
 ## 已安装资源卡片插件入口
 
-MovieSync 支持通过 Python 包的 entry point 加载可信资源来源插件，组名为 `moviesync.resource_sources`。每个入口必须指向一个工厂函数，接收单个 `context` 字典并返回 `ResourceSourceCard` 实例。当前上下文包含 `telegram`、`config_store` 和 `logger`，插件可以按需使用这些共享服务。
+MovieSync 支持通过 Python 包的 entry point 加载可信资源来源插件，组名为 `moviesync.resource_sources`。每个入口必须指向一个工厂函数，接收单个 `context` 字典并返回 `ResourceSourceCard` 实例。当前上下文包含 `config_store` 与 `logger`；为兼容旧扩展，可能仍提供 `telegram` 客户端。新插件应优先依赖稳定的卡片接口，而不是依赖特定平台客户端。
 
 例如，插件包的 `pyproject.toml` 可声明：
 
@@ -95,7 +95,7 @@ def create_card(context):
 
 通用配置 API 在字段白名单、字段类型和必填项检查后，会调用卡片的 validate_config(config) 钩子。该方法接收合并后的完整配置，应返回校验通过且规范化后的配置字典；无效配置应抛出 ValueError（包括 ConfigValidationError），不得在校验阶段产生持久化副作用。通用接口只保存本次提交字段对应的规范化值，因此不会意外覆盖卡片内部的健康状态等未声明字段。
 
-未实现该钩子的卡片继承 Card 默认实现，只进行对象形状检查。声明了复杂配置的卡片应自行验证其业务约束。内置 Quark 会校验默认/分类目录 FID，Telegram 会校验频道数组、频道 ID、正则语法与长度限制。校验失败返回 HTTP 400，且不会改变已保存配置或启用状态。
+未实现该钩子的卡片继承 Card 默认实现，只进行对象形状检查。声明了复杂配置的卡片应自行验证其业务约束。内置 Quark 会校验默认/分类目录 FID；其他卡片应按自身配置字段验证业务约束。校验失败返回 HTTP 400，且不会改变已保存配置或启用状态。
 
 
 ## 存储卡片停用与任务状态
@@ -176,9 +176,8 @@ CI 中的 `tests/test_example_storage_plugin_package.py` 会将示例包安装�
 
 ## Built-in single-file cards
 
-The built-in Telegram resource source, PanSou resource source, Quark storage target, and Douban metadata provider live as independent files under `card_templates/`. On first startup, `CardFilePluginManager` copies each valid template into the persistent `/app/data/cards/` directory and loads it through `create_card(context)`. The core resource, storage, and metadata managers only discover registered cards by their declared interface; they do not instantiate a specific built-in implementation.
+The built-in PanSou resource source, Quark storage target, and Douban metadata provider live as independent files under `card_templates/`. On first startup, `CardFilePluginManager` copies each valid template into the persistent `/app/data/cards/` directory and loads it through `create_card(context)`. The core resource, storage, and metadata managers only discover registered cards by their declared interface; they do not instantiate a specific built-in implementation.
 
-- `telegram.py`: Telegram channel search and health checks.
 - `pansou.py`: PanSou resource search.
 - `quark.py`: Quark link resolution, destination folders, and transfers.
 - `douban.py`: Douban metadata lookup and search.
