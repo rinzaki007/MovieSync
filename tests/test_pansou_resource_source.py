@@ -320,7 +320,9 @@ def test_pansou_search_filters_aliyun_links_when_aliyun_storage_is_selected():
     assert [item["resource_id"] for item in results] == ["aliyun123"]
     assert results[0]["resource_type"] == "aliyun_share"
     assert "pwd_id" not in results[0]
-    assert http.calls[0][3]["params"]["cloud_types"] == "aliyun"
+    query_cloud_types = set(http.calls[0][3]["params"]["cloud_types"].split(","))
+    assert {"quark", "aliyun", "baidu", "magnet"}.issubset(query_cloud_types)
+    assert "ed2k" not in query_cloud_types
 
 
 def test_pansou_search_filters_baidu_merged_results_when_baidu_storage_is_selected():
@@ -349,7 +351,9 @@ def test_pansou_search_filters_baidu_merged_results_when_baidu_storage_is_select
 
     assert [item["resource_id"] for item in results] == ["baidu123"]
     assert results[0]["resource_type"] == "baidu_share"
-    assert http.calls[0][3]["params"]["cloud_types"] == "baidu"
+    query_cloud_types = set(http.calls[0][3]["params"]["cloud_types"].split(","))
+    assert {"quark", "aliyun", "baidu", "magnet"}.issubset(query_cloud_types)
+    assert "ed2k" not in query_cloud_types
 
 
 def test_pansou_does_not_fall_back_to_quark_for_unknown_selected_storage_type():
@@ -390,3 +394,48 @@ def test_pansou_falls_back_for_external_instances_without_progressive_endpoint()
         "http://external-pansou.local/api/search",
     ]
     assert "wait_ms" not in http.calls[1][3]["params"]
+
+
+def test_pansou_broadens_selected_quark_search_but_returns_only_quark_links():
+    http = FakeHttpClient(
+        search_payload={
+            "code": 200,
+            "data": {
+                "results": [
+                    {
+                        "title": "兰香如故 全47集",
+                        "links": [
+                            {"type": "quark", "url": "https://pan.quark.cn/s/quark-match"},
+                            {"type": "baidu", "url": "https://pan.baidu.com/s/baidu-other"},
+                            {"type": "aliyun", "url": "https://www.alipan.com/s/aliyun-other"},
+                        ],
+                    }
+                ],
+                "merged_by_type": {
+                    "quark": [
+                        {"url": "https://pan.quark.cn/s/quark-match", "note": "兰香如故 全47集"},
+                        {"url": "https://pan.quark.cn/s/quark-merged", "note": "兰香如故 全集"},
+                    ],
+                    "baidu": [
+                        {"url": "https://pan.baidu.com/s/baidu-merged", "note": "兰香如故"},
+                    ],
+                },
+            },
+        }
+    )
+    source = PanSouResourceSource(http)
+
+    results = source.search(
+        {
+            "title": "兰香如故",
+            "storage_target_id": "quark",
+            "resource_types": ["quark_share"],
+        },
+        {"base_url": "http://pansou.local"},
+    )
+
+    assert {item["resource_id"] for item in results} == {"quark-match", "quark-merged"}
+    assert all(item["resource_type"] == "quark_share" for item in results)
+    queried_types = set(http.calls[0][3]["params"]["cloud_types"].split(","))
+    assert {"quark", "aliyun", "baidu", "magnet"}.issubset(queried_types)
+    assert "ed2k" not in queried_types

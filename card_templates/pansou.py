@@ -318,27 +318,48 @@ class PanSouResourceSource(ResourceSourceCard):
         base_url = self._base_url(config)
         if not title or not base_url:
             return []
+        all_resource_types = bool(
+            isinstance(movie, dict) and movie.get("all_resource_types")
+        )
+        has_selected_target = bool(
+            isinstance(movie, dict) and "storage_target_id" in movie
+        )
         requested_types = (
             ["quark_share", "aliyun_share", "baidu_share", "uc_share", "tianyi_share",
              "mobile_share", "115_share", "pikpak_share", "xunlei_share", "123_share",
              "magnet_link"]
-            if isinstance(movie, dict) and movie.get("all_resource_types")
+            if all_resource_types
             else (
                 movie.get("resource_types")
-                if isinstance(movie, dict) and "storage_target_id" in movie
+                if has_selected_target
                 else ["quark_share"]
             )
         )
         if not isinstance(requested_types, (list, tuple, set)):
             requested_types = []
-        cloud_types = sorted({
+
+        # Separate the providers queried upstream from the provider types returned
+        # to MovieSync. The "More download links" flow searches all providers at once,
+        # which often surfaces good Quark shares that a Quark-only PanSou query misses.
+        # Reuse that broad discovery strategy for selected storage targets, but still
+        # return only links the selected storage card explicitly accepts.
+        allowed_cloud_types = sorted({
             cloud_type
             for resource_type in requested_types
             if (cloud_type := self._cloud_type_for_resource_type(resource_type))
         })
+        all_provider_cloud_types = sorted({
+            "quark", "aliyun", "baidu", "uc", "tianyi", "mobile",
+            "115", "pikpak", "xunlei", "123", "magnet",
+        })
+        query_cloud_types = (
+            allowed_cloud_types
+            if all_resource_types or not has_selected_target
+            else all_provider_cloud_types
+        )
         # An explicit target without a matching PanSou cloud type must not silently
-        # fall back to Quark or search every provider.
-        if not cloud_types:
+        # fall back to Quark or search every provider without filtering the results.
+        if not allowed_cloud_types or not query_cloud_types:
             return []
         try:
             timeout = int(config.get("timeout", 45))
@@ -348,7 +369,7 @@ class PanSouResourceSource(ResourceSourceCard):
             "kw": title,
             "res": "all",
             "src": "plugin",
-            "cloud_types": ",".join(cloud_types),
+            "cloud_types": ",".join(query_cloud_types),
             "wait_ms": 6000,
         }
         try:
@@ -465,12 +486,12 @@ class PanSouResourceSource(ResourceSourceCard):
                         cloud_type = next(
                             (
                                 candidate_type
-                                for candidate_type in cloud_types
+                                for candidate_type in query_cloud_types
                                 if self._share_id(link.get("url"), candidate_type)
                             ),
                             "",
                         )
-                    if cloud_type not in cloud_types:
+                    if cloud_type not in allowed_cloud_types:
                         continue
                     normalized = self._normalize_link(
                         link, cloud_type=cloud_type, title=result_title, channel=channel
@@ -499,7 +520,7 @@ class PanSouResourceSource(ResourceSourceCard):
             }
             for raw_cloud_type, items in merged.items():
                 cloud_type = aliases.get(str(raw_cloud_type).strip().lower())
-                if cloud_type not in cloud_types or not isinstance(items, list):
+                if cloud_type not in allowed_cloud_types or not isinstance(items, list):
                     continue
                 for item in items:
                     if not isinstance(item, dict):
