@@ -625,7 +625,10 @@ def test_get_card_config_reads_arbitrary_card_without_card_specific_accessors(tm
         "endpoint": "https://example.test",
         "language": "zh-CN",
     }
-    assert store.get_card_config("not-installed") == {}def test_quark_category_fids_use_four_structured_inputs_and_keep_legacy_support():
+    assert store.get_card_config("not-installed") == {}
+
+
+def test_quark_category_fids_use_four_structured_inputs_and_keep_legacy_support():
     from card_templates.quark import QuarkStorageCard
 
     fields = {field["key"]: field for field in QuarkStorageCard.manifest.config_fields}
