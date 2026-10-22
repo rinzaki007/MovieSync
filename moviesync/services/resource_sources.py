@@ -284,12 +284,22 @@ class ResourceSourceManager:
         cards = config.get("cards", {})
         # 通过卡片类型发现识别能力，不绑定固定卡片 ID。高优先级规则先尝试；
         # 同优先级按卡片 ID 排序，避免依赖注册顺序造成结果不稳定。
+        def processor_sort_key(item: object) -> tuple[int, str]:
+            try:
+                raw_priority = getattr(item, "rule_priority", 100)
+                priority = 100 if isinstance(raw_priority, bool) else int(raw_priority)
+            except Exception:
+                # A malformed optional card must not disable episode recognition.
+                priority = 100
+            try:
+                card_id = str(getattr(item, "card_id", ""))
+            except Exception:
+                card_id = ""
+            return -priority, card_id
+
         processors = sorted(
             self.registry.find_by_type("filename_processor"),
-            key=lambda item: (
-                -int(getattr(item, "rule_priority", 100)),
-                str(getattr(item, "card_id", "")),
-            ),
+            key=processor_sort_key,
         )
         for processor in processors:
             if not isinstance(processor, FilenameProcessorCard):
