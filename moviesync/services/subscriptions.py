@@ -868,18 +868,16 @@ class SubscriptionManager:
                 "没有可扫描的文件", "频道历史搜索", "频道增量搜索",
                 "频道资源搜索", "分享解析失败", "未获取到文件列表",
             )
-            if any(marker in reason for marker in ("无法识别", "缺少可确认的季数", "无法可靠识别")):
-                status, label = "unrecognized", "待识别"
-            elif any(marker in reason for marker in ("失败", "异常", "格式异常", "未能完整")):
-                status, label = "warning", "需留意"
-            elif any(marker in reason for marker in safe_reason_markers):
-                status, label = "skipped", "已跳过"
-            else:
+            is_known_safe_reason = any(marker in reason for marker in safe_reason_markers)
+            if not is_known_safe_reason:
                 # Examples can contain arbitrary messages returned by a storage
                 # provider. Only known, locally-authored explanations are echoed.
                 status, label = "warning", "需留意"
-            if status == "warning":
                 reason = "资源解析或来源检查存在异常；详细原因已记录到服务日志"
+            elif any(marker in reason for marker in ("无法识别", "缺少可确认的季数", "无法可靠识别")):
+                status, label = "unrecognized", "待识别"
+            else:
+                status, label = "skipped", "已跳过"
             items.append({
                 "status": status,
                 "label": label,
