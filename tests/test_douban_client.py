@@ -88,3 +88,41 @@ def test_douban_detail_extracts_subject_fields():
     assert detail["year"] == "2024"
     assert detail["rate"] == "8.1"
     assert detail["summary"] == "一段测试剧情。"
+
+
+
+def test_douban_detail_falls_back_to_mobile_api_when_html_has_no_metadata():
+    client = DoubanClient()
+
+    class HtmlResponse:
+        status_code = 200
+        text = "<html><head><title>Just a moment...</title></head><body>challenge</body></html>"
+
+    class FakeSession:
+        def get(self, url, timeout):
+            return HtmlResponse()
+
+    class FakeHttpWithFallback:
+        session = FakeSession()
+
+        def request_json(self, method, url, **kwargs):
+            assert url == "https://m.douban.com/rexxar/api/v2/subject/12345"
+            return FakeResponse(), {
+                "id": "12345",
+                "title": "示例电影",
+                "intro": "移动接口返回的剧情简介。",
+                "directors": [{"name": "张三"}],
+                "writers": [{"name": "李四"}],
+                "actors": [{"name": "王五"}],
+                "rating": {"value": 8.1},
+                "year": "2024",
+            }
+
+    client.http = FakeHttpWithFallback()
+    detail = client.get_detail("12345")
+
+    assert detail["summary"] == "移动接口返回的剧情简介。"
+    assert detail["directors"] == ["张三"]
+    assert detail["writers"] == ["李四"]
+    assert detail["casts"] == ["王五"]
+    assert detail["rate"] == "8.1"

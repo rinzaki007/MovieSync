@@ -412,6 +412,58 @@ class DoubanClient:
         runtime = info_values("片长")
         original_title = info_values("又名")
 
+        # Douban sometimes serves a lightweight/anti-bot HTML shell with HTTP 200.
+        # When its HTML contains no useful metadata, fall back to the public mobile
+        # subject endpoint instead of returning a successful but entirely empty detail.
+        if not any((summary, directors, writers, casts)):
+            try:
+                mobile_response, mobile_payload = self.http.request_json(
+                    "GET",
+                    f"https://m.douban.com/rexxar/api/v2/subject/{subject_id}",
+                    timeout=8,
+                    retries=0,
+                )
+                if mobile_response.status_code == 200 and isinstance(mobile_payload, dict):
+                    payload = mobile_payload
+                    title = title or str(payload.get("title") or payload.get("name") or "").strip()
+                    summary = summary or str(
+                        payload.get("intro") or payload.get("summary") or payload.get("description") or ""
+                    ).strip()
+                    directors = directors or self._schema_people(payload.get("directors") or payload.get("director"))
+                    writers = writers or self._schema_people(payload.get("writers") or payload.get("creator"))
+                    casts = casts or self._schema_people(
+                        payload.get("actors") or payload.get("casts") or payload.get("actor")
+                    )
+                    raw_genres = payload.get("genres") or payload.get("genre") or []
+                    if isinstance(raw_genres, str):
+                        raw_genres = [raw_genres]
+                    genres = genres or [
+                        str(value.get("name") if isinstance(value, dict) else value).strip()
+                        for value in raw_genres
+                        if str(value.get("name") if isinstance(value, dict) else value).strip()
+                    ]
+                    countries = countries or self._schema_people(
+                        payload.get("countries") or payload.get("country")
+                    )
+                    runtime = runtime or self._schema_people(
+                        payload.get("durations") or payload.get("runtime")
+                    )
+                    rating_data = payload.get("rating")
+                    if isinstance(rating_data, dict):
+                        rating = rating or str(rating_data.get("value") or rating_data.get("star") or "")
+                    else:
+                        rating = rating or str(rating_data or "")
+                    year = year or str(payload.get("year") or payload.get("release_year") or "")
+                    cover = cover or self._extract_cover_url(
+                        payload.get("pic") or payload.get("cover") or payload.get("image")
+                    )
+            except (ApiError, TypeError, ValueError):
+                # Keep any fields already extracted from the HTML.
+                pass
+
+        if not any((title, summary, directors, writers, casts, genres, cover)):
+            return None
+
         return {
             "id": subject_id,
             "title": title,
