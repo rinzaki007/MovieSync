@@ -546,6 +546,7 @@ async function openMovieDetail(idx) {
     activeMovieDetailIndex = idx;
     const requestSeq = ++movieDetailRequestSeq;
     document.getElementById('movie-detail-drawer').classList.remove('hidden');
+    document.getElementById('movie-detail-drawer').classList.add('flex');
     document.getElementById('movie-detail-detail-loading')?.classList.remove('hidden');
     document.getElementById('movie-detail-detail-error')?.classList.add('hidden');
     renderMovieDetail(movie);
@@ -583,6 +584,7 @@ async function openMovieDetail(idx) {
 function closeMovieDetail() {
     movieDetailRequestSeq += 1;
     document.getElementById('movie-detail-drawer')?.classList.add('hidden');
+    document.getElementById('movie-detail-drawer')?.classList.remove('flex');
     activeMovieDetailIndex = null;
 }
 
