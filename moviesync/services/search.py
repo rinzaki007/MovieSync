@@ -342,12 +342,7 @@ class SearchService:
             cls._simplify(str(video.get("file_name") or "")).replace("_", "").lower()
             for video in videos
         ]
-        # 目标标题在分享名或任一实际视频名中出现时，不能仅凭其他词语判定误命中。
-        if any(title in source_name for title in target_titles) or any(
-            title in name for title in target_titles for name in file_names
-        ):
-            return False
-
+        # 明确的其他作品名优先于来源描述中偶然出现的目标名称，避免混合帖/频道文案误放行。
         # 有些网盘分享的实际文件只叫“第 287 集.mp4”，无法从文件名交叉验证作品。
         # 若用户看到的来源标题本身明确写了另一部中文作品，也应过滤；纯“更新至第几集”
         # 或“古装仙侠合集”一类缺少具体作品名的模糊标题仍然保留。
@@ -371,9 +366,17 @@ class SearchService:
                     normalized_marker = cls._simplify(marker).replace("_", "").lower()
                     if normalized_marker:
                         normalized_term = normalized_term.replace(normalized_marker, "")
-                # 只把去除常见频道/更新/类型词后仍像具体作品名的词当作强证据。
+                # 目标作品名本身不是冲突证据，但标题中并列的另一部作品仍是。
+                if any(normalized_term == title or normalized_term in title for title in target_titles):
+                    continue
                 if len(normalized_term) >= 3:
                     return True
+
+        # 目标标题或实际文件路径有正向证据时保留；它不能覆盖上面已识别的冲突标题。
+        if any(title in source_name for title in target_titles) or any(
+            title in name for title in target_titles for name in file_names
+        ):
+            return False
 
         # 同时检查中文作品名片段与清理后的文件标题，兼顾中文剧集和英文原名电影。
         generic = {
@@ -424,6 +427,60 @@ class SearchService:
                 continue
             # 单文件分享也可判断，但必须有分享标题与文件名两处证据。
             if len(videos) == 1 or count * 2 >= len(videos):
+                return True
+        return False
+
+    @classmethod
+    def _has_target_title_evidence(
+        cls,
+        movie: object,
+        source_title: str,
+        videos: list[dict[str, Any]],
+    ) -> bool:
+        """Require positive title evidence before accepting a PanSou series result.
+
+        PanSou performs broad searches and may return unrelated channel posts. A source
+        title that is missing must not inherit the query title, and an unrelated result
+        without a recognizable foreign title must not be accepted merely because its
+        share resolves to playable video files.
+        """
+        if not isinstance(movie, dict):
+            return False
+
+        target_titles = [
+            str(movie.get(key) or "").strip()
+            for key in ("title", "name", "original_title")
+            if str(movie.get(key) or "").strip()
+        ]
+        for alias_key in ("aliases", "alternative_titles", "aka"):
+            aliases = movie.get(alias_key)
+            if isinstance(aliases, str):
+                target_titles.extend(
+                    part.strip() for part in re.split(r"[,;；、|]", aliases) if part.strip()
+                )
+            elif isinstance(aliases, (list, tuple, set)):
+                target_titles.extend(str(part).strip() for part in aliases if str(part).strip())
+
+        normalized_titles = {
+            cls._simplify(value).replace("_", "").lower()
+            for value in target_titles
+        }
+        normalized_titles = {value for value in normalized_titles if len(value) >= 2}
+        if not normalized_titles:
+            return False
+
+        source_name = cls._simplify(str(source_title or "")).replace("_", "").lower()
+        if any(title in source_name for title in normalized_titles):
+            return True
+
+        for video in videos:
+            # Folder names often contain the series title even when the leaf is just E01.mp4.
+            file_evidence = " ".join(
+                str(video.get(key) or "")
+                for key in ("file_name", "relative_path", "path", "parent_name")
+            )
+            normalized_file = cls._simplify(file_evidence).replace("_", "").lower()
+            if any(title in normalized_file for title in normalized_titles):
                 return True
         return False
 
@@ -695,6 +752,26 @@ class SearchService:
                             "过滤疑似错误影视候选：目标《%s》，来源标题/文件名证据指向其他作品《%s》",
                             title,
                             source_title,
+                        )
+                        seen_resource_keys.add(resource_key)
+                        continue
+
+                    media_type = str(movie.get("media_type") or "").strip().lower() if isinstance(movie, dict) else ""
+                    media_tag = str(movie.get("tag") or "").strip()
+                    is_series_query = (
+                        media_type in {"tv", "tv_show", "series", "anime", "variety", "documentary", "short_drama"}
+                        or media_tag in {"电视剧", "剧集", "综艺", "动漫", "动画", "纪录片", "短剧"}
+                    )
+                    source_id = str(source.get("source_id") or "").strip().lower()
+                    if (
+                        source_id == "pansou"
+                        and is_series_query
+                        and not self._has_target_title_evidence(movie, source_title, all_videos)
+                    ):
+                        self.logger.info(
+                            "过滤标题相关性不足的 PanSou 剧集候选：目标《%s》，来源标题《%s》且文件路径未匹配目标名称",
+                            title,
+                            source_title or "未提供标题",
                         )
                         seen_resource_keys.add(resource_key)
                         continue

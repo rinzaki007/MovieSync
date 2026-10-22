@@ -28,6 +28,49 @@ def test_keeps_matching_title_even_with_descriptive_words():
     )
 
 
+def test_foreign_title_is_not_hidden_by_target_name_in_mixed_source_text():
+    movie = {"title": "兰香如故", "media_type": "tv", "tag": "电视剧"}
+    videos = [
+        {"file_name": "第01集.mp4"},
+        {"file_name": "第02集.mp4"},
+    ]
+
+    assert SearchService._has_conflicting_media_title(
+        movie,
+        "兰香如故相关频道文案 #斗罗大陆2：绝世唐门",
+        videos,
+        display_title="兰香如故相关频道文案 #斗罗大陆2：绝世唐门",
+    )
+
+
+def test_pansou_series_relevance_needs_target_title_in_result_or_file_path():
+    movie = {
+        "title": "兰香如故",
+        "media_type": "tv",
+        "tag": "电视剧",
+        "aliases": ["旧梦如故"],
+    }
+    generic_files = [
+        {"file_name": "第287集.mp4", "relative_path": "第287集.mp4"},
+        {"file_name": "第288集.mp4", "relative_path": "第288集.mp4"},
+    ]
+
+    assert not SearchService._has_target_title_evidence(movie, "", generic_files)
+    assert not SearchService._has_target_title_evidence(
+        movie, "#斗罗大陆2：绝世唐门", generic_files
+    )
+    assert SearchService._has_target_title_evidence(
+        movie, "#兰香如故 全47集", generic_files
+    )
+    assert SearchService._has_target_title_evidence(
+        movie, "分享标题不明确",
+        [{"file_name": "第01集.mp4", "relative_path": "兰香如故/第01集.mp4"}],
+    )
+    assert SearchService._has_target_title_evidence(
+        movie, "#旧梦如故 全集", generic_files
+    )
+
+
 def test_keeps_ambiguous_share_without_clear_foreign_title_evidence():
     movie = {"title": "兰香如故", "media_type": "tv", "tag": "电视剧"}
     videos = [
@@ -192,3 +235,63 @@ def test_candidate_priority_keeps_numbered_title_as_identity():
         "movie",
     )
     assert sequel_score > franchise_score
+
+
+def test_pansou_series_search_drops_candidates_without_title_evidence():
+    import logging
+    from types import SimpleNamespace
+
+    class Sources:
+        def search(self, movie, config):
+            return [
+                {
+                    "source_id": "pansou", "source_name": "PanSou",
+                    "resource_id": "missing-title", "resource_type": "quark_share",
+                    "title": "",
+                },
+                {
+                    "source_id": "pansou", "source_name": "PanSou",
+                    "resource_id": "foreign-title", "resource_type": "quark_share",
+                    "title": "#斗罗大陆2：绝世唐门",
+                },
+                {
+                    "source_id": "pansou", "source_name": "PanSou",
+                    "resource_id": "matching-title", "resource_type": "quark_share",
+                    "title": "#兰香如故 全47集",
+                },
+            ]
+
+    class Storage:
+        capabilities = ("storage.accepts.quark_share",)
+
+        def get(self, target_id=None):
+            return SimpleNamespace(
+                card_id="quark",
+                capabilities=self.capabilities,
+            )
+
+        def resolve_resource(self, resource, target_id=None):
+            return {
+                "target_id": "quark",
+                "files": [
+                    {"fid": f"{resource['resource_id']}-1", "file_name": "第01集.mp4", "size": 1},
+                    {"fid": f"{resource['resource_id']}-2", "file_name": "第02集.mp4", "size": 1},
+                ],
+                "token": "test-token",
+                "error": None,
+            }
+
+    service = SearchService(Sources(), Storage(), logging.getLogger("test"))
+    candidates = service.search_movie_candidates(
+        {
+            "title": "兰香如故",
+            "media_type": "tv",
+            "tag": "电视剧",
+            "storage_target_id": "quark",
+        },
+        {},
+    )
+
+    assert [item["resource_id"] for item in candidates] == ["matching-title"]
+
+

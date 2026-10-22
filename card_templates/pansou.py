@@ -438,7 +438,9 @@ class PanSouResourceSource(ResourceSourceCard):
                 links = result.get("links")
                 if not isinstance(links, list):
                     continue
-                result_title = str(result.get("title") or result.get("content") or title)
+                # A missing provider title is unknown, not the searched query. Reusing the query
+                # here makes every link in a title-less result look like an exact match.
+                result_title = str(result.get("title") or result.get("content") or "").strip()[:500]
                 channel = str(result.get("channel") or result.get("source") or "")
                 for link in links:
                     if not isinstance(link, dict):
@@ -505,7 +507,8 @@ class PanSouResourceSource(ResourceSourceCard):
                     normalized = self._normalize_link(
                         item,
                         cloud_type=cloud_type,
-                        title=str(item.get("note") or title),
+                        # Do not substitute the search query for missing source metadata.
+                        title=str(item.get("note") or item.get("title") or "").strip()[:500],
                         channel=str(item.get("source") or ""),
                     )
                     key = (normalized["resource_type"], normalized["resource_id"]) if normalized else None

@@ -63,6 +63,38 @@ class FakeHttpClient:
         raise AssertionError(f"Unexpected request: {method} {url}")
 
 
+def test_pansou_does_not_replace_missing_result_title_with_the_search_query():
+    http = FakeHttpClient(
+        search_payload={
+            "code": 200,
+            "data": {
+                "results": [
+                    {
+                        "links": [
+                            {"type": "quark", "url": "https://pan.quark.cn/s/share123"}
+                        ]
+                    }
+                ],
+                "merged_by_type": {
+                    "quark": [
+                        {"url": "https://pan.quark.cn/s/share456"}
+                    ]
+                },
+            },
+        }
+    )
+    source = PanSouResourceSource(http)
+
+    results = source.search(
+        {"title": "兰香如故"},
+        {"base_url": "http://pansou.local", "timeout": 45},
+    )
+
+    assert [item["resource_id"] for item in results] == ["share123", "share456"]
+    assert all(item["title"] == "" for item in results)
+    assert all(item["title"] != "兰香如故" for item in results)
+
+
 def test_pansou_search_normalizes_quark_links_and_skips_other_drives():
     http = FakeHttpClient()
     source = PanSouResourceSource(http)
