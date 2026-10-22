@@ -40,6 +40,35 @@ def test_keeps_ambiguous_share_without_clear_foreign_title_evidence():
     )
 
 
+def test_filters_explicit_foreign_series_titles_when_video_names_only_show_episodes():
+    movie = {"title": "兰香如故", "media_type": "tv", "tag": "电视剧"}
+    # Some cloud shares expose generic episode filenames, so filename evidence alone
+    # cannot reveal that the share belongs to a different show.
+    videos = [
+        {"file_name": "第287集.mp4"},
+        {"file_name": "第288集.mp4"},
+    ]
+    source_titles = [
+        "#斗罗大陆2：绝世唐门",
+        "#完美世界（2024）4K 更新至288集 晚上更",
+        "#斗破苍穹 年番 4K 更新至212集",
+    ]
+
+    for source_title in source_titles:
+        assert SearchService._has_conflicting_media_title(
+            movie, source_title, videos, display_title=source_title
+        ), source_title
+
+
+def test_keeps_generic_series_source_titles_without_a_specific_work_name():
+    movie = {"title": "兰香如故", "media_type": "tv", "tag": "电视剧"}
+    videos = [{"file_name": "第01集.mp4"}, {"file_name": "第02集.mp4"}]
+    for source_title in ("更新至第02集 1080P", "古装仙侠剧合集 全47集"):
+        assert not SearchService._has_conflicting_media_title(
+            movie, source_title, videos, display_title=source_title
+        ), source_title
+
+
 def test_movie_search_filters_clear_mismatched_chinese_title():
     movie = {"title": "兰香如故", "media_type": "movie", "tag": "电影"}
     videos = [
