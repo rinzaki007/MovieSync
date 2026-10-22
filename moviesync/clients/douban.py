@@ -415,7 +415,7 @@ class DoubanClient:
         # Douban sometimes serves a lightweight/anti-bot HTML shell with HTTP 200.
         # When its HTML contains no useful metadata, fall back to the public mobile
         # subject endpoint instead of returning a successful but entirely empty detail.
-        if not any((summary, directors, writers, casts, genres, cover)):
+        if not any((summary, directors, writers, casts)):
             try:
                 mobile_response, mobile_payload = self.http.request_json(
                     "GET",
