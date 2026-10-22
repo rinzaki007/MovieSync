@@ -654,3 +654,40 @@ def test_search_flags_numbered_title_and_episode_format_mismatches():
     assert candidates[0]["resource_title"] == "潜伏 第1季 S01E01"
     assert candidates[0]["title_mismatch"] is True
     assert candidates[0]["format_mismatch"] is True
+
+
+
+def test_search_exposes_source_diagnostics_through_page_info():
+    import logging
+
+    class DiagnosticSources:
+        def search_with_diagnostics(self, movie, config, *, source_ids=None):
+            return [], [
+                {
+                    "id": "broken-source",
+                    "name": "Broken Source",
+                    "status": "error",
+                    "result_count": 0,
+                    "invalid_items": 0,
+                    "duration_ms": 12,
+                    "message": "资源来源请求失败，请检查卡片配置或查看服务日志",
+                }
+            ]
+
+        def search(self, movie, config, *, source_ids=None):
+            raise AssertionError("diagnostic-capable managers should use search_with_diagnostics")
+
+    service = SearchService(DiagnosticSources(), FakeStorageTargets(), logging.getLogger("test"))
+    page_info = {}
+
+    candidates = service.search_movie_candidates(
+        {"title": "Show"},
+        {},
+        page_info=page_info,
+    )
+
+    assert candidates == []
+    assert page_info["total_discovered"] == 0
+    assert page_info["source_search_failed"] == 1
+    assert page_info["source_search_diagnostics"][0]["id"] == "broken-source"
+    assert page_info["source_search_diagnostics"][0]["status"] == "error"
