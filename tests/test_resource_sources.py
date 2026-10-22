@@ -19,7 +19,10 @@ class FakeLogger:
         pass
 
     def warning(self, *args, **kwargs):
-        passdef test_manager_registers_direct_resource_source_card():
+        pass
+
+
+def test_manager_registers_direct_resource_source_card():
     from moviesync.cards import CardManifest, ResourceSourceCard
 
     class Store:
