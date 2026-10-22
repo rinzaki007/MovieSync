@@ -1020,7 +1020,7 @@ class SubscriptionManager:
                 resource,
                 resource.get("storage_target_id") or None,
             )
-        except Exception as exc:
+        except Exception:
             diagnostics["resolution_failures"] = 1
             diagnostics["examples"].append({
                 "file": resource.get("resource_id") or resource.get("pwd_id") or "当前分享",
@@ -1516,7 +1516,7 @@ class SubscriptionManager:
                         })
                 else:
                     sources = self.resource_sources.search_channel(source_id, channel, title)
-        except Exception as exc:
+        except Exception:
             diagnostics["source_search_errors"] += 1
             diagnostics["examples"].append({
                 "file": "频道资源搜索",
@@ -1551,7 +1551,7 @@ class SubscriptionManager:
                             "file": "频道历史搜索",
                             "reason": "资源卡片返回了非预期的数据结构",
                         })
-                except Exception as exc:
+                except Exception:
                     diagnostics["source_search_errors"] += 1
                     diagnostics["examples"].append({
                         "file": "频道历史搜索",
