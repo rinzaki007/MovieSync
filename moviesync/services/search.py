@@ -295,10 +295,10 @@ class SearchService:
         *,
         display_title: str | None = None,
     ) -> bool:
-        """仅在分享标题与实际视频文件名共同指向另一部作品时，过滤明显的错误候选。
+        """过滤明显错误的影视候选，同时尽量保留别名、简称和标题模糊的合集。
 
-        适用于电影、电视剧、综艺和动画。标题不明确时保留候选，避免误杀简称、别名和合集。
-        同时支持常见中文标题与英文原名，并要求分享元数据和视频文件相互佐证，降低误杀风险。
+        当来源标题明确指向另一部中文作品时，即使分享内文件只按集数命名也会过滤；
+        来源标题不明确时，仍要求分享元数据与视频文件相互佐证，降低误杀风险。
         """
         if not isinstance(movie, dict):
             return False
@@ -365,7 +365,7 @@ class SearchService:
                 "犯罪", "动作", "恐怖", "青春", "校园", "家庭", "冒险", "传记", "搞笑",
                 "真人秀", "脱口秀", "动画片", "电视剧集",
             )
-            for term in re.findall(r"[\\u4e00-\\u9fff]{3,}", str(display_title)):
+            for term in re.findall(r"[\u4e00-\u9fff]{3,}", str(display_title)):
                 normalized_term = cls._simplify(term).replace("_", "").lower()
                 for marker in sorted(title_noise, key=len, reverse=True):
                     normalized_marker = cls._simplify(marker).replace("_", "").lower()
