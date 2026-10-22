@@ -105,3 +105,41 @@ def test_subscription_task_detail_preserves_media_context_and_diagnostics(tmp_pa
     finally:
         services["tasks"].shutdown()
         services["subscriptions"].stop_scheduler()
+
+
+def test_subscription_task_detail_sanitizes_non_finite_diagnostics(tmp_path):
+    app = create_app({"MOVIESYNC_DATA_DIR": str(tmp_path)}, start_scheduler=False)
+    services = app.extensions["moviesync"]
+    client = app.test_client()
+    try:
+        setup = client.post(
+            "/api/setup",
+            json={"username": "admin", "password": "password123"},
+        )
+        assert setup.status_code == 200
+
+        sub = services["subscriptions"].add_subscription(
+            title="异常诊断数字",
+            pwd_id="share-non-finite",
+        )
+        sub["last_diagnostics"] = {
+            "schema_version": 1,
+            "files_scanned": float("nan"),
+            "video_files": float("inf"),
+            "examples": [
+                {"file": "bad.mkv", "numeric_detail": float("-inf")},
+            ],
+        }
+        services["subscriptions"].store.write([sub])
+
+        response = client.get(f"/api/tasks/subscription:{sub['id']}")
+        assert response.status_code == 200
+        task = response.get_json()["task"]
+        diagnostics = task["last_diagnostics"]
+        assert diagnostics["files_scanned"] == 0
+        assert diagnostics["video_files"] == 0
+        assert diagnostics["examples"][0]["numeric_detail"] == 0
+    finally:
+        services["tasks"].shutdown()
+        services["subscriptions"].stop_scheduler()
+
