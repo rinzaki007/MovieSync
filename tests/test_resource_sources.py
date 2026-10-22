@@ -961,3 +961,43 @@ def test_search_with_diagnostics_reports_empty_and_failed_sources_safely():
     assert by_id["broken-source"]["message"] == "资源来源请求失败，请检查卡片配置或查看服务日志"
     assert "DO_NOT_EXPOSE" not in str(diagnostics)
     assert all(item["duration_ms"] >= 0 for item in diagnostics)
+
+
+def test_search_with_diagnostics_marks_all_invalid_records_as_partial():
+    class Store:
+        def load(self):
+            return {"cards": {"invalid-source": {"enabled": True, "config": {}}}}
+
+    class InvalidSource(ResourceSourceCard):
+        manifest = CardManifest(
+            id="invalid-source",
+            name="Invalid Source",
+            type="resource_source",
+            capabilities=("resource.search",),
+        )
+
+        def search(self, movie, config):
+            return [None, "not-a-resource"]
+
+        def check(self, config):
+            return {"status": "healthy"}
+
+    store = Store()
+    manager = ResourceSourceManager(
+        store,
+        FakeLogger(),
+        resource_cards=[InvalidSource()],
+    )
+
+    items, diagnostics = manager.search_with_diagnostics(
+        {"title": "Film"},
+        store.load(),
+    )
+
+    assert items == []
+    assert len(diagnostics) == 1
+    assert diagnostics[0]["status"] == "partial"
+    assert diagnostics[0]["result_count"] == 0
+    assert diagnostics[0]["invalid_items"] == 2
+    assert diagnostics[0]["message"] == "已忽略 2 条格式无效的资源记录"
+

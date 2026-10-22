@@ -228,7 +228,7 @@ class ResourceSourceManager:
                     for item in raw_items
                     if isinstance(item, dict)
                 ]
-                status = "empty" if not items else ("partial" if invalid_items else "success")
+                status = "empty" if not raw_items else ("partial" if invalid_items else "success")
                 if invalid_items:
                     message = f"已忽略 {invalid_items} 条格式无效的资源记录"
                 elif items:
