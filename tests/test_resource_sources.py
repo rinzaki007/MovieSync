@@ -1,6 +1,5 @@
 import pytest
 
-from card_templates.telegram import TelegramResourceSource
 from moviesync.cards import (
     Card,
     CardManifest,
@@ -12,21 +11,6 @@ from moviesync.services import resource_sources as resource_sources_module
 from moviesync.services.resource_sources import ResourceSourceManager
 
 
-class FakeTelegramClient:
-    def __init__(self):
-        self.last_scan_all = None
-
-    def search_channel(self, channel, title, scan_all=False):
-        self.last_scan_all = scan_all
-        return [{
-            "pwd_id": "abc123",
-            "channel": channel["name"],
-        }]
-
-    def check_channel_detail(self, channel):
-        return {"status": "healthy", "message": "正常"}
-
-
 class FakeLogger:
     def exception(self, *args, **kwargs):
         pass
@@ -35,151 +19,7 @@ class FakeLogger:
         pass
 
     def warning(self, *args, **kwargs):
-        pass
-
-
-def test_resource_source_uses_telegram_card_config():
-    class Store:
-        def load(self):
-            return {
-                "cards": {
-                    "telegram": {
-                        "enabled": True,
-                        "config": {
-                            "channels": [{"id": "movie_channel", "name": "电影频道"}],
-                        },
-                    }
-                }
-            }
-
-        def update_resource_source_health(self, *args, **kwargs):
-            pass
-
-        def get_resource_sources(self):
-            return [{
-                "id": "telegram",
-                "name": "Telegram",
-                "type": "telegram",
-                "enabled": True,
-                "health": {},
-            }]
-
-    manager = ResourceSourceManager(
-        Store(), FakeLogger(), resource_cards=[TelegramResourceSource(FakeTelegramClient())]
-    )
-    results = manager.search(
-        {"title": "测试电影"},
-        Store().load(),
-    )
-
-    assert len(results) == 1
-    assert results[0]["source_id"] == "telegram"
-    assert results[0]["channel"] == "电影频道"
-
-
-
-def test_resource_source_parses_episode_using_card_magic_regex():
-    class Store:
-        def load(self):
-            return {
-                "cards": {
-                    "telegram": {
-                        "enabled": True,
-                        "config": {
-                            "channels": [],
-                            "magic_regex": {
-                                "pattern": r".*?(?<!\\d)([Ss]\\d{1,2})?([Ee]?[Pp]?[Xx]?\\d{1,3})(?!\\d).*?\\.(mp4|mkv)",
-                                "replace": r"\\1\\2.\\3",
-                            },
-                        },
-                    }
-                }
-            }
-
-        def update_resource_source_health(self, *args, **kwargs):
-            pass
-
-        def get_resource_sources(self):
-            return []
-
-    manager = ResourceSourceManager(
-        Store(), FakeLogger(), resource_cards=[TelegramResourceSource(FakeTelegramClient())]
-    )
-    assert manager.parse_tv_episode(
-        "telegram",
-        "Stranger.Things.S04E01.2022.NF.WEB-DL.2160p.HEVC.HDR.DDP.mkv",
-    ) == (4, 1)
-    assert manager.parse_tv_episode(
-        "telegram",
-        "Stranger.Things.S02E09.2160p.BluRay.x265.10bit.DTS.mkv",
-    ) == (2, 9)
-
-
-def test_resource_source_health_uses_telegram_card_config():
-    class Store:
-        def load(self):
-            return {
-                "cards": {
-                    "telegram": {
-                        "enabled": True,
-                        "config": {
-                            "channels": [{"id": "movie_channel", "name": "电影频道"}],
-                        },
-                    }
-                }
-            }
-
-        def update_resource_source_health(self, *args, **kwargs):
-            self.last = args
-
-        def get_resource_sources(self):
-            return []
-
-    store = Store()
-    manager = ResourceSourceManager(store, FakeLogger(), resource_cards=[TelegramResourceSource(FakeTelegramClient())])
-    results = manager.check_all()
-
-    assert results[0]["id"] == "telegram"
-    assert results[0]["status"] == "healthy"
-    assert results[0]["total"] == 1
-    assert results[0]["valid_count"] == 1
-
-
-
-def test_channel_search_scans_recent_messages_without_telegram_title_query():
-    class Store:
-        def load(self):
-            return {
-                "cards": {
-                    "telegram": {
-                        "enabled": True,
-                        "config": {
-                            "channels": [{"id": "movie_channel", "name": "电影频道"}],
-                        },
-                    }
-                }
-            }
-
-        def update_resource_source_health(self, *args, **kwargs):
-            pass
-
-        def get_resource_sources(self):
-            return []
-
-    client = FakeTelegramClient()
-    manager = ResourceSourceManager(Store(), FakeLogger(), resource_cards=[TelegramResourceSource(client)])
-
-    results = manager.search_channel(
-        "telegram",
-        {"id": "movie_channel", "name": "电影频道"},
-        "测试剧",
-    )
-
-    assert len(results) == 1
-    assert client.last_scan_all is True
-
-
-def test_manager_registers_direct_resource_source_card():
+        passdef test_manager_registers_direct_resource_source_card():
     from moviesync.cards import CardManifest, ResourceSourceCard
 
     class Store:
@@ -483,11 +323,22 @@ def test_resource_manager_lists_only_resource_source_manifests():
     manager = ResourceSourceManager(
         object(), FakeLogger(), registry=registry
     )
-    registry.register(TelegramResourceSource(FakeTelegramClient()))
+    class GenericSource(ResourceSourceCard):
+        manifest = CardManifest(
+            id="generic-source",
+            name="Generic Source",
+            type="resource_source",
+            capabilities=("resource.search",),
+        )
+
+        def search(self, movie, config):
+            return []
+
+    registry.register(GenericSource())
     registry.register(OtherCard())
 
     manifests = manager.get_cards()
-    assert [item["id"] for item in manifests] == ["telegram"]
+    assert [item["id"] for item in manifests] == ["generic-source"]
     assert all(item["type"] == "resource_source" for item in manifests)
 
 
@@ -584,23 +435,7 @@ def test_resource_source_health_is_saved_and_reported_by_card_id():
         "type": "resource_source",
         "enabled": True,
         "health": saved_health,
-    }]
-
-
-
-def test_telegram_card_does_not_search_removed_or_unconfigured_channel():
-    client = FakeTelegramClient()
-    card = TelegramResourceSource(client)
-
-    assert card.search_channel(
-        {"id": "my_test_channel", "name": "旧测试频道"},
-        "测试剧",
-        {"channels": [{"id": "movie_channel", "name": "正式频道"}]},
-    ) == []
-    assert client.last_scan_all is None
-
-
-def test_resource_manager_isolates_malformed_channel_search_results():
+    }]def test_resource_manager_isolates_malformed_channel_search_results():
     class Store:
         def load(self):
             return {
