@@ -358,7 +358,9 @@ class DoubanClient:
                         names.append(part)
             return names or self._schema_people(schema.get(schema_key))
 
-        title_node = soup.select_one('#content h1 span[property="v:itemreviewed"]') or soup.select_one("#content h1 span")
+        title_node = soup.select_one('#content h1 span[property="v:itemreviewed"]') or soup.select_one(
+            "#content h1 span"
+        )
         title = (title_node.get_text(" ", strip=True) if title_node else "") or schema_text("name")
         title = re.sub(r"\s*\(\d{4}\)\s*$", "", title).strip()
         cover_node = soup.select_one("#mainpic img") or soup.select_one('meta[property="og:image"]')
@@ -373,7 +375,11 @@ class DoubanClient:
             or soup.select_one('[itemprop="ratingValue"]')
         )
         rating = (rating_node.get_text(" ", strip=True) if rating_node else "") or schema_text("ratingValue")
-        summary_node = soup.select_one('span[property="v:summary"]') or soup.select_one("#link-report .all") or soup.select_one("#link-report")
+        summary_node = (
+            soup.select_one('span[property="v:summary"]')
+            or soup.select_one("#link-report .all")
+            or soup.select_one("#link-report")
+        )
         summary = summary_node.get_text(" ", strip=True) if summary_node else ""
         summary = re.sub(r"\s+", " ", summary).strip() or schema_text("description")
 
@@ -384,9 +390,14 @@ class DoubanClient:
                 genres.append(value)
         if not genres:
             raw_genres = schema.get("genre", [])
-            genres = [str(value).strip() for value in (raw_genres if isinstance(raw_genres, list) else [raw_genres]) if str(value).strip()]
+            genre_values = raw_genres if isinstance(raw_genres, list) else [raw_genres]
+            genres = [str(value).strip() for value in genre_values if str(value).strip()]
 
-        release_dates = [node.get_text(" ", strip=True) for node in soup.select('span[property="v:initialReleaseDate"]') if node.get_text(" ", strip=True)]
+        release_dates = [
+            node.get_text(" ", strip=True)
+            for node in soup.select('span[property="v:initialReleaseDate"]')
+            if node.get_text(" ", strip=True)
+        ]
         year_match = re.search(r"\b(19|20)\d{2}\b", " ".join(release_dates) or schema_text("datePublished"))
         year = year_match.group(0) if year_match else ""
         info_year = info_values("上映日期")
