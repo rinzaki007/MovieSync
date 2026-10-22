@@ -943,7 +943,7 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
                     })
                     .filter(Boolean);
                 const sourceSummaryText = sourceSummary.length
-                    ? `来源诊断（原始记录）：${sourceSummary.join('；')}${sources.length > sourceSummary.length ? `；另有 ${sources.length - sourceSummary.length} 个来源` : ''}`
+                    ? `来源诊断（原始记录）：${sourceSummary.join('；')}${sources.length > 4 ? `；另有 ${sources.length - 4} 个来源未展开` : ''}`
                     : '';
                 const failureDetails = sourceFailures.length
                     ? `失败来源：${sourceFailures.slice(0, 3).join('；')}${sourceFailures.length > 3 ? `；另有 ${sourceFailures.length - 3} 个来源失败` : ''}`
