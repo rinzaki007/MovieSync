@@ -37,7 +37,6 @@ printf '%s' "$status"
     path.chmod(0o755)
 
 
-
 def _write_fake_python(path: Path) -> None:
     path.write_text(
         """#!/bin/sh
@@ -58,6 +57,7 @@ printf '%s' "$status"
         encoding="utf-8",
     )
     path.chmod(0o755)
+
 
 def _run_smoke_test(
     tmp_path: Path,
