@@ -263,7 +263,7 @@ def test_pansou_series_search_drops_candidates_without_title_evidence():
                 {
                     "source_id": "pansou", "source_name": "PanSou",
                     "resource_id": "matching-title", "resource_type": "quark_share",
-                    "title": "#兰香如故 全47集",
+                    "title": "更新至第11集",
                 },
             ]
 
@@ -280,7 +280,7 @@ def test_pansou_series_search_drops_candidates_without_title_evidence():
             return {
                 "target_id": "quark",
                 "files": [
-                    {"fid": f"{resource['resource_id']}-1", "file_name": "第01集.mp4", "size": 1},
+                    {"fid": f"{resource['resource_id']}-1", "file_name": "第01集.mp4", "relative_path": ("兰香如故/第01集.mp4" if resource["resource_id"] == "direct-match" else "合集/第01集.mp4"), "size": 1},
                     {"fid": f"{resource['resource_id']}-2", "file_name": "第02集.mp4", "size": 1},
                 ],
                 "token": "test-token",
