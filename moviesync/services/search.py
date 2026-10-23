@@ -363,8 +363,8 @@ class SearchService:
                     # Punctuation is already normalized away. Chinese suffixes are
                     # common official subtitles; a parenthesized release year is metadata.
                     return bool(
-                        re.match(r"[\\u4e00-\\u9fff]", suffix)
-                        or re.match(r"(?:19|20)\\d{2}", suffix)
+                        re.match(r"[\u4e00-\u9fff]", suffix)
+                        or re.match(r"(?:19|20)\d{2}", suffix)
                     )
 
                 if any(matches_target_or_numbered_subtitle(title) for title in target_titles):
