@@ -471,12 +471,6 @@ function renderGrid() {
                 <div class="absolute right-2.5 top-2.5 rounded-lg border border-amber-300/20 bg-black/55 px-2 py-1 text-[11px] font-bold text-amber-300 backdrop-blur-md">
                     <i class="fa-solid fa-star mr-0.5"></i>${escapeHtml(movie.rate || '暂无')}
                 </div>
-                <div class="absolute bottom-2.5 left-2.5 right-2.5 flex items-center justify-between gap-2">
-                    <div class="flex min-w-0 items-center gap-1.5">
-                        <span class="shrink-0 whitespace-nowrap rounded-md border border-slate-400/20 bg-black/55 px-2 py-1 text-[10px] text-slate-300 backdrop-blur-md">${escapeHtml(movie.tag || currentTag)}</span>
-                    </div>
-                    <a href="${escapeHtml(movie.url || '#')}" target="_blank" rel="noopener noreferrer" class="douban-poster-btn shrink-0" aria-label="打开${escapeHtml(movie.provider_name || '影视详情')}">${escapeHtml(movie.provider_name || '详情')} <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
-                </div>
             </div>
             <div class="p-3">
                 <div class="truncate text-sm font-semibold text-slate-100 group-hover:text-blue-300" title="${escapeHtml(movie.title)}">${escapeHtml(movie.title)}</div>
