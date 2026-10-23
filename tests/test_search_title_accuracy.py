@@ -1,6 +1,15 @@
 """影视资源搜索标题准确率回归测试。"""
 
-from moviesync.services.search import SearchService
+from moviesync.services.search import SearchService, _detect_resolution
+
+
+def test_resolution_falls_back_to_source_title_without_overriding_filename():
+    assert _detect_resolution("第01集.mp4", "兰香如故 (2026) 4K 全47完结") == "4K"
+    assert _detect_resolution("第01集.mp4", "兰香如故4K全47完结") == "4K"
+    assert _detect_resolution("第01集.1080p.mkv", "兰香如故 4K 全47完结") == "1080P"
+    assert _detect_resolution("第01集.mp4", "兰香如故 全47完结") == "未知"
+
+
 
 
 def test_rejects_tv_share_clearly_belonging_to_another_show():
@@ -221,6 +230,22 @@ def test_candidate_priority_ignores_parenthesized_release_year_for_sequel_titles
         older_franchise_entry, "潜伏6 (2025)", "movie"
     )
     assert exact_score > older_score
+
+
+def test_explicit_source_title_match_outranks_quality_markers_in_unrelated_description():
+    direct_match = {
+        "title": "兰香如故 (2026) 4K 全47完结",
+        "file_name": "第01集.mp4",
+    }
+    misleading_result = {
+        "title": "吞噬星空 S01E47 4K 1080p 全集",
+        "description": "频道文案提到兰香如故",
+        "file_name": "第47集.mkv",
+    }
+
+    direct_score = SearchService._candidate_priority(direct_match, "兰香如故", "tv")
+    misleading_score = SearchService._candidate_priority(misleading_result, "兰香如故", "tv")
+    assert direct_score > misleading_score
 
 
 def test_candidate_priority_puts_direct_series_title_ahead_of_generic_episode_results():

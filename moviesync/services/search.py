@@ -41,18 +41,20 @@ def _format_size(value: object) -> str:
     return f"{number:.1f} {units[index]}"
 
 
-def _detect_resolution(name: str) -> str:
-    text = str(name or "").lower()
+def _detect_resolution(name: str, fallback: str = "") -> str:
+    """Detect quality from the filename first, then fall back to the source title."""
     patterns = [
-        (r"\b(2160p|4k|uhd)\b", "4K"),
-        (r"\b(1440p|2k)\b", "2K"),
-        (r"\b1080[pi]?\b", "1080P"),
-        (r"\b(720[pi]?)\b", "720P"),
-        (r"\b(480[pi]?)\b", "480P"),
+        (r"(?<![a-z0-9])(2160p|4k|uhd)(?![a-z0-9])", "4K"),
+        (r"(?<![a-z0-9])(1440p|2k)(?![a-z0-9])", "2K"),
+        (r"(?<![a-z0-9])1080[pi]?(?![a-z0-9])", "1080P"),
+        (r"(?<![a-z0-9])720[pi]?(?![a-z0-9])", "720P"),
+        (r"(?<![a-z0-9])480[pi]?(?![a-z0-9])", "480P"),
     ]
-    for pattern, label in patterns:
-        if re.search(pattern, text):
-            return label
+    for value in (name, fallback):
+        text = str(value or "").lower()
+        for pattern, label in patterns:
+            if re.search(pattern, text):
+                return label
     return "未知"
 
 
@@ -543,10 +545,18 @@ class SearchService:
         ).strip()
         simplified_title = SearchService._simplify(normalized_movie_title).lower()
         simplified_text = SearchService._simplify(text)
-        if simplified_title and simplified_title in simplified_text:
-            # A direct title hit must rank ahead of generic episode/resolution markers,
-            # otherwise a valid result can be pushed beyond the default first scan page.
-            score += 30
+        primary_title_text = " ".join(
+            str(source.get(key) or "")
+            for key in ("title", "name", "resource_name", "share_name")
+        )
+        simplified_primary_title = SearchService._simplify(primary_title_text)
+        if simplified_title and simplified_title in simplified_primary_title:
+            # An explicit work-name match in the source title outranks generic episode,
+            # resolution, and codec markers. Quality is useful only after identity.
+            score += 80
+        elif simplified_title and simplified_title in simplified_text:
+            # A mention in descriptions/paths is weaker evidence than the source title.
+            score += 5
 
         # Metadata is soft evidence for ordering, never a hard filter. Share titles
         # often omit credits or years, so absent evidence must not hide a valid result.
@@ -843,6 +853,13 @@ class SearchService:
                         ),
                         "",
                     )
+                    # 网盘文件名经常只有“第01集.mp4”等通用名称；若文件名没有
+                    # 分辨率标记，使用来源标题补足版本信息，但绝不覆盖文件名中的明确标记。
+                    title_resolution = _detect_resolution("", source_title)
+                    if title_resolution != "未知":
+                        for video in all_videos:
+                            if video["resolution"] == "未知":
+                                video["resolution"] = title_resolution
                     source_title_evidence = " ".join(
                         str(source.get(key) or "").strip()
                         for key in ("title", "name", "resource_name", "share_name", "content", "description")
