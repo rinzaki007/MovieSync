@@ -860,7 +860,31 @@ class SearchService:
                     # and channel content often append unrelated recommendations or other works;
                     # treating that entire blob as the displayed title falsely rejects valid shares
                     # whose actual title matches the requested movie (as seen in production logs).
-                    display_title_for_filter = source_title or None
+                    # Ignore unrelated descriptive copy only when the primary title itself
+                    # positively identifies the requested work. If the primary title is generic
+                    # (for example, an episode-only title), retain full evidence so conflicts
+                    # mentioned in the description can still be rejected.
+                    primary_title = self._simplify(source_title or "").replace("_", "").lower()
+                    target_title_values = [
+                        self._simplify(str(movie.get(key) or "")).replace("_", "").lower()
+                        for key in ("title", "name", "original_title")
+                        if str(movie.get(key) or "").strip()
+                    ] if isinstance(movie, dict) else []
+                    aliases = movie.get("aliases", []) if isinstance(movie, dict) else []
+                    if isinstance(aliases, str):
+                        aliases = re.split(r"[,;；、|]", aliases)
+                    if isinstance(aliases, (list, tuple, set)):
+                        target_title_values.extend(
+                            self._simplify(str(alias)).replace("_", "").lower()
+                            for alias in aliases if str(alias).strip()
+                        )
+                    primary_title_matches_target = bool(primary_title) and any(
+                        target and (target in primary_title or primary_title in target)
+                        for target in target_title_values if len(target) >= 2
+                    )
+                    display_title_for_filter = (
+                        source_title if primary_title_matches_target else source_title_evidence
+                    ) or None
                     candidate_title_evidence = source_title_evidence
                     if is_pansou_aggregate:
                         # Use the title paired with this specific share URL rather than
