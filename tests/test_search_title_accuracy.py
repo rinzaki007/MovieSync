@@ -511,7 +511,7 @@ def test_search_passes_movie_metadata_to_priority_and_expands_until_direct_match
             return {
                 "target_id": "quark",
                 "files": [
-                    {"fid": f"{resource['resource_id']}-1", "file_name": "第01集.mp4", "size": 1},
+                    {"fid": f"{resource['resource_id']}-1", "file_name": "第01集.mp4", "relative_path": ("兰香如故/第01集.mp4" if resource["resource_id"] == "direct-match" else "合集/第01集.mp4"), "size": 1},
                 ],
                 "token": "test-token",
                 "error": None,
