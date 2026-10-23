@@ -821,3 +821,27 @@ def test_candidate_priority_uses_metadata_as_soft_ranking_evidence():
     )
 
     assert enriched > baseline
+
+def test_exact_title_match_outranks_unrelated_episode_and_quality_markers():
+    exact_match = {
+        "title": "兰香如故 (2026) 完结47集",
+    }
+    unrelated_series = {
+        "title": "吞噬星空 S01E01 S01E02 S01E03 S01E04 4K 1080p",
+    }
+    metadata = {
+        "title": "兰香如故",
+        "media_type": "tv",
+        "year": "2026",
+        "casts": ["谭松韵", "刘学义"],
+    }
+
+    exact_score = SearchService._candidate_priority(
+        exact_match, "兰香如故", "tv", metadata
+    )
+    unrelated_score = SearchService._candidate_priority(
+        unrelated_series, "兰香如故", "tv", metadata
+    )
+
+    assert exact_score > unrelated_score
+
