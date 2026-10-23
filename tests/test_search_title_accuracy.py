@@ -361,8 +361,8 @@ def test_pansou_series_search_expands_empty_first_page_until_a_match_is_found():
     )
 
     assert [item["resource_id"] for item in candidates] == ["matching-title"]
-    assert page_info["next_offset"] == 11
-    assert page_info["has_more"] is False
+    assert page_info["next_offset"] == 10
+    assert page_info["has_more"] is True
 
 def test_pansou_aggregate_title_does_not_reject_every_share_in_the_bundle():
     import logging
