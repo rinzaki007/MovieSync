@@ -644,7 +644,12 @@ class SearchService:
         # category, media_type, year and alternate/original titles without core coupling.
         search_context = {"title": cleaned_title}
         if isinstance(movie, dict):
-            for key in ("tag", "media_type", "year", "original_title", "genres"):
+            for key in (
+                "tag", "media_type", "year", "release_year", "original_title",
+                "aliases", "alternative_titles", "aka", "genres", "directors",
+                "writers", "casts", "actors", "countries", "release_dates",
+                "runtime", "summary", "provider_id", "id", "url",
+            ):
                 value = movie.get(key)
                 if value not in (None, "", [], {}):
                     search_context[key] = value
