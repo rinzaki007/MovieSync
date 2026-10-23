@@ -372,13 +372,25 @@ def test_candidate_search_uses_selected_target_capabilities_and_pins_target():
     service = SearchService(sources, targets, logging.getLogger("test"))
 
     candidates = service.search_movie_candidates(
-        {"title": "Show"},
+        {
+            "title": "Show",
+            "year": "2024",
+            "original_title": ["Original Show"],
+            "directors": ["Director Name"],
+            "casts": ["Lead Actor"],
+            "summary": "A test synopsis",
+        },
         {"cards": {}},
         storage_target_id="aliyun",
     )
 
     assert sources.search_context["storage_target_id"] == "aliyun"
     assert sources.search_context["resource_types"] == ["aliyun_share"]
+    assert sources.search_context["year"] == "2024"
+    assert sources.search_context["original_title"] == ["Original Show"]
+    assert sources.search_context["directors"] == ["Director Name"]
+    assert sources.search_context["casts"] == ["Lead Actor"]
+    assert sources.search_context["summary"] == "A test synopsis"
     assert targets.resolved_target == "aliyun"
     assert len(candidates) == 1
     assert candidates[0]["resource_type"] == "aliyun_share"
@@ -784,3 +796,28 @@ def test_search_does_not_cache_empty_share_listing(tmp_path):
     assert second[1] == "token"
     assert storage.resolve_count == 2
 
+
+
+
+def test_candidate_priority_uses_metadata_as_soft_ranking_evidence():
+    from moviesync.services.search import SearchService
+
+    title_only = {"title": "Drama 2024"}
+    metadata_match = {"title": "Drama 2024 Director Name Lead Actor"}
+
+    baseline = SearchService._candidate_priority(
+        title_only, "Drama", "tv", {"title": "Drama", "year": "2024"}
+    )
+    enriched = SearchService._candidate_priority(
+        metadata_match,
+        "Drama",
+        "tv",
+        {
+            "title": "Drama",
+            "year": "2024",
+            "directors": ["Director Name"],
+            "casts": ["Lead Actor"],
+        },
+    )
+
+    assert enriched > baseline
