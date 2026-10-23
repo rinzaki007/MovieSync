@@ -5,7 +5,6 @@
 """
 from __future__ import annotations
 
-import hashlib
 import re
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
@@ -209,11 +208,7 @@ class SearchService:
         return re.sub(r"[^\w\u4e00-\u9fa5]", "", value or "")
 
     def _get_resource_files(self, resource: dict, *, refresh: bool = False):
-        """解析分享文件。
-
-        普通搜索允许短时复用文件列表；转存前必须 refresh，重新获取文件状态和
-        临时 token。缓存键只保留提取码摘要，缓存内容不保存 token。
-        """
+        """解析分享文件。每次搜索均读取最新文件列表，不复用旧缓存。"""
         storage_target_id = str(
             resource.get("storage_target_id") or resource.get("target_id") or ""
         ).strip()
@@ -247,18 +242,6 @@ class SearchService:
         token = resolved.get("token")
         error = resolved.get("error")
         target_id = resolved.get("target_id") or storage_target_id
-
-        # 只缓存成功解析出的非空文件列表。不缓存临时错误或空结果，
-        # 这样来源短暂故障后，用户重试不会在 TTL 内反复命中旧失败。
-        if not error and files:
-            with self._share_lock:
-                self._share_cache[cache_key] = (now, (files, error, target_id))
-                while len(self._share_cache) > MAX_SHARE_CACHE_ENTRIES:
-                    oldest_key = min(
-                        self._share_cache,
-                        key=lambda key: self._share_cache[key][0],
-                    )
-                    self._share_cache.pop(oldest_key, None)
 
         return files, token, error, target_id
 
