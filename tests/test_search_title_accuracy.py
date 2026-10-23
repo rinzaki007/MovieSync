@@ -223,6 +223,25 @@ def test_candidate_priority_ignores_parenthesized_release_year_for_sequel_titles
     assert exact_score > older_score
 
 
+def test_candidate_priority_puts_direct_series_title_ahead_of_generic_episode_results():
+    direct_match = {
+        "title": "兰香如故 (2026) 4K 全47完结",
+        "file_name": "第01集.mp4",
+    }
+    generic_episode_result = {
+        "title": "更新至第47集 S01E47 4K 1080p 全集",
+        "file_name": "第47集.mkv",
+    }
+
+    direct_score = SearchService._candidate_priority(
+        direct_match, "兰香如故", "tv", {"title": "兰香如故", "year": "2026"}
+    )
+    generic_score = SearchService._candidate_priority(
+        generic_episode_result, "兰香如故", "tv", {"title": "兰香如故", "year": "2026"}
+    )
+    assert direct_score > generic_score
+
+
 def test_candidate_priority_keeps_numbered_title_as_identity():
     sequel_score = SearchService._candidate_priority(
         {"title": "潜伏6 4K", "file_name": "潜伏6.mkv"},
