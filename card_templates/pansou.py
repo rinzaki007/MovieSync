@@ -547,7 +547,9 @@ class PanSouResourceSource(ResourceSourceCard):
                     return [str(part).strip() for part in value if str(part).strip()]
                 return []
 
-            normalize = lambda value: re.sub(r"[^\w\u4e00-\u9fff]", "", str(value or "")).casefold()
+            def normalize(value: object) -> str:
+                return re.sub(r"[^\w\u4e00-\u9fff]", "", str(value or "")).casefold()
+
             primary = normalize(title)
             alternate_terms: list[str] = []
             for field in ("original_title", "aliases", "alternative_titles", "aka"):
