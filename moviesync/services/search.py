@@ -682,6 +682,7 @@ class SearchService:
                 source,
                 title,
                 str(movie.get("media_type") or "") if isinstance(movie, dict) else "",
+                movie if isinstance(movie, dict) else None,
             ),
             reverse=True,
         )
