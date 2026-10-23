@@ -263,7 +263,7 @@ def test_pansou_series_search_drops_candidates_without_title_evidence():
                 {
                     "source_id": "pansou", "source_name": "PanSou",
                     "resource_id": "matching-title", "resource_type": "quark_share",
-                    "title": "更新至第11集",
+                    "title": "#兰香如故 全47集",
                 },
             ]
 
@@ -497,7 +497,7 @@ def test_search_passes_movie_metadata_to_priority_and_expands_until_direct_match
                     "source_name": "PanSou",
                     "resource_id": "direct-match",
                     "resource_type": "quark_share",
-                    "title": "#兰香如故 全47集",
+                    "title": "更新至第11集",
                 }
             ]
 
