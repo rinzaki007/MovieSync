@@ -547,7 +547,7 @@ class PanSouResourceSource(ResourceSourceCard):
                     return [str(part).strip() for part in value if str(part).strip()]
                 return []
 
-            normalize = lambda value: re.sub(r"[^\\w\\u4e00-\\u9fff]", "", str(value or "")).casefold()
+            normalize = lambda value: re.sub(r"[^\w\u4e00-\u9fff]", "", str(value or "")).casefold()
             primary = normalize(title)
             alternate_terms: list[str] = []
             for field in ("original_title", "aliases", "alternative_titles", "aka"):
@@ -561,7 +561,7 @@ class PanSouResourceSource(ResourceSourceCard):
                     break
             if not alternate_terms:
                 year = str(movie.get("year") or movie.get("release_year") or "").strip()
-                if re.fullmatch(r"(?:19|20)\\d{2}", year):
+                if re.fullmatch(r"(?:19|20)\d{2}", year):
                     alternate_terms.append(f"{title} {year}")
 
             for alternate in alternate_terms[:2]:
