@@ -489,6 +489,7 @@ class SearchService:
         source: dict,
         movie_title: str,
         media_type: str = "",
+        metadata: dict | None = None,
     ) -> int:
         """稳定地把名称/剧集信息较明确的资源排在前面；未知格式仍保留在后续页。"""
         name_fields = (
