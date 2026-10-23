@@ -116,6 +116,7 @@ def test_pansou_search_normalizes_quark_links_and_skips_other_drives():
     assert kwargs["params"]["kw"] == "测试电影"
     assert kwargs["params"]["cloud_types"] == "quark"
     assert kwargs["params"]["wait_ms"] == 6000
+    assert kwargs["params"]["refresh"] == "true"
 
 
 
