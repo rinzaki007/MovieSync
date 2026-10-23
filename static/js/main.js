@@ -56,6 +56,13 @@ function captureSourceSearchDiagnostics(result, title, destination) {
     }
 }
 
+function updateCandidateSearchProgressDisplay() {
+    const progress = document.getElementById('candidate-search-progress');
+    if (progress) progress.textContent = candidateSearchProgressText;
+    const emptyState = document.querySelector('#candidate-content .candidate-search-empty-state');
+    if (emptyState) emptyState.textContent = candidateSearchProgressText;
+}
+
 function stopCandidateSearchProgress(requestId) {
     if (requestId !== candidateSearchRequestSeq) return;
     if (candidateSearchProgressTimer) {
@@ -910,6 +917,7 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
                     candidateSearchProgressText = remaining
                         ? `已完成 ${completedSources}/${sources.length} 个资源来源，发现 ${count} 个可用资源；还有 ${remaining} 个来源正在检索。 ${activeText}结果会陆续显示。`
                         : `来源检索完成，共找到 ${count} 个可用资源。${failedSources ? `另有 ${failedSources} 个来源请求失败。` : ''}`;
+                    updateCandidateSearchProgressDisplay();
                 };
 
                 const searchOneSource = async source => {
@@ -990,7 +998,12 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
                             firstSourceResponse = true;
                         }
                         updateSourceProgress();
-                        refreshModalPreservingSelection();
+                        // Do not rebuild the whole candidate list for a source that
+                        // returned no new candidates. Updating the progress label is
+                        // enough and avoids flicker/scroll jumps during progressive search.
+                        if (!sourceHadResponse || !opened) {
+                            refreshModalPreservingSelection();
+                        }
                     }
                 };
 
