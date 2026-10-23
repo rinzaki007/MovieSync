@@ -628,3 +628,33 @@ def test_matching_primary_title_is_not_rejected_by_unrelated_description():
         videos,
         display_title="逃出布迪秀 (2026) 1080p",
     )
+
+def test_keeps_matching_title_with_bilingual_subtitle_and_release_metadata():
+    movie = {"title": "逃出布迪秀", "media_type": "movie", "tag": "电影"}
+    videos = [
+        {"file_name": "逃出布迪秀 (2026) 4K SDR 内封简英双语字幕.mkv"},
+        {"file_name": "逃出布迪秀 (2026) 1080p 外挂中文字幕.mkv"},
+    ]
+
+    assert not SearchService._has_conflicting_media_title(
+        movie,
+        "逃出布迪秀 (2026) 4K SDR 内封简英双语字幕",
+        videos,
+        display_title="逃出布迪秀 (2026) 4K SDR 内封简英双语字幕",
+    )
+
+
+def test_keeps_matching_title_with_english_name_and_genre_tags():
+    movie = {"title": "逃出布迪秀", "media_type": "movie", "tag": "电影"}
+    videos = [
+        {"file_name": "逃出布迪秀 Buddy (2026) 1080P 惊悚恐怖奇幻.mkv"},
+        {"file_name": "逃出布迪秀 Buddy (2026) 4K.mkv"},
+    ]
+
+    assert not SearchService._has_conflicting_media_title(
+        movie,
+        "逃出布迪秀 Buddy (2026) [1080P] [外挂中文字幕] [惊悚/恐怖/奇幻]",
+        videos,
+        display_title="逃出布迪秀 Buddy (2026) [1080P] [外挂中文字幕] [惊悚/恐怖/奇幻]",
+    )
+
