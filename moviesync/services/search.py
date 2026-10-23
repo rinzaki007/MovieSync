@@ -339,6 +339,10 @@ class SearchService:
                 "现代", "爱情", "情感", "战争", "科幻", "剧情", "喜剧", "奇幻", "武侠",
                 "犯罪", "动作", "恐怖", "青春", "校园", "家庭", "冒险", "传记", "搞笑",
                 "真人秀", "脱口秀", "动画片", "电视剧集",
+                # Release/codec/audio-video metadata must not be mistaken for another work title.
+                "内封官中", "内封", "官中", "杜比视界", "杜比", "视界", "高码率",
+                "HDR10", "HDR", "SDR", "DV", "iT", "HEVC", "H265", "H264",
+                "DDP", "DTS", "Atmos", "蓝光原盘", "原盘",
             )
             for term in re.findall(r"[\u4e00-\u9fff]{3,}", str(display_title)):
                 normalized_term = cls._simplify(term).replace("_", "").lower()
@@ -347,7 +351,25 @@ class SearchService:
                     if normalized_marker:
                         normalized_term = normalized_term.replace(normalized_marker, "")
                 # 目标作品名本身不是冲突证据，但标题中并列的另一部作品仍是。
-                if any(normalized_term == title or normalized_term in title for title in target_titles):
+                # A numbered title may legitimately be followed by a subtitle, e.g.
+                # "潜伏6：血域". Keep sequel identity strict in the other direction:
+                # searching "潜伏" must not make "潜伏6" look like the same work.
+                def matches_target_or_numbered_subtitle(
+                    title: str, term: str = normalized_term
+                ) -> bool:
+                    if term == title or term in title:
+                        return True
+                    if not title or not title[-1:].isdigit() or not term.startswith(title):
+                        return False
+                    suffix = term[len(title):]
+                    # Punctuation is already normalized away. Chinese suffixes are
+                    # common official subtitles; a parenthesized release year is metadata.
+                    return bool(
+                        re.match(r"[\u4e00-\u9fff]", suffix)
+                        or re.match(r"(?:19|20)\d{2}", suffix)
+                    )
+
+                if any(matches_target_or_numbered_subtitle(title) for title in target_titles):
                     continue
                 if len(normalized_term) >= 3:
                     return True

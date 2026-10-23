@@ -213,6 +213,21 @@ def test_declared_episode_count_can_be_extracted_without_forcing_movie_warning()
     assert _declared_episode_count("电影合集 全47集") == 47
 
 
+def test_keeps_numbered_movie_title_with_official_chinese_subtitle():
+    movie = {"title": "潜伏6", "media_type": "movie", "tag": "电影"}
+    videos = [
+        {"file_name": "潜伏6：血域 (2026) 4K.mkv"},
+        {"file_name": "潜伏6：血域 (2026) 1080p.mkv"},
+    ]
+
+    assert not SearchService._has_conflicting_media_title(
+        movie,
+        "潜伏6：血域（2026）iT 4K DV&HDR 内封官中",
+        videos,
+        display_title="潜伏6：血域（2026）iT 4K DV&HDR 内封官中",
+    )
+
+
 def test_candidate_priority_ignores_parenthesized_release_year_for_sequel_titles():
     exact_sequel = {
         "title": "潜伏6 4K BluRay 1080p",
