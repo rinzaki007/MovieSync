@@ -354,12 +354,14 @@ class SearchService:
                 # A numbered title may legitimately be followed by a subtitle, e.g.
                 # "潜伏6：血域". Keep sequel identity strict in the other direction:
                 # searching "潜伏" must not make "潜伏6" look like the same work.
-                def matches_target_or_numbered_subtitle(title: str) -> bool:
-                    if normalized_term == title or normalized_term in title:
+                def matches_target_or_numbered_subtitle(
+                    title: str, term: str = normalized_term
+                ) -> bool:
+                    if term == title or term in title:
                         return True
-                    if not title or not title[-1:].isdigit() or not normalized_term.startswith(title):
+                    if not title or not title[-1:].isdigit() or not term.startswith(title):
                         return False
-                    suffix = normalized_term[len(title):]
+                    suffix = term[len(title):]
                     # Punctuation is already normalized away. Chinese suffixes are
                     # common official subtitles; a parenthesized release year is metadata.
                     return bool(
