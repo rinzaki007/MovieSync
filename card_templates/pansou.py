@@ -536,6 +536,39 @@ class PanSouResourceSource(ResourceSourceCard):
                     if normalized and key not in seen:
                         seen.add(key)
                         results.append(normalized)
+        # If the primary title yields no links, retry a small number of metadata
+        # aliases before giving up. This is a fallback only (not extra requests on
+        # every successful search), so the common path keeps its existing latency.
+        if not results and isinstance(movie, dict) and not movie.get("_metadata_alias_fallback"):
+            def values(value: object) -> list[str]:
+                if isinstance(value, str):
+                    return [part.strip() for part in re.split(r"[,;；、|]", value) if part.strip()]
+                if isinstance(value, (list, tuple, set)):
+                    return [str(part).strip() for part in value if str(part).strip()]
+                return []
+
+            normalize = lambda value: re.sub(r"[^\\w\\u4e00-\\u9fff]", "", str(value or "")).casefold()
+            primary = normalize(title)
+            alternate_terms: list[str] = []
+            for field in ("original_title", "aliases", "alternative_titles", "aka"):
+                for alternate in values(movie.get(field)):
+                    if len(normalize(alternate)) >= 2 and normalize(alternate) != primary:
+                        if alternate not in alternate_terms:
+                            alternate_terms.append(alternate)
+                    if len(alternate_terms) >= 2:
+                        break
+                if len(alternate_terms) >= 2:
+                    break
+            if not alternate_terms:
+                year = str(movie.get("year") or movie.get("release_year") or "").strip()
+                if re.fullmatch(r"(?:19|20)\\d{2}", year):
+                    alternate_terms.append(f"{title} {year}")
+
+            for alternate in alternate_terms[:2]:
+                fallback_movie = {**movie, "title": alternate, "_metadata_alias_fallback": True}
+                fallback_results = self.search(fallback_movie, config)
+                if fallback_results:
+                    return fallback_results
         return results
 
     def check(self, config: dict) -> dict[str, Any]:
