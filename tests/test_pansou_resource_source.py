@@ -150,13 +150,13 @@ def test_pansou_search_polls_and_merges_progressive_results():
     assert len([call for call in http.calls if call[1].endswith("/api/search/first")]) == 4
 
 
-def test_pansou_stops_polling_after_two_unchanged_snapshots(monkeypatch):
+def test_pansou_keeps_polling_for_late_results_after_unchanged_snapshots(monkeypatch):
     import time
 
     monkeypatch.setattr(time, "sleep", lambda _: None)
     payload = {
         "results": [
-            {"title": "测试电影", "links": [
+            {"title": "更新至第47集", "links": [
                 {"type": "quark", "url": "https://pan.quark.cn/s/share123"}
             ]}
         ],
@@ -164,22 +164,23 @@ def test_pansou_stops_polling_after_two_unchanged_snapshots(monkeypatch):
     }
     later = {
         "results": [
-            {"title": "测试电影", "links": [
+            {"title": "兰香如故 (2026) 4K 全47完结", "links": [
                 {"type": "quark", "url": "https://pan.quark.cn/s/share456"}
             ]}
         ],
         "merged_by_type": {},
     }
-    http = FakeHttpClient(search_payloads=[payload, payload, payload, later])
+    # The first six snapshots are unchanged; the exact-title result arrives later.
+    http = FakeHttpClient(search_payloads=[payload, payload, payload, payload, payload, payload, payload, later])
     source = PanSouResourceSource(http)
 
     results = source.search(
-        {"title": "测试电影"},
+        {"title": "兰香如故"},
         {"base_url": "http://pansou.local", "timeout": 45},
     )
 
-    assert [item["resource_id"] for item in results] == ["share123"]
-    assert len([call for call in http.calls if call[1].endswith("/api/search/first")]) == 3
+    assert {item["resource_id"] for item in results} == {"share123", "share456"}
+    assert len([call for call in http.calls if call[1].endswith("/api/search/first")]) == 8
 
 
 def test_pansou_all_resource_types_excludes_ed2k():
