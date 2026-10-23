@@ -416,3 +416,36 @@ def test_pansou_aggregate_title_does_not_reject_every_share_in_the_bundle():
     )
 
     assert [item["resource_id"] for item in candidates] == ["aggregate-share"]
+
+
+def test_pansou_aggregate_title_is_scoped_to_the_share_url():
+    from moviesync.services.search import SearchService
+
+    aggregate_title = (
+        "#斗罗大陆2：绝世唐门 更新至172集 https://pan.quark.cn/s/foreign-share "
+        "#兰香如故 全47集 https://pan.quark.cn/s/matching-share"
+    )
+
+    foreign_title = SearchService._pansou_title_for_share(
+        aggregate_title, "https://pan.quark.cn/s/foreign-share"
+    )
+    matching_title = SearchService._pansou_title_for_share(
+        aggregate_title, "https://pan.quark.cn/s/matching-share"
+    )
+
+    assert "斗罗大陆2" in foreign_title
+    assert "兰香如故" not in foreign_title
+    assert "兰香如故" in matching_title
+    assert "斗罗大陆2" not in matching_title
+    assert SearchService._has_conflicting_media_title(
+        {"title": "兰香如故", "media_type": "tv", "tag": "电视剧"},
+        foreign_title,
+        [{"file_name": "第01集.mp4"}, {"file_name": "第02集.mp4"}],
+        display_title=foreign_title,
+    )
+    assert not SearchService._has_conflicting_media_title(
+        {"title": "兰香如故", "media_type": "tv", "tag": "电视剧"},
+        matching_title,
+        [{"file_name": "第01集.mp4"}, {"file_name": "第02集.mp4"}],
+        display_title=matching_title,
+    )

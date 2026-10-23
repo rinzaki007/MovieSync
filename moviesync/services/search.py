@@ -286,6 +286,29 @@ class SearchService:
 
         return files, token, error, target_id
 
+    @staticmethod
+    def _pansou_title_for_share(source_title: str, share_url: str) -> str:
+        """Extract the title segment associated with one link in a PanSou aggregate.
+
+        PanSou may return one display title containing several title/URL pairs.
+        Treating that entire aggregate as one title either leaks unrelated shares
+        into the result set or rejects every link. When the current share URL is
+        present, use the text immediately preceding that URL instead.
+        """
+        title = str(source_title or "").strip()
+        url = str(share_url or "").strip()
+        if not title or not url:
+            return ""
+        matches = list(re.finditer(r"https?://[^\s]+", title, re.IGNORECASE))
+        for index, match in enumerate(matches):
+            candidate_url = match.group(0).rstrip(".,;，；。)")
+            if candidate_url != url.rstrip(".,;，；。)"):
+                continue
+            start = matches[index - 1].end() if index > 0 else 0
+            segment = title[start:match.start()].strip(" \t|｜;；,，")
+            return segment[:500]
+        return ""
+
     @classmethod
     def _has_conflicting_media_title(
         cls,
@@ -832,11 +855,20 @@ class SearchService:
                         source_id == "pansou"
                         and len(re.findall(r"https?://", source_title_evidence, re.IGNORECASE)) >= 2
                     )
+                    display_title_for_filter = source_title
+                    if is_pansou_aggregate:
+                        # Use the title paired with this specific share URL rather than
+                        # the whole multi-work aggregate. If no pairing is available,
+                        # retain the legacy conservative behavior instead of guessing.
+                        display_title_for_filter = self._pansou_title_for_share(
+                            source_title_evidence,
+                            str(source.get("url") or ""),
+                        ) or None
                     if self._has_conflicting_media_title(
                         movie,
                         source_title_evidence,
                         all_videos,
-                        display_title=None if is_pansou_aggregate else source_title,
+                        display_title=display_title_for_filter,
                     ):
                         self.logger.info(
                             "过滤疑似错误影视候选：目标《%s》，来源标题/文件名证据指向其他作品《%s》",
