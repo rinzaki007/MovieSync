@@ -521,6 +521,45 @@ class SearchService:
         simplified_text = SearchService._simplify(text)
         if simplified_title and simplified_title in simplified_text:
             score += 3
+
+        # Metadata is soft evidence for ordering, never a hard filter. Share titles
+        # often omit credits or years, so absent evidence must not hide a valid result.
+        metadata = metadata if isinstance(metadata, dict) else {}
+
+        def metadata_values(value: object) -> list[str]:
+            if isinstance(value, str):
+                return [part.strip() for part in re.split(r"[,;；、|]", value) if part.strip()]
+            if isinstance(value, (list, tuple, set)):
+                return [str(part).strip() for part in value if str(part).strip()]
+            return []
+
+        for field in ("original_title", "aliases", "alternative_titles", "aka"):
+            alias_hit = any(
+                len(normalized := SearchService._simplify(alias).lower()) >= 2
+                and normalized in simplified_text
+                for alias in metadata_values(metadata.get(field))
+            )
+            if alias_hit:
+                score += 3
+                break
+
+        year = str(metadata.get("year") or metadata.get("release_year") or "").strip()
+        year_match = re.search(r"(?:19|20)\d{2}", year)
+        if year_match and re.search(rf"(?<!\d){year_match.group(0)}(?!\d)", text):
+            score += 2
+
+        credit_hits = 0
+        for field in ("directors", "writers", "casts", "actors"):
+            if any(
+                len(normalized := SearchService._simplify(person).lower()) >= 2
+                and normalized in simplified_text
+                for person in metadata_values(metadata.get(field))
+            ):
+                credit_hits += 1
+            if credit_hits >= 2:
+                break
+        score += min(credit_hits, 2)
+
         # A sequel number is part of the title, not disposable punctuation:
         # "潜伏6" must not rank "潜伏" TV-season shares above matching film shares.
         sequel_match = re.search(r"(\d+)$", simplified_title)
