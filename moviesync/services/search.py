@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import re
+import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
