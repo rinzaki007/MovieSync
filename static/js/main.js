@@ -1325,7 +1325,7 @@ function showMoreCandidateResults(mIdx) {
     if (!refreshed) return;
     for (const input of refreshed.querySelectorAll('input[type="checkbox"]')) {
         input.checked = selected.has(input.name + '::' + input.value);
-        const match = input.name.match(/^batch-file-(\\d+)-(\\d+)$/);
+        const match = input.name.match(/^batch-file-(\d+)-(\d+)$/);
         if (input.checked && match) updateCandidateSelectionCount(Number(match[1]), Number(match[2]));
     }
     refreshed.scrollTop = scrollTop;
