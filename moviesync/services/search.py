@@ -521,7 +521,10 @@ class SearchService:
         simplified_title = SearchService._simplify(normalized_movie_title).lower()
         simplified_text = SearchService._simplify(text)
         if simplified_title and simplified_title in simplified_text:
-            score += 3
+            # Identity evidence must outweigh generic quality/episode markers.
+            # Otherwise unrelated episodic shares can outrank an exact title match
+            # simply because they contain SxxExx, resolution, or codec labels.
+            score += 12
 
         # Metadata is soft evidence for ordering, never a hard filter. Share titles
         # often omit credits or years, so absent evidence must not hide a valid result.
@@ -682,6 +685,7 @@ class SearchService:
                 source,
                 title,
                 str(movie.get("media_type") or "") if isinstance(movie, dict) else "",
+                movie if isinstance(movie, dict) else None,
             ),
             reverse=True,
         )

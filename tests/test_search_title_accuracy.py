@@ -295,7 +295,7 @@ def test_pansou_series_search_drops_candidates_without_title_evidence():
     assert {item["resource_id"] for item in candidates} == {"missing-title", "matching-title"}
 
 
-def test_pansou_series_search_expands_empty_first_page_until_a_match_is_found():
+def test_pansou_series_search_prioritizes_matching_title_without_expansion():
     import logging
     from types import SimpleNamespace
 
@@ -355,8 +355,9 @@ def test_pansou_series_search_expands_empty_first_page_until_a_match_is_found():
     )
 
     assert [item["resource_id"] for item in candidates] == ["matching-title"]
-    assert page_info["next_offset"] == 11
-    assert page_info["has_more"] is False
+    assert page_info["next_offset"] == 10
+    # Ten entries were scanned, but the source returned an eleventh entry.
+    assert page_info["has_more"] is True
 
 def test_pansou_aggregate_title_does_not_reject_every_share_in_the_bundle():
     import logging
