@@ -234,7 +234,7 @@ def test_transfer_refreshes_share_state_and_temporary_token():
     service = SearchService(FakeResourceSources(), storage, logging.getLogger("test"))
     resource = {"pwd_id": "same123", "storage_target_id": "quark"}
 
-    # Search can populate the short-lived cache, but its token must not be reused for transfer.
+    # Search and transfer each resolve fresh state; temporary tokens are never reused.
     _files, search_token, _error, _target_id = service._get_resource_files(resource)
     assert search_token == "token-1"
 
@@ -726,6 +726,39 @@ def test_search_exposes_source_diagnostics_through_page_info():
     assert page_info["source_search_failed"] == 1
     assert page_info["source_search_diagnostics"][0]["id"] == "broken-source"
     assert page_info["source_search_diagnostics"][0]["status"] == "error"
+
+
+def test_search_refreshes_successful_share_listing_between_calls():
+    import logging
+
+    class ChangingStorage(FakeStorageTargets):
+        def __init__(self):
+            self.resolve_count = 0
+
+        def resolve_resource(self, resource, target_id=None):
+            self.resolve_count += 1
+            return {
+                "target_id": target_id or "quark",
+                "files": [{
+                    "fid": f"f{self.resolve_count}",
+                    "file_name": f"Show.S01E{self.resolve_count:02d}.mkv",
+                }],
+                "token": f"token-{self.resolve_count}",
+                "error": None,
+            }
+
+    storage = ChangingStorage()
+    service = SearchService(FakeResourceSources(), storage, logging.getLogger("test"))
+    resource = {"pwd_id": "changing-share", "storage_target_id": "quark"}
+
+    first = service._get_resource_files(resource)
+    second = service._get_resource_files(resource)
+
+    assert [item["fid"] for item in first[0]] == ["f1"]
+    assert [item["fid"] for item in second[0]] == ["f2"]
+    assert first[1] == "token-1"
+    assert second[1] == "token-2"
+    assert storage.resolve_count == 2
 
 
 def test_search_does_not_cache_failed_share_resolution(tmp_path):
