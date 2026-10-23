@@ -531,7 +531,7 @@ def test_pansou_returns_first_snapshot_immediately_for_targeted_ui_search():
     source = PanSouResourceSource(http)
 
     results = source.search(
-        {"title": "测试电影", "storage_target_id": "quark"},
+        {"title": "测试电影", "storage_target_id": "quark", "resource_types": ["quark_share"]},
         {"base_url": "http://pansou.local", "timeout": 45},
     )
 
