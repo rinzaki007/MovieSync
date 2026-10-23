@@ -371,6 +371,9 @@ class PanSouResourceSource(ResourceSourceCard):
             "src": "plugin",
             "cloud_types": ",".join(query_cloud_types),
             "wait_ms": 6000,
+            # Resource discovery should not reuse stale plugin-search results.
+            # The bundled /api/search/first endpoint explicitly supports refresh=true.
+            "refresh": "true",
         }
         try:
             # The progressive endpoint may return cached/partial plugin results while
