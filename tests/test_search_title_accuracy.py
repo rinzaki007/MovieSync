@@ -356,7 +356,8 @@ def test_pansou_series_search_prioritizes_matching_title_without_expansion():
 
     assert [item["resource_id"] for item in candidates] == ["matching-title"]
     assert page_info["next_offset"] == 10
-    assert page_info["has_more"] is False
+    # Ten entries were scanned, but the source returned an eleventh entry.
+    assert page_info["has_more"] is True
 
 def test_pansou_aggregate_title_does_not_reject_every_share_in_the_bundle():
     import logging
