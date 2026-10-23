@@ -413,7 +413,7 @@ class PanSouResourceSource(ResourceSourceCard):
             # that the refresh is finished. Keep checking that case for up to seven
             # seconds. Empty snapshots can stop early, and once fresh links have arrived
             # two unchanged polls are enough to avoid needless waiting.
-            for poll_index in range(7):
+            for _poll_index in range(7):
                 time.sleep(1)
                 try:
                     _, next_payload = self._request(
