@@ -517,7 +517,7 @@ class SearchService:
         """稳定地把名称/剧集信息较明确的资源排在前面；未知格式仍保留在后续页。"""
         name_fields = (
             "title", "name", "file_name", "filename", "resource_name",
-            "share_name", "description",
+            "share_name", "description", "content", "relative_path", "path",
         )
         text = " ".join(str(source.get(key) or "") for key in name_fields).lower()
         score = 0
@@ -544,7 +544,8 @@ class SearchService:
         simplified_title = SearchService._simplify(normalized_movie_title).lower()
         simplified_text = SearchService._simplify(text)
         if simplified_title and simplified_title in simplified_text:
-            score += 3
+            # A direct title hit should outweigh generic episode/resolution markers.
+            score += 12
 
         # Metadata is soft evidence for ordering, never a hard filter. Share titles
         # often omit credits or years, so absent evidence must not hide a valid result.
@@ -705,6 +706,7 @@ class SearchService:
                 source,
                 title,
                 str(movie.get("media_type") or "") if isinstance(movie, dict) else "",
+                movie if isinstance(movie, dict) else None,
             ),
             reverse=True,
         )
@@ -748,6 +750,7 @@ class SearchService:
         )
         candidates: list[dict] = []
         seen_resource_keys: set[tuple[str, str]] = set()
+        direct_title_match_found = False
 
         # 分享解析涉及网盘网络请求，按小批次并发执行。批次内仍按原始顺序
         # 消费结果，保证候选排序稳定，并在达到上限后立即停止后续请求。
@@ -859,6 +862,7 @@ class SearchService:
                     # while the first title field only says "updated to episode N". Check all
                     # available text for conflicts; aggregate PanSou results remain URL-scoped.
                     display_title_for_filter = source_title_evidence
+                    candidate_title_evidence = source_title_evidence
                     if is_pansou_aggregate:
                         # Use the title paired with this specific share URL rather than
                         # the whole multi-work aggregate. If no pairing is available,
@@ -867,6 +871,8 @@ class SearchService:
                             source_title_evidence,
                             str(source.get("url") or ""),
                         ) or None
+                        if display_title_for_filter:
+                            candidate_title_evidence = display_title_for_filter
                     if self._has_conflicting_media_title(
                         movie,
                         source_title_evidence,
@@ -950,12 +956,18 @@ class SearchService:
                     )
                     match_explanation = _candidate_match_explanation(
                         movie if isinstance(movie, dict) else {"title": title},
-                        source_title,
+                        candidate_title_evidence,
                         recognized_episode_files,
                         total_video_count,
                         declared_episode_count if is_series_media else None,
                         scan_complete,
                     )
+                    if self._has_target_title_evidence(
+                        movie,
+                        candidate_title_evidence,
+                        all_videos,
+                    ):
+                        direct_title_match_found = True
                     seen_resource_keys.add(resource_key)
                     candidates.append({
                         "match_explanation": match_explanation,
@@ -1009,7 +1021,7 @@ class SearchService:
                     break
                 if (
                     allow_empty_page_expansion
-                    and not candidates
+                    and not direct_title_match_found
                     and batch_start >= len(page_sources)
                     and safe_offset + len(page_sources) < auto_scan_end
                 ):
