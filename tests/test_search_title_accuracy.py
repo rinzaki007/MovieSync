@@ -610,3 +610,21 @@ def test_search_passes_movie_metadata_to_priority_and_expands_until_direct_match
 
     assert any(item["resource_id"] == "direct-match" for item in candidates)
     assert page_info["next_offset"] == 11
+
+
+
+def test_matching_primary_title_is_not_rejected_by_unrelated_description():
+    movie = {"title": "逃出布迪秀", "media_type": "movie", "tag": "电影"}
+    videos = [
+        {"file_name": "逃出布迪秀 (2026) 1080p.mkv"},
+        {"file_name": "逃出布迪秀 (2026) 4K.mkv"},
+    ]
+    # Resource descriptions/channel copy may mention other titles; the primary
+    # title still matches the requested work and should be used for conflict checks.
+    source_evidence = "逃出布迪秀 (2026) 1080p · 推荐观看：其他完全不同的影视作品"
+    assert not SearchService._has_conflicting_media_title(
+        movie,
+        source_evidence,
+        videos,
+        display_title="逃出布迪秀 (2026) 1080p",
+    )
