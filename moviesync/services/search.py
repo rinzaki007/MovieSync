@@ -544,8 +544,9 @@ class SearchService:
         simplified_title = SearchService._simplify(normalized_movie_title).lower()
         simplified_text = SearchService._simplify(text)
         if simplified_title and simplified_title in simplified_text:
-            # A direct title hit should outweigh generic episode/resolution markers.
-            score += 12
+            # A direct title hit must rank ahead of generic episode/resolution markers,
+            # otherwise a valid result can be pushed beyond the default first scan page.
+            score += 30
 
         # Metadata is soft evidence for ordering, never a hard filter. Share titles
         # often omit credits or years, so absent evidence must not hide a valid result.
@@ -962,10 +963,13 @@ class SearchService:
                         declared_episode_count if is_series_media else None,
                         scan_complete,
                     )
+                    # Only title metadata should end the expanded first scan. A folder
+                    # path can be useful evidence for a candidate, but must not stop us
+                    # before a later share whose actual source title directly matches.
                     if self._has_target_title_evidence(
                         movie,
                         candidate_title_evidence,
-                        all_videos,
+                        [],
                     ):
                         direct_title_match_found = True
                     seen_resource_keys.add(resource_key)
