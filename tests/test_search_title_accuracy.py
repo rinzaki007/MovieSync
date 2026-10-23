@@ -1,6 +1,15 @@
 """影视资源搜索标题准确率回归测试。"""
 
-from moviesync.services.search import SearchService
+from moviesync.services.search import SearchService, _detect_resolution
+
+
+def test_resolution_falls_back_to_source_title_without_overriding_filename():
+    assert _detect_resolution("第01集.mp4", "兰香如故 (2026) 4K 全47完结") == "4K"
+    assert _detect_resolution("第01集.mp4", "兰香如故4K全47完结") == "4K"
+    assert _detect_resolution("第01集.1080p.mkv", "兰香如故 4K 全47完结") == "1080P"
+    assert _detect_resolution("第01集.mp4", "兰香如故 全47完结") == "未知"
+
+
 
 
 def test_rejects_tv_share_clearly_belonging_to_another_show():
