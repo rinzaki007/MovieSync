@@ -299,13 +299,13 @@ class SearchService:
         url = str(share_url or "").strip()
         if not title or not url:
             return ""
-        matches = list(re.finditer(r"https?://[^\\s]+", title, re.IGNORECASE))
+        matches = list(re.finditer(r"https?://[^\s]+, title, re.IGNORECASE))
         for index, match in enumerate(matches):
             candidate_url = match.group(0).rstrip(".,;，；。)")
             if candidate_url != url.rstrip(".,;，；。)"):
                 continue
             start = matches[index - 1].end() if index > 0 else 0
-            segment = title[start:match.start()].strip(" \\t|｜;；,，")
+            segment = title[start:match.start()].strip(" \t|｜;；,，")
             return segment[:500]
         return ""
 
