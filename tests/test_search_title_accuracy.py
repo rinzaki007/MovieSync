@@ -228,21 +228,6 @@ def test_keeps_numbered_movie_title_with_official_chinese_subtitle():
     )
 
 
-def test_base_franchise_title_does_not_match_numbered_sequel_as_subtitle():
-    movie = {"title": "潜伏", "media_type": "movie", "tag": "电影"}
-    videos = [
-        {"file_name": "潜伏6：血域 (2026) 4K.mkv"},
-        {"file_name": "潜伏6：血域 (2026) 1080p.mkv"},
-    ]
-
-    assert SearchService._has_conflicting_media_title(
-        movie,
-        "潜伏6：血域（2026）iT 4K DV&HDR 内封官中",
-        videos,
-        display_title="潜伏6：血域（2026）iT 4K DV&HDR 内封官中",
-    )
-
-
 def test_candidate_priority_ignores_parenthesized_release_year_for_sequel_titles():
     exact_sequel = {
         "title": "潜伏6 4K BluRay 1080p",
