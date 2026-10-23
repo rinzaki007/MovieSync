@@ -439,3 +439,36 @@ def test_pansou_broadens_selected_quark_search_but_returns_only_quark_links():
     queried_types = set(http.calls[0][3]["params"]["cloud_types"].split(","))
     assert {"quark", "aliyun", "baidu", "magnet"}.issubset(queried_types)
     assert "ed2k" not in queried_types
+
+
+
+def test_pansou_retries_douban_alternate_title_when_primary_search_is_empty(monkeypatch):
+    import time
+
+    monkeypatch.setattr(time, "sleep", lambda _: None)
+    empty = {"data": {"results": [], "merged_by_type": {}}}
+    alternate = {
+        "data": {
+            "results": [{
+                "title": "Lan Xiang Ru Gu 2024",
+                "links": [{"type": "quark", "url": "https://pan.quark.cn/s/alternate123"}],
+            }],
+            "merged_by_type": {},
+        }
+    }
+    http = FakeHttpClient(search_payloads=[empty, empty, empty, alternate, alternate, alternate])
+    source = PanSouResourceSource(http)
+
+    results = source.search(
+        {"title": "兰香如故", "year": "2024", "original_title": ["Lan Xiang Ru Gu"]},
+        {"base_url": "http://pansou.local", "timeout": 45},
+    )
+
+    queries = [
+        call[3]["params"]["kw"]
+        for call in http.calls
+        if call[1].endswith("/api/search/first")
+    ]
+    assert queries[0] == "兰香如故"
+    assert "Lan Xiang Ru Gu" in queries
+    assert any(item["resource_id"] == "alternate123" for item in results)
