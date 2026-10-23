@@ -7,8 +7,6 @@ from __future__ import annotations
 
 import hashlib
 import re
-import threading
-import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
@@ -21,8 +19,6 @@ from .transfer_outcome import is_uncertain_transfer_message
 VIDEO_EXTENSIONS = (".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv", ".m4v", ".ts", ".m2ts", ".iso")
 MAX_VIDEO_FILES_PER_CANDIDATE = 200
 MAX_CANDIDATES_PER_MOVIE = 20
-SHARE_CACHE_TTL_SECONDS = 30
-MAX_SHARE_CACHE_ENTRIES = 128
 
 
 def _format_size(value: object) -> str:
@@ -201,13 +197,6 @@ class SearchService:
         self.resource_sources = resource_sources
         self.storage_targets = storage_targets
         self.logger = logger
-        # 缓存仅用于搜索结果展示，不缓存可用于转存的临时 token。
-        # TTL 和容量上限避免分享文件列表长期过期或随搜索次数无限增长。
-        self._share_cache: dict[
-            str,
-            tuple[float, tuple[list[dict[str, Any]], str | None, str]],
-        ] = {}
-        self._share_lock = threading.Lock()
 
     @staticmethod
     def _title(movie: object) -> tuple[str, str]:
@@ -251,23 +240,8 @@ class SearchService:
         resource_type = str(resource.get("resource_type") or "").strip().lower()
         source_id = str(resource.get("source_id") or "").strip()
 
-        password = str(resource.get("password") or resource.get("passcode") or "")
-        password_digest = hashlib.sha256(password.encode("utf-8")).hexdigest()
-        # Resource IDs are scoped to their provider; don't share cache entries
-        # between clouds that happen to use the same ID.
-        cache_key = f"{storage_target_id}:{resource_type}:{source_id}:{resource_id}:{password_digest}"
-        now = time.monotonic()
-
-        if not refresh:
-            with self._share_lock:
-                cached = self._share_cache.get(cache_key)
-                if cached is not None:
-                    cached_at, cached_result = cached
-                    if now - cached_at < SHARE_CACHE_TTL_SECONDS:
-                        files, error, target_id = cached_result
-                        return files, None, error, target_id
-                    self._share_cache.pop(cache_key, None)
-
+        # 搜索阶段不复用短时分享文件缓存：每次都读取最新目录，
+        # 避免旧文件清单影响候选相关性与集数判断。转存仍会独立刷新 token。
         resolved = self.storage_targets.resolve_resource(resource, storage_target_id or None)
         files = resolved.get("files") or []
         token = resolved.get("token")
