@@ -233,9 +233,6 @@ class SearchService:
         ).strip()
         if not resource_id:
             return [], None, "资源标识无效", storage_target_id
-        resource_type = str(resource.get("resource_type") or "").strip().lower()
-        source_id = str(resource.get("source_id") or "").strip()
-
         # 搜索阶段不复用短时分享文件缓存：每次都读取最新目录，
         # 避免旧文件清单影响候选相关性与集数判断。转存仍会独立刷新 token。
         resolved = self.storage_targets.resolve_resource(resource, storage_target_id or None)
