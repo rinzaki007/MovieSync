@@ -280,7 +280,16 @@ def test_pansou_series_search_drops_candidates_without_title_evidence():
             return {
                 "target_id": "quark",
                 "files": [
-                    {"fid": f"{resource['resource_id']}-1", "file_name": "第01集.mp4", "size": 1},
+                    {
+                        "fid": f"{resource['resource_id']}-1",
+                        "file_name": "第01集.mp4",
+                        "relative_path": (
+                            "兰香如故/第01集.mp4"
+                            if resource["resource_id"] == "direct-match"
+                            else "合集/第01集.mp4"
+                        ),
+                        "size": 1,
+                    },
                     {"fid": f"{resource['resource_id']}-2", "file_name": "第02集.mp4", "size": 1},
                 ],
                 "token": "test-token",
@@ -361,8 +370,8 @@ def test_pansou_series_search_expands_empty_first_page_until_a_match_is_found():
     )
 
     assert [item["resource_id"] for item in candidates] == ["matching-title"]
-    assert page_info["next_offset"] == 11
-    assert page_info["has_more"] is False
+    assert page_info["next_offset"] == 10
+    assert page_info["has_more"] is True
 
 def test_pansou_aggregate_title_does_not_reject_every_share_in_the_bundle():
     import logging
@@ -455,3 +464,90 @@ def test_pansou_aggregate_title_is_scoped_to_the_share_url():
         [{"file_name": "第01集.mp4"}, {"file_name": "第02集.mp4"}],
         display_title=matching_title,
     )
+
+
+
+def test_candidate_match_explanation_uses_full_title_evidence():
+    from moviesync.services.search import _candidate_match_explanation
+
+    explanation = _candidate_match_explanation(
+        {"title": "兰香如故", "media_type": "tv"},
+        "#兰香如故 全47集",
+        recognized_episode_files=1,
+        total_video_count=1,
+        declared_episode_count=47,
+        scan_complete=True,
+    )
+
+    assert "分享标题包含目标名称" in explanation
+    assert "标题未直接匹配" not in explanation
+
+
+def test_search_passes_movie_metadata_to_priority_and_expands_until_direct_match():
+    import logging
+    from types import SimpleNamespace
+
+    class Sources:
+        def search(self, movie, config):
+            # Generic, playable episode-only shares should not stop the first-page
+            # scan before a direct title match is discovered.
+            return [
+                {
+                    "source_id": "pansou",
+                    "source_name": "PanSou",
+                    "resource_id": f"ambiguous-{index}",
+                    "resource_type": "quark_share",
+                    "title": f"更新至第{index:02d}集",
+                }
+                for index in range(1, 11)
+            ] + [
+                {
+                    "source_id": "pansou",
+                    "source_name": "PanSou",
+                    "resource_id": "direct-match",
+                    "resource_type": "quark_share",
+                    "title": "更新至第11集",
+                }
+            ]
+
+    class Storage:
+        capabilities = ("storage.accepts.quark_share",)
+
+        def get(self, target_id=None):
+            return SimpleNamespace(card_id="quark", capabilities=self.capabilities)
+
+        def resolve_resource(self, resource, target_id=None):
+            return {
+                "target_id": "quark",
+                "files": [
+                    {
+                        "fid": f"{resource['resource_id']}-1",
+                        "file_name": "第01集.mp4",
+                        "relative_path": (
+                            "兰香如故/第01集.mp4"
+                            if resource["resource_id"] == "direct-match"
+                            else "合集/第01集.mp4"
+                        ),
+                        "size": 1,
+                    },
+                ],
+                "token": "test-token",
+                "error": None,
+            }
+
+    service = SearchService(Sources(), Storage(), logging.getLogger("test"))
+    page_info = {}
+    candidates = service.search_movie_candidates(
+        {
+            "title": "兰香如故",
+            "media_type": "tv",
+            "tag": "电视剧",
+            "storage_target_id": "quark",
+        },
+        {},
+        scan_limit=10,
+        page_info=page_info,
+    )
+
+    assert any(item["resource_id"] == "direct-match" for item in candidates)
+    assert page_info["next_offset"] == 11
