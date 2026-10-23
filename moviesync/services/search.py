@@ -339,6 +339,10 @@ class SearchService:
                 "现代", "爱情", "情感", "战争", "科幻", "剧情", "喜剧", "奇幻", "武侠",
                 "犯罪", "动作", "恐怖", "青春", "校园", "家庭", "冒险", "传记", "搞笑",
                 "真人秀", "脱口秀", "动画片", "电视剧集",
+                # Release/codec/audio-video metadata must not be mistaken for another work title.
+                "内封官中", "内封", "官中", "杜比视界", "杜比", "视界", "高码率",
+                "HDR10", "HDR", "SDR", "DV", "iT", "HEVC", "H265", "H264",
+                "DDP", "DTS", "Atmos", "蓝光原盘", "原盘",
             )
             for term in re.findall(r"[\u4e00-\u9fff]{3,}", str(display_title)):
                 normalized_term = cls._simplify(term).replace("_", "").lower()
