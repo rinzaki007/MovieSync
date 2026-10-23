@@ -147,7 +147,7 @@ def test_pansou_search_polls_and_merges_progressive_results():
     )
 
     assert {item["resource_id"] for item in results} == {"share123", "share456"}
-    assert len([call for call in http.calls if call[1].endswith("/api/search/first")]) == 4
+    assert len([call for call in http.calls if call[1].endswith("/api/search/first")]) == 11
 
 
 def test_pansou_keeps_polling_for_late_results_after_unchanged_snapshots(monkeypatch):
@@ -181,7 +181,7 @@ def test_pansou_keeps_polling_for_late_results_after_unchanged_snapshots(monkeyp
 
     assert {item["resource_id"] for item in results} == {"share123", "share456"}
     # Keep polling through the minimum observation window even when early snapshots stall.
-    assert len([call for call in http.calls if call[1].endswith("/api/search/first")]) == 12
+    assert len([call for call in http.calls if call[1].endswith("/api/search/first")]) == 11
 
 
 def test_pansou_finds_exact_title_arriving_after_ten_stale_polls(monkeypatch):
@@ -214,7 +214,7 @@ def test_pansou_finds_exact_title_arriving_after_ten_stale_polls(monkeypatch):
     )
 
     assert {item["resource_id"] for item in results} == {"share123", "share456"}
-    assert len([call for call in http.calls if call[1].endswith("/api/search/first")]) == 14
+    assert len([call for call in http.calls if call[1].endswith("/api/search/first")]) == 15
 
 
 def test_pansou_all_resource_types_excludes_ed2k():
@@ -492,7 +492,7 @@ def test_pansou_retries_douban_alternate_title_when_primary_search_is_empty(monk
             "merged_by_type": {},
         }
     }
-    http = FakeHttpClient(search_payloads=[empty, empty, empty, alternate, alternate, alternate])
+    http = FakeHttpClient(search_payloads=[empty] * 11 + [alternate, alternate, alternate])
     source = PanSouResourceSource(http)
 
     results = source.search(
