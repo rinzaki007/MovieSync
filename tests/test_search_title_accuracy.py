@@ -232,6 +232,22 @@ def test_candidate_priority_ignores_parenthesized_release_year_for_sequel_titles
     assert exact_score > older_score
 
 
+def test_explicit_source_title_match_outranks_quality_markers_in_unrelated_description():
+    direct_match = {
+        "title": "兰香如故 (2026) 4K 全47完结",
+        "file_name": "第01集.mp4",
+    }
+    misleading_result = {
+        "title": "吞噬星空 S01E47 4K 1080p 全集",
+        "description": "频道文案提到兰香如故",
+        "file_name": "第47集.mkv",
+    }
+
+    direct_score = SearchService._candidate_priority(direct_match, "兰香如故", "tv")
+    misleading_score = SearchService._candidate_priority(misleading_result, "兰香如故", "tv")
+    assert direct_score > misleading_score
+
+
 def test_candidate_priority_puts_direct_series_title_ahead_of_generic_episode_results():
     direct_match = {
         "title": "兰香如故 (2026) 4K 全47完结",
