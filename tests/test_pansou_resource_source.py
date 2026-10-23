@@ -508,3 +508,32 @@ def test_pansou_retries_douban_alternate_title_when_primary_search_is_empty(monk
     assert queries[0] == "兰香如故"
     assert "Lan Xiang Ru Gu" in queries
     assert any(item["resource_id"] == "alternate123" for item in results)
+
+
+def test_pansou_returns_first_snapshot_immediately_for_targeted_ui_search():
+    first = {
+        "results": [
+            {"title": "测试电影", "links": [
+                {"type": "quark", "url": "https://pan.quark.cn/s/share123"}
+            ]}
+        ],
+        "merged_by_type": {},
+    }
+    later = {
+        "results": [
+            {"title": "测试电影", "links": [
+                {"type": "quark", "url": "https://pan.quark.cn/s/share456"}
+            ]}
+        ],
+        "merged_by_type": {},
+    }
+    http = FakeHttpClient(search_payloads=[first, later])
+    source = PanSouResourceSource(http)
+
+    results = source.search(
+        {"title": "测试电影", "storage_target_id": "quark", "resource_types": ["quark_share"]},
+        {"base_url": "http://pansou.local", "timeout": 45},
+    )
+
+    assert [item["resource_id"] for item in results] == ["share123"]
+    assert len([call for call in http.calls if call[1].endswith("/api/search/first")]) == 1

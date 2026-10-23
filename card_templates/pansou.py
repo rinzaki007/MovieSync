@@ -414,7 +414,11 @@ class PanSouResourceSource(ResourceSourceCard):
             # to 15 seconds; do not treat early unchanged/empty snapshots as completion.
             # After at least 10 seconds, three unchanged snapshots allow a quiet search to
             # finish early. Any newly discovered URL resets that quiet-period counter.
-            for _poll_index in range(15):
+            # When searching for a selected storage target, the UI owns polling and
+            # renders each snapshot as it arrives. Polling here would hold the first
+            # candidate response for up to 15 seconds, making all results appear at once.
+            # Non-UI callers (e.g. More Download Links) still aggregate snapshots here.
+            for _poll_index in range(0 if has_selected_target else 15):
                 time.sleep(1)
                 try:
                     _, next_payload = self._request(
