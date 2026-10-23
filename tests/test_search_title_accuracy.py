@@ -256,6 +256,12 @@ def test_pansou_series_search_drops_candidates_without_title_evidence():
                 },
                 {
                     "source_id": "pansou", "source_name": "PanSou",
+                    "resource_id": "foreign-description", "resource_type": "quark_share",
+                    "title": "更新至第288集",
+                    "description": "#完美世界 更新至288集",
+                },
+                {
+                    "source_id": "pansou", "source_name": "PanSou",
                     "resource_id": "matching-title", "resource_type": "quark_share",
                     "title": "#兰香如故 全47集",
                 },

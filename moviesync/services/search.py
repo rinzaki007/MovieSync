@@ -855,7 +855,10 @@ class SearchService:
                         source_id == "pansou"
                         and len(re.findall(r"https?://", source_title_evidence, re.IGNORECASE)) >= 2
                     )
-                    display_title_for_filter = source_title
+                    # Ordinary resource cards can put the real work title in description/content
+                    # while the first title field only says "updated to episode N". Check all
+                    # available text for conflicts; aggregate PanSou results remain URL-scoped.
+                    display_title_for_filter = source_title_evidence
                     if is_pansou_aggregate:
                         # Use the title paired with this specific share URL rather than
                         # the whole multi-work aggregate. If no pairing is available,
