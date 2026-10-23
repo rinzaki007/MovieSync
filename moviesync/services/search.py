@@ -545,10 +545,18 @@ class SearchService:
         ).strip()
         simplified_title = SearchService._simplify(normalized_movie_title).lower()
         simplified_text = SearchService._simplify(text)
-        if simplified_title and simplified_title in simplified_text:
-            # A direct title hit must rank ahead of generic episode/resolution markers,
-            # otherwise a valid result can be pushed beyond the default first scan page.
-            score += 30
+        primary_title_text = " ".join(
+            str(source.get(key) or "")
+            for key in ("title", "name", "resource_name", "share_name")
+        )
+        simplified_primary_title = SearchService._simplify(primary_title_text)
+        if simplified_title and simplified_title in simplified_primary_title:
+            # An explicit work-name match in the source title outranks generic episode,
+            # resolution, and codec markers. Quality is useful only after identity.
+            score += 80
+        elif simplified_title and simplified_title in simplified_text:
+            # A mention in descriptions/paths is weaker evidence than the source title.
+            score += 5
 
         # Metadata is soft evidence for ordering, never a hard filter. Share titles
         # often omit credits or years, so absent evidence must not hide a valid result.
