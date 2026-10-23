@@ -405,8 +405,15 @@ class PanSouResourceSource(ResourceSourceCard):
             snapshots = [payload]
             seen_urls = self._snapshot_link_urls(payload)
             stale_polls = 0
+            had_growth_during_polling = False
             poll_params = {**search_params, "wait_ms": 1200}
-            for _ in range(3):
+            # The first-result endpoint can expose an old cache snapshot immediately,
+            # even while the forced refresh is still running. Upstream plugins commonly
+            # take 4-5 seconds, so unchanged polls over a populated cache are not evidence
+            # that the refresh is finished. Keep checking that case for up to seven
+            # seconds. Empty snapshots can stop early, and once fresh links have arrived
+            # two unchanged polls are enough to avoid needless waiting.
+            for _poll_index in range(7):
                 time.sleep(1)
                 try:
                     _, next_payload = self._request(
@@ -424,12 +431,11 @@ class PanSouResourceSource(ResourceSourceCard):
                 new_urls = next_urls - seen_urls
                 if new_urls:
                     seen_urls.update(new_urls)
+                    had_growth_during_polling = True
                     stale_polls = 0
                 else:
                     stale_polls += 1
-                    # A single unchanged snapshot can be transient while PanSou
-                    # plugins are still running. Stop only after two stale polls.
-                    if stale_polls >= 2:
+                    if stale_polls >= 2 and (not seen_urls or had_growth_during_polling):
                         break
 
             # Merge progressive snapshots before normalizing links. The same link
