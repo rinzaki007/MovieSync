@@ -17,6 +17,9 @@ const metadataListRequests = new Map();
 const METADATA_LIST_CACHE_TTL_MS = 90_000;
 let candidateSearchProgressText = '';
 let candidateSearchProgressTimer = null;
+const CANDIDATE_INITIAL_VISIBLE = 10;
+const CANDIDATE_VISIBLE_STEP = 10;
+const candidateVisibleCounts = new Map();
 
 function startCandidateSearchProgress(requestId) {
     const startedAt = Date.now();
@@ -782,6 +785,7 @@ async function searchAndOpenCandidates(selectedMovies, requestedTargetId = null,
 
     const canPage = selectedMovies.length === 1;
     const title = selectedMovies[0]?.title || '';
+    if (canPage) candidateVisibleCounts.set(title, CANDIDATE_INITIAL_VISIBLE);
     let candidatesMap = {};
     let opened = false;
     candidateSearchProgressText = canPage
@@ -1207,7 +1211,7 @@ function openCandidateModal(movies, candidatesMap) {
             <div class="flex flex-wrap items-end justify-between gap-2 border-b border-slate-800 pb-3">
                 <div>
                     <div class="text-sm font-semibold text-white">🎬 《${escapeHtml(title)}》</div>
-                    <div class="mt-1 text-[11px] text-slate-500">找到 ${candidates.length} 个可选资源版本 · 默认不选择</div>
+                    <div class="mt-1 text-[11px] text-slate-500">找到 ${candidates.length} 个可选资源版本 · 当前显示 ${Math.min(candidates.length, candidateVisibleCounts.get(title) || CANDIDATE_INITIAL_VISIBLE)} 个 · 默认不选择</div>
                 </div>
             </div>`;
 
@@ -1220,7 +1224,7 @@ function openCandidateModal(movies, candidatesMap) {
                 : '<div class="rounded-xl border border-amber-900/50 bg-amber-950/20 p-4 text-xs text-amber-300">未找到可用资源，或后续检索未能完成。</div>';
         } else {
             html += '<div class="space-y-3">';
-            candidates.forEach((cand, cIdx) => {
+            candidates.slice(0, candidateVisibleCounts.get(title) || CANDIDATE_INITIAL_VISIBLE).forEach((cand, cIdx) => {
                 const files = Array.isArray(cand.files) ? cand.files : [];
                 const resolutions = Object.keys(cand.resolutions || {});
                 const resolutionText = resolutions.length
@@ -1286,12 +1290,45 @@ function openCandidateModal(movies, candidatesMap) {
                     </article>`;
             });
             html += '</div>';
+            const visibleCount = candidateVisibleCounts.get(title) || CANDIDATE_INITIAL_VISIBLE;
+            if (candidates.length > visibleCount) {
+                html += `<div class="flex flex-col items-center gap-2 pt-2"><button type="button" onclick="showMoreCandidateResults(${mIdx})" class="rounded-xl border border-slate-700 bg-slate-900/80 px-5 py-2.5 text-xs font-semibold text-slate-200 hover:border-blue-500 hover:text-white"><i class="fa-solid fa-chevron-down mr-2"></i>查看更多（再显示 ${Math.min(CANDIDATE_VISIBLE_STEP, candidates.length - visibleCount)} 个）</button><div class="text-[10px] text-slate-500">已显示 ${visibleCount} / ${candidates.length} 个；后台搜刮仍会持续补充结果</div></div>`;
+            } else if (candidateSearchProgressText && !candidateSearchProgressText.includes('搜索完成') && !candidateSearchProgressText.includes('失败')) {
+                html += `<div class="pt-2 text-center text-[10px] text-slate-500">当前 ${candidates.length} 个资源已全部显示，新结果会自动追加</div>`;
+            }
         }
 
         movieSection.innerHTML = html;
         container.appendChild(movieSection);
     });
     document.getElementById('candidate-modal').classList.remove('hidden');
+}
+
+
+function showMoreCandidateResults(mIdx) {
+    const state = candidateModalState;
+    const movie = state?.movies?.[mIdx];
+    if (!movie) return;
+    const title = movie.title;
+    const all = state.candidatesMap?.[title] || [];
+    const current = candidateVisibleCounts.get(title) || CANDIDATE_INITIAL_VISIBLE;
+    if (current >= all.length) return;
+    const container = document.getElementById('candidate-content');
+    const scrollTop = container?.scrollTop || 0;
+    const selected = new Set(
+        [...(container?.querySelectorAll('input[type="checkbox"]:checked') || [])]
+            .map(input => input.name + '::' + input.value)
+    );
+    candidateVisibleCounts.set(title, current + CANDIDATE_VISIBLE_STEP);
+    openCandidateModal(state.movies, state.candidatesMap);
+    const refreshed = document.getElementById('candidate-content');
+    if (!refreshed) return;
+    for (const input of refreshed.querySelectorAll('input[type="checkbox"]')) {
+        input.checked = selected.has(input.name + '::' + input.value);
+        const match = input.name.match(/^batch-file-(\d+)-(\d+)$/);
+        if (input.checked && match) updateCandidateSelectionCount(Number(match[1]), Number(match[2]));
+    }
+    refreshed.scrollTop = scrollTop;
 }
 
 function closeCandidateModal() {
