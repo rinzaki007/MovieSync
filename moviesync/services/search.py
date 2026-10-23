@@ -347,7 +347,23 @@ class SearchService:
                     if normalized_marker:
                         normalized_term = normalized_term.replace(normalized_marker, "")
                 # 目标作品名本身不是冲突证据，但标题中并列的另一部作品仍是。
-                if any(normalized_term == title or normalized_term in title for title in target_titles):
+                # A numbered title may legitimately be followed by a subtitle, e.g.
+                # "潜伏6：血域". Keep sequel identity strict in the other direction:
+                # searching "潜伏" must not make "潜伏6" look like the same work.
+                def matches_target_or_numbered_subtitle(title: str) -> bool:
+                    if normalized_term == title or normalized_term in title:
+                        return True
+                    if not title or not title[-1:].isdigit() or not normalized_term.startswith(title):
+                        return False
+                    suffix = normalized_term[len(title):]
+                    # Punctuation is already normalized away. Chinese suffixes are
+                    # common official subtitles; a parenthesized release year is metadata.
+                    return bool(
+                        re.match(r"[\\u4e00-\\u9fff]", suffix)
+                        or re.match(r"(?:19|20)\\d{2}", suffix)
+                    )
+
+                if any(matches_target_or_numbered_subtitle(title) for title in target_titles):
                     continue
                 if len(normalized_term) >= 3:
                     return True
