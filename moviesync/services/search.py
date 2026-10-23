@@ -856,7 +856,11 @@ class SearchService:
                     # Ordinary resource cards can put the real work title in description/content
                     # while the first title field only says "updated to episode N". Check all
                     # available text for conflicts; aggregate PanSou results remain URL-scoped.
-                    display_title_for_filter = source_title_evidence
+                    # Use the resource's primary title for title-conflict detection. Descriptions
+                    # and channel content often append unrelated recommendations or other works;
+                    # treating that entire blob as the displayed title falsely rejects valid shares
+                    # whose actual title matches the requested movie (as seen in production logs).
+                    display_title_for_filter = source_title or None
                     candidate_title_evidence = source_title_evidence
                     if is_pansou_aggregate:
                         # Use the title paired with this specific share URL rather than
