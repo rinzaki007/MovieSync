@@ -90,7 +90,7 @@ def _candidate_match_explanation(
     original_norm = normalize(original_title)
     if target_norm and target_norm in source_norm:
         suffix = source_norm.split(target_norm, 1)[1]
-        if suffix[:1].isdigit() and not target_norm[-1:].isdigit():
+        if re.match(r"^\\d{1,2}(?=[\\u4e00-\\u9fff]|$)", suffix) and not target_norm[-1:].isdigit():
             title_reason = "标题包含相同主标题但编号不同，疑似续作"
         else:
             title_reason = "分享标题包含目标名称"
@@ -105,7 +105,7 @@ def _candidate_match_explanation(
                 alias
                 and alias in source_norm
                 and not (
-                    source_norm.split(alias, 1)[1][:1].isdigit()
+                    re.match(r"^\\d{1,2}(?=[\\u4e00-\\u9fff]|$)", source_norm.split(alias, 1)[1])
                     and not alias[-1:].isdigit()
                 )
                 for alias in alias_norms
