@@ -326,7 +326,6 @@ def test_bundled_pansou_can_be_disabled_without_marking_movie_sync_unhealthy():
     assert "/api/health" not in healthcheck
 
 
-
 def test_pansou_defaults_are_persistent_and_not_baked_into_docker_env():
     root = Path(__file__).resolve().parents[1]
     dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
