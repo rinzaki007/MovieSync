@@ -192,3 +192,16 @@ Uninstalling one of these files removes that card from the registry and persiste
 ## 存储卡的可选网盘入口
 
 存储卡可通过 `web_url` 属性声明面向浏览器的网盘主页地址。该字段仅用于任务成功后的“打开网盘”快捷入口，不参与转存、认证或目录解析；不应包含 Cookie、Token、用户名、密码或其他凭据。核心只向前端公开格式有效的 HTTP/HTTPS URL，并使用新标签页和 `noopener noreferrer` 打开。未声明该属性的卡片仍完整支持标准存储接口，只是不显示外部跳转按钮。
+
+
+## Resource-source execution and resilience
+
+Resource-source cards execute inside the MovieSync process and are trusted executable code. A card's
+`search()` implementation must set explicit connection and read timeouts on every network request;
+the recommended total request budget is 10–15 seconds. Never wait indefinitely on a socket, subprocess,
+or external API. Return partial results when a provider fails after some results are available.
+
+MovieSync records per-card execution duration and isolated failure diagnostics. A source that fails
+repeatedly is temporarily cooled down (default: three consecutive failures, then 60 seconds) while
+other sources continue to run. A successful or empty response resets that source's failure counter.
+The cooldown is not a sandbox and does not terminate a card that ignores its own timeout contract.

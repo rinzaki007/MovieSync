@@ -870,3 +870,41 @@ def test_filename_processor_invalid_priority_uses_safe_default():
 
     assert manager.parse_tv_episode("unknown-source", "sample.mkv") == (3, 8)
 
+
+
+def test_repeated_resource_source_failures_enter_temporary_cooldown():
+    class Store:
+        def load(self):
+            return {"cards": {"flaky-source": {"enabled": True, "config": {}}}}
+
+    class FlakySource(ResourceSourceCard):
+        manifest = CardManifest(
+            id="flaky-source",
+            name="Flaky Source",
+            type="resource_source",
+            capabilities=("resource.search", "resource.health_check"),
+        )
+
+        def __init__(self):
+            self.calls = 0
+
+        def search(self, movie, config):
+            self.calls += 1
+            raise RuntimeError("temporary upstream failure")
+
+        def check(self, config):
+            return {"status": "healthy"}
+
+    source = FlakySource()
+    manager = ResourceSourceManager(Store(), FakeLogger(), resource_cards=[source])
+    manager.search_failure_threshold = 2
+    manager.search_cooldown_seconds = 60
+
+    _, first = manager.search_with_diagnostics({"title": "Film"}, Store().load())
+    _, second = manager.search_with_diagnostics({"title": "Film"}, Store().load())
+    _, third = manager.search_with_diagnostics({"title": "Film"}, Store().load())
+
+    assert first[0]["status"] == "error"
+    assert second[0]["status"] == "error"
+    assert third[0]["status"] == "cooldown"
+    assert source.calls == 2

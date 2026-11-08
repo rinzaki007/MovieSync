@@ -40,6 +40,12 @@ docker compose up -d
 
 浏览器打开 `http://服务器IP:8099`，按页面提示创建管理员账号。首次初始化需要输入启动日志中输出的一次性初始化令牌；令牌同时保存在数据目录的 `setup.token` 文件中。也可通过环境变量 `MOVIESYNC_SETUP_TOKEN` 自行指定令牌。完成初始化后令牌文件会自动删除。若通过 HTTPS 反向代理提供服务，请按实际部署调整 Cookie 安全设置，并确保管理界面不会暴露给不可信的访问者。
 
+### 运行权限与数据备份
+
+官方容器默认使用非 root UID/GID（默认 `10001:10001`）运行 MovieSync 和内置 PanSou。首次启动会将挂载的数据目录归属调整为该 UID/GID；如需与宿主机用户匹配，可设置 `MOVIESYNC_UID` / `MOVIESYNC_GID`。如需暂时保留旧版 root 行为，可设置 `MOVIESYNC_RUN_AS_NON_ROOT=false`。
+
+建议定期备份 `/app/data`。备份脚本和恢复步骤见 [数据备份与恢复](BACKUP_RESTORE.md)。备份包含认证密钥、配置、订阅、任务和卡片；缓存及日志默认排除。
+
 ### 数据与更新
 
 - 所有运行数据保存在宿主机的 `./data` 目录中；更新镜像时保留该目录。

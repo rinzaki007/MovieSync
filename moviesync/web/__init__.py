@@ -12,6 +12,7 @@ from threading import Lock
 
 from flask import jsonify, redirect, request, session
 
+from .image_proxy import proxy_api
 from .playback import playback_api, playback_pages
 from .routes import api, pages
 from .vod_source_manager import register_vod_source_manager_api
@@ -75,6 +76,7 @@ class LoginRateLimiter:
 def register_web(app, services):
     app.register_blueprint(pages)
     app.register_blueprint(api)
+    app.register_blueprint(proxy_api)
     app.register_blueprint(playback_pages)
     app.register_blueprint(playback_api)
     register_vod_source_manager_api(app)

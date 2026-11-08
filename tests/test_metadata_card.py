@@ -276,7 +276,7 @@ def test_metadata_plugin_factory_closes_card_when_registration_fails(monkeypatch
 def test_metadata_image_policy_uses_card_manifest_hosts_not_provider_ids():
     from types import SimpleNamespace
 
-    from moviesync.web.routes import _metadata_image_policy
+    from moviesync.web.image_proxy import _metadata_image_policy
 
     card = SimpleNamespace(
         manifest=SimpleNamespace(
