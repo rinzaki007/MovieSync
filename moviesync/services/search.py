@@ -89,7 +89,11 @@ def _candidate_match_explanation(
     target_norm, source_norm = normalize(target_title), normalize(source)
     original_norm = normalize(original_title)
     if target_norm and target_norm in source_norm:
-        title_reason = "分享标题包含目标名称"
+        suffix = source_norm.split(target_norm, 1)[1]
+        if suffix[:1].isdigit() and not target_norm[-1:].isdigit():
+            title_reason = "标题包含相同主标题但编号不同，疑似续作"
+        else:
+            title_reason = "分享标题包含目标名称"
     elif original_norm and original_norm in source_norm:
         title_reason = "分享标题匹配影视原名"
     else:
@@ -97,11 +101,23 @@ def _candidate_match_explanation(
         alias_norms = [normalize(alias) for alias in aliases] if isinstance(aliases, list) else []
         title_reason = (
             "分享标题匹配已知别名"
-            if any(alias and alias in source_norm for alias in alias_norms)
+            if any(
+                alias
+                and alias in source_norm
+                and not (
+                    source_norm.split(alias, 1)[1][:1].isdigit()
+                    and not alias[-1:].isdigit()
+                )
+                for alias in alias_norms
+            )
             else "标题未直接匹配，建议人工核对"
         )
 
     reasons = [title_reason]
+    year = str(movie.get("year") or movie.get("release_year") or "").strip()
+    year_match = re.search(r"(?:19|20)\\d{2}", year)
+    if year_match and re.search(rf"(?<!\\d){year_match.group(0)}(?!\\d)", source):
+        reasons.append(f"年份匹配 {year_match.group(0)}")
     media_type = str(movie.get("media_type") or "").strip().lower()
     if media_type in {"tv", "tv_show", "series", "anime", "variety", "documentary", "short_drama"}:
         recognized = max(0, int(recognized_episode_files or 0))
