@@ -521,7 +521,7 @@ def test_task_recovery_survives_malformed_counts_and_event_history(tmp_path):
         assert queued["failed_count"] == 1
         assert isinstance(queued["events"], list)
         assert all(isinstance(event, dict) for event in queued["events"])
-        assert "可安全重试" in queued["message"]
+        assert "自动执行" in queued["message"]
 
         running = recovered["running-corrupt-history"]
         assert running["status"] == "failed"
