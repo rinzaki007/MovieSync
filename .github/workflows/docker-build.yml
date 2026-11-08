@@ -70,6 +70,33 @@ jobs:
         with:
           context: .
           push: false
+          load: true
+          tags: moviesync:pr
+
+      - name: Run non-root container smoke test
+        run: |
+          mkdir -p "$RUNNER_TEMP/moviesync-data"
+          docker run -d --name moviesync-pr \
+            -p 127.0.0.1:5099:5000 \
+            -v "$RUNNER_TEMP/moviesync-data:/app/data" \
+            -e MOVIESYNC_BUNDLED_PANSOU_ENABLED=false \
+            moviesync:pr
+          cleanup() {
+            docker logs moviesync-pr || true
+            docker rm -f moviesync-pr || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:5099/healthz; then
+              break
+            fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:5099/healthz
+          uid=$(docker exec moviesync-pr awk '/^Uid:/{print $2}' /proc/1/status)
+          test "$uid" = "10001"
+          data_uid=$(docker exec moviesync-pr stat -c '%u' /app/data)
+          test "$data_uid" = "10001"
 
   publish:
     name: Publish Docker image (manual only)
