@@ -25,7 +25,6 @@ def _metadata_image_policy(target: str, metadata_cards) -> dict[str, str] | None
         return None
     host = host.lower()
     try:
-        import ipaddress
         address = ipaddress.ip_address(host)
     except ValueError:
         address = None
@@ -40,7 +39,7 @@ def _metadata_image_policy(target: str, metadata_cards) -> dict[str, str] | None
     return None
 
 
-@api.get("/proxy-img")
+@proxy_api.get("/proxy-img")
 def proxy_img():
     target = request.args.get("url", "").strip()
     metadata_cards = _services()["card_registry"].find_by_type("metadata_provider")
