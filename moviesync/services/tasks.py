@@ -36,19 +36,7 @@ class TaskManager:
             for item in items:
                 if not isinstance(item, dict):
                     continue
-                if item.get("status") == "queued":
-                    # queued means the worker had not marked the task as running;
-                    # it is safe to retry because the transfer runner had not started.
-                    item["status"] = "failed"
-                    item["phase"] = "failed"
-                    item["phase_label"] = "任务中断"
-                    item["message"] = "服务重启时任务仍在排队，未开始执行，可安全重试"
-                    item["recovery_uncertain"] = False
-                    item["failed_count"] = self._recovered_failed_count(item)
-                    item["updated_at"] = time.time()
-                    self._append_event(item, "error", item["message"])
-                    changed = True
-                elif item.get("status") == "running":
+                if item.get("status") == "running":
                     # A running transfer may already have reached the remote drive.
                     # Never offer a blind retry after a process crash.
                     item["status"] = "failed"
@@ -72,6 +60,44 @@ class TaskManager:
                     changed = True
             if changed:
                 self._save(items)
+
+    def resume_queued_tasks(self, runner_factory):
+        """Resume only durable tasks that never crossed the remote-execution boundary.
+
+        A queued task is safe to resume: _run_transfer changes it to running and
+        persists that transition before invoking the remote storage card. Running
+        tasks are handled as uncertain during startup and are never auto-retried.
+        """
+        if not callable(runner_factory):
+            raise TypeError("runner_factory must be callable")
+
+        resumed = 0
+        for task in self.list_tasks():
+            if task.get("type") != "transfer" or task.get("status") != "queued":
+                continue
+            task_id = str(task.get("id") or "").strip()
+            if not task_id:
+                continue
+            try:
+                runner = runner_factory(dict(task))
+                if not callable(runner):
+                    raise TypeError("runner_factory must return a callable")
+                self._submit_transfer(task, runner)
+                resumed += 1
+            except Exception:
+                self.logger.exception("恢复排队转存任务 %s 失败；远程转存尚未开始", task_id)
+                self._update(
+                    task_id,
+                    status="failed",
+                    phase="failed",
+                    phase_label="恢复失败",
+                    progress=0,
+                    recovery_uncertain=False,
+                    message="任务恢复准备失败，尚未开始转存，可以安全重试",
+                    failed_count=1,
+                    finished_at=time.time(),
+                )
+        return resumed
 
     def list_tasks(self):
         with self.lock:
