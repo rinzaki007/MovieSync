@@ -43,6 +43,7 @@ class TaskManager:
                     item["phase_label"] = "恢复排队"
                     item["message"] = "服务重启后已恢复排队，正在等待自动执行"
                     item["recovery_uncertain"] = False
+                    item["failed_count"] = self._recovered_failed_count(item)
                     item["updated_at"] = time.time()
                     self._append_event(item, "info", item["message"])
                     changed = True
