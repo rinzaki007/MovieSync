@@ -47,3 +47,25 @@ def test_explanation_accepts_known_alias_and_original_title():
 
     assert "匹配已知别名" in alias
     assert "匹配影视原名" in original
+
+
+def test_explanation_distinguishes_numbered_sequel_and_matching_year():
+    sequel = _candidate_match_explanation(
+        {"title": "潜伏", "media_type": "tv"},
+        "潜伏6：血域 4K WEB-DL",
+        recognized_episode_files=0,
+        total_video_count=1,
+        declared_episode_count=None,
+        scan_complete=True,
+    )
+    year = _candidate_match_explanation(
+        {"title": "兰香如故", "year": "2026", "media_type": "tv"},
+        "兰香如故 2026 全47集",
+        recognized_episode_files=8,
+        total_video_count=8,
+        declared_episode_count=47,
+        scan_complete=True,
+    )
+
+    assert "编号不同" in sequel
+    assert "年份匹配 2026" in year
