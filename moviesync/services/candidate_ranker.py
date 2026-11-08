@@ -12,7 +12,7 @@ class CandidateRanker:
         return re.sub(r"[^\w\u4e00-\u9fa5]", "", value or "")
 
     @staticmethod
-    def _candidate_priority(
+    def priority(
         source: dict,
         movie_title: str,
         media_type: str = "",
