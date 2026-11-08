@@ -4,7 +4,6 @@ import pathlib
 
 from moviesync.services.candidate_ranker import CandidateRanker
 
-
 CASES = json.loads(
     (pathlib.Path(__file__).parent / "search_ranker_cases.json").read_text(encoding="utf-8")
 )
