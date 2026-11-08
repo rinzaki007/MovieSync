@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+umask 077
 
 DATA_DIR="${MOVIESYNC_DATA_DIR:-/app/data}"
 OUTPUT_DIR="${1:-./moviesync-backups}"
