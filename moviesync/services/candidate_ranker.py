@@ -57,7 +57,7 @@ class CandidateRanker:
             # title (e.g. searching "潜伏" must not promote "潜伏6：血域").
             suffix = simplified_primary_title.split(simplified_title, 1)[1]
             numbered_sequel = bool(
-                re.match(r"^\\d{1,2}(?=[\\u4e00-\\u9fff]|$)", suffix)
+                re.match(r"^\d{1,2}(?=[\u4e00-\u9fff]|$)", suffix)
                 and not simplified_title[-1:].isdigit()
             )
             if numbered_sequel:
