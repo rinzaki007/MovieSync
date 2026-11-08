@@ -12,6 +12,8 @@ if [ "${1:-}" != "--non-root" ] && [ "$(id -u)" = "0" ] && [ "${MOVIESYNC_RUN_AS
             exit 1
         fi
     fi
+    HOME=/app/data
+    export HOME
     exec gosu "${MOVIESYNC_UID}:${MOVIESYNC_GID}" "$0" --non-root
 fi
 if [ "${1:-}" = "--non-root" ]; then shift; fi
