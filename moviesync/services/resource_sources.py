@@ -10,6 +10,7 @@ import time
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from importlib.metadata import entry_points
+from threading import Lock
 from typing import Any
 
 from ..cards import Card, CardManifest, CardRegistry, FilenameProcessorCard, ResourceSourceCard
@@ -58,6 +59,11 @@ class ResourceSourceManager:
         self.logger = logger
         self.config_store = config_store
         self.registry = registry or CardRegistry()
+        self.search_failure_threshold = 3
+        self.search_cooldown_seconds = 60
+        self._search_failures: dict[str, int] = {}
+        self._search_cooldowns: dict[str, float] = {}
+        self._search_state_lock = Lock()
 
         # Core never creates a platform-specific source. All built-in and optional
         # sources must be registered by the card loader or explicit injection.
@@ -260,20 +266,67 @@ class ResourceSourceManager:
                 }
                 return [], diagnostic
 
-        # Resource cards are independent network sources. executor.map preserves
-        # registration order so results and diagnostics remain deterministic.
-        with ThreadPoolExecutor(
-            max_workers=min(8, len(enabled_sources)),
-            thread_name_prefix="moviesync-resource-search",
-        ) as executor:
-            source_results = list(executor.map(search_one, enabled_sources))
+        # Repeatedly failing cards enter a short cooldown. This is per-card:
+        # one unstable upstream must not slow down healthy sources.
+        now = time.monotonic()
+        diagnostics_by_id: dict[str, dict[str, Any]] = {}
+        items_by_id: dict[str, list[dict[str, Any]]] = {}
+        eligible_sources = []
+        with self._search_state_lock:
+            for source in enabled_sources:
+                until = self._search_cooldowns.get(source.card_id, 0.0)
+                if until > now:
+                    diagnostics_by_id[source.card_id] = {
+                        "id": source.card_id,
+                        "name": self._source_name(source),
+                        "status": "cooldown",
+                        "result_count": 0,
+                        "invalid_items": 0,
+                        "duration_ms": 0,
+                        "message": f"连续失败后暂缓请求，约 {max(1, int(until - now))} 秒后自动重试",
+                    }
+                else:
+                    eligible_sources.append(source)
+
+        if eligible_sources:
+            # Card implementations must set their own network-level timeouts;
+            # Python cannot safely terminate arbitrary third-party plugin code.
+            with ThreadPoolExecutor(
+                max_workers=min(8, len(eligible_sources)),
+                thread_name_prefix="moviesync-resource-search",
+            ) as executor:
+                source_results = list(executor.map(search_one, eligible_sources))
+
+            for source, (source_items, diagnostic) in zip(eligible_sources, source_results):
+                diagnostics_by_id[source.card_id] = diagnostic
+                items_by_id[source.card_id] = source_items
+                with self._search_state_lock:
+                    if diagnostic["status"] == "error":
+                        failures = self._search_failures.get(source.card_id, 0) + 1
+                        self._search_failures[source.card_id] = failures
+                        if failures >= self.search_failure_threshold:
+                            self._search_cooldowns[source.card_id] = (
+                                time.monotonic() + self.search_cooldown_seconds
+                            )
+                            self.logger.warning(
+                                "资源卡片 %s 连续失败，进入 %.0f 秒冷却",
+                                source.card_id,
+                                self.search_cooldown_seconds,
+                            )
+                    else:
+                        self._search_failures.pop(source.card_id, None)
+                        self._search_cooldowns.pop(source.card_id, None)
 
         items = [
             item
-            for source_items, _diagnostic in source_results
-            for item in source_items
+            for source in enabled_sources
+            for item in items_by_id.get(source.card_id, [])
         ]
-        diagnostics = [diagnostic for _items, diagnostic in source_results]
+        diagnostics = [
+            diagnostics_by_id[source.card_id]
+            for source in enabled_sources
+            if source.card_id in diagnostics_by_id
+        ]
         return items, diagnostics
 
     def parse_tv_episode(self, source_id: str, file_name: str) -> tuple[int | None, int | None]:
