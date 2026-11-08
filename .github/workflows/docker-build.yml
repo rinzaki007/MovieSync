@@ -9,9 +9,6 @@ on:
   push:
     branches:
       - main
-  push:
-    branches:
-      - main
   workflow_dispatch:
 
 # 同一 PR/ref 只保留最新检查；不同 PR 的检查互不影响。
@@ -51,7 +48,7 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Run tests
-        run: pytest -q --cov=moviesync --cov-report=term-missing --cov-fail-under=45 --cov-fail-under=45
+        run: pytest -q --cov=moviesync --cov-report=term-missing --cov-fail-under=45
 
       - name: Run Ruff
         run: ruff check . --output-format=github
