@@ -22,7 +22,7 @@ class CandidateRanker:
             # A separated release year is metadata, while an immediately attached
             # number (潜伏6) is part of the work identity.
             cleaned = re.sub(
-                r"(?<!\\d)[\\s(（]+(?:19|20)\\d{2}(?!\\d)[)）]?", " ", raw_title
+                r"(?<!\d)[\s(（]+(?:19|20)\d{2}(?!\d)[)）]?", " ", raw_title
             )
             normalized = CandidateRanker._simplify(cleaned).lower()
             position = normalized.find(normalized_target)
