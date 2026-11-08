@@ -5,6 +5,8 @@
 """
 from __future__ import annotations
 
+import os
+import secrets
 from pathlib import Path
 from threading import Lock
 
@@ -108,6 +110,33 @@ class AuthStore:
             isinstance(data, dict)
             and data.get("initialized")
         )
+
+    @property
+    def setup_token_path(self) -> Path:
+        return self.store.path.with_name("setup.token")
+
+    def get_or_create_setup_token(self) -> tuple[str, bool]:
+        """Return the persistent first-run token and whether it was just created."""
+        path = self.setup_token_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            token = path.read_text(encoding="utf-8").strip()
+            if not token:
+                raise OSError("首次初始化令牌文件为空")
+            try:
+                path.chmod(0o600)
+            except OSError:
+                pass
+            return token, False
+        token = secrets.token_urlsafe(32)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(token + "\n")
+        return token, True
+
+    def clear_setup_token(self) -> None:
+        self.setup_token_path.unlink(missing_ok=True)
 
     def setup(
         self,
