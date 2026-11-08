@@ -26,3 +26,35 @@ def test_candidate_ranker_prioritizes_explicit_title_identity():
     assert CandidateRanker.priority(direct, "兰香如故", "tv") > CandidateRanker.priority(
         unrelated, "兰香如故", "tv"
     )
+
+
+
+def test_candidate_ranker_uses_alias_in_primary_title_as_strong_evidence():
+    alias_title = {"title": "旧梦如故 2026 全47集"}
+    incidental_alias = {
+        "title": "吞噬星空 S01E47",
+        "description": "旧梦如故相关频道推荐",
+    }
+    metadata = {"aliases": ["旧梦如故"]}
+
+    assert CandidateRanker.priority(
+        alias_title, "兰香如故", "tv", metadata
+    ) > CandidateRanker.priority(
+        incidental_alias, "兰香如故", "tv", metadata
+    )
+
+
+def test_candidate_ranker_fuzzy_match_is_conservative_and_never_hides_sequels():
+    near_match = {"title": "The Matr ix 1999 BluRay"}
+    sequel_mismatch = {"title": "潜伏 电视剧 S01E01"}
+
+    assert CandidateRanker.priority(
+        near_match, "The Matrix", "movie"
+    ) > CandidateRanker.priority(
+        {"title": "Unrelated Movie"}, "The Matrix", "movie"
+    )
+    assert CandidateRanker.priority(
+        sequel_mismatch, "潜伏6", "movie"
+    ) < CandidateRanker.priority(
+        {"title": "潜伏6 4K WEB-DL"}, "潜伏6", "movie"
+    )
