@@ -37,16 +37,14 @@ class TaskManager:
                 if not isinstance(item, dict):
                     continue
                 if item.get("status") == "queued":
-                    # queued means the worker had not marked the task as running;
-                    # it is safe to retry because the transfer runner had not started.
-                    item["status"] = "failed"
-                    item["phase"] = "failed"
-                    item["phase_label"] = "任务中断"
-                    item["message"] = "服务重启时任务仍在排队，未开始执行，可安全重试"
+                    # A queued task has not entered the transfer runner. Keep it queued;
+                    # create_app will resubmit it after cards and services are ready.
+                    item["phase"] = "waiting"
+                    item["phase_label"] = "恢复排队"
+                    item["message"] = "服务重启后已恢复排队，正在等待自动执行"
                     item["recovery_uncertain"] = False
-                    item["failed_count"] = self._recovered_failed_count(item)
                     item["updated_at"] = time.time()
-                    self._append_event(item, "error", item["message"])
+                    self._append_event(item, "info", item["message"])
                     changed = True
                 elif item.get("status") == "running":
                     # A running transfer may already have reached the remote drive.
@@ -234,6 +232,49 @@ class TaskManager:
             items.append(task)
             self._save(items)
         return self._submit_transfer(task, runner)
+
+    def resume_queued_tasks(self, runner_factory):
+        """Resume tasks that were durably queued before a service restart.
+
+        The runner factory is invoked only after application services/cards are ready.
+        Running tasks are deliberately excluded because their remote outcome is unknown.
+        """
+        resumed = 0
+        for task in self.list_tasks():
+            if task.get("type") != "transfer" or task.get("status") != "queued":
+                continue
+            payload = task.get("retry_payload")
+            if not isinstance(payload, dict):
+                self._update(
+                    str(task.get("id") or ""),
+                    status="failed",
+                    phase="failed",
+                    phase_label="无法恢复",
+                    recovery_uncertain=False,
+                    message="排队任务缺少有效的重试数据，未开始转存；请重新创建任务",
+                    failed_count=1,
+                    finished_at=time.time(),
+                )
+                continue
+            try:
+                runner = runner_factory(task)
+                if not callable(runner):
+                    raise TypeError("task runner factory must return a callable")
+                self._submit_transfer(task, runner)
+                resumed += 1
+            except Exception:
+                self.logger.exception("恢复排队转存任务 %s 失败", task.get("id"))
+                self._update(
+                    str(task.get("id") or ""),
+                    status="failed",
+                    phase="failed",
+                    phase_label="恢复失败",
+                    recovery_uncertain=False,
+                    message="任务恢复失败，尚未开始转存，可以安全重试",
+                    failed_count=1,
+                    finished_at=time.time(),
+                )
+        return resumed
 
     def _submit_transfer(self, task, runner):
         """Submit a persisted task once; allow reclaiming it after a worker exits."""
