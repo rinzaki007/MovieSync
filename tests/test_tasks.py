@@ -219,8 +219,7 @@ def test_restart_recovery_only_allows_retry_when_task_never_started(tmp_path):
     manager = TaskManager(path, logging.getLogger("test"))
     try:
         recovered = {task["id"]: task for task in manager.list_tasks()}
-        assert recovered["queued-before-restart"]["status"] == "failed"
-        assert recovered["queued-before-restart"]["recovery_uncertain"] is False
+        assert recovered["queued-before-restart"]["status"] == "queued"
         assert recovered["running-before-restart"]["status"] == "failed"
         assert recovered["running-before-restart"]["recovery_uncertain"] is True
         assert "检查目标网盘" in recovered["running-before-restart"]["message"]
@@ -230,14 +229,21 @@ def test_restart_recovery_only_allows_retry_when_task_never_started(tmp_path):
             lambda progress: (True, "不应执行", {"success": 1}),
         ) is None
 
-        retry = manager.retry_transfer(
-            "queued-before-restart",
-            lambda progress: (True, "安全重试成功", {"success": 1}),
-        )
-        assert retry is not None
-        assert retry["status"] == "queued"
+        calls = []
+
+        def runner_factory(task):
+            assert task["id"] == "queued-before-restart"
+
+            def runner(progress):
+                calls.append("started")
+                return True, "安全恢复成功", {"success": 1, "skipped": 0, "failed": 0}
+
+            return runner
+
+        assert manager.resume_queued_tasks(runner_factory) == 1
         manager.executor.shutdown(wait=True)
-        assert manager.get_task(retry["id"])["status"] == "success"
+        assert calls == ["started"]
+        assert manager.get_task("queued-before-restart")["status"] == "success"
     finally:
         manager.shutdown()
 
@@ -516,11 +522,12 @@ def test_task_recovery_survives_malformed_counts_and_event_history(tmp_path):
         recovered = {task["id"]: task for task in manager.list_tasks()}
 
         queued = recovered["queued-corrupt-history"]
-        assert queued["status"] == "failed"
-        assert queued["failed_count"] == 1
-        assert isinstance(queued["events"], list)
-        assert all(isinstance(event, dict) for event in queued["events"])
-        assert "可安全重试" in queued["message"]
+        # Queued tasks have not crossed the remote-execution boundary. Preserve
+        # them for app startup to rebuild a runner and resume safely; malformed
+        # legacy metadata is normalized when the task is next updated.
+        assert queued["status"] == "queued"
+        assert queued["failed_count"] == "not-a-number"
+        assert queued["events"] == "legacy-invalid-value"
 
         running = recovered["running-corrupt-history"]
         assert running["status"] == "failed"

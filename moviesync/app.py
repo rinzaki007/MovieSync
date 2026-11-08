@@ -283,6 +283,34 @@ def create_app(
 
     register_web(app, services)
 
+    def recovered_transfer_runner(task: dict):
+        payload = task.get("retry_payload")
+        if not isinstance(payload, dict):
+            raise ValueError("排队任务缺少可恢复的转存参数")
+        movie = payload.get("movie")
+        candidate = payload.get("candidate")
+        if not isinstance(movie, dict) or not isinstance(candidate, dict):
+            raise ValueError("排队任务的影视或资源信息无效")
+        files = candidate.get("files")
+        if not isinstance(files, list) or not files:
+            raise ValueError("排队任务没有可转存文件")
+
+        def runner(progress):
+            with app.app_context():
+                return search_service.transfer_selected_resource_with_progress(
+                    movie,
+                    candidate,
+                    payload.get("target_fid") or "0",
+                    {},
+                    progress,
+                )
+
+        return runner
+
+    resumed_tasks = tasks.resume_queued_tasks(recovered_transfer_runner)
+    if resumed_tasks:
+        logger.info("服务启动后已恢复 %s 个尚未开始执行的转存任务", resumed_tasks)
+
     if start_scheduler and not app.testing:
         subscriptions.start_scheduler()
 
