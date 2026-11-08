@@ -26,3 +26,15 @@ def test_candidate_ranker_prioritizes_explicit_title_identity():
     assert CandidateRanker.priority(direct, "兰香如故", "tv") > CandidateRanker.priority(
         unrelated, "兰香如故", "tv"
     )
+
+
+def test_candidate_ranker_does_not_treat_numbered_sequel_as_exact_title_match():
+    base = {"title": "潜伏6：血域 4K WEB-DL"}
+    sequel = {"title": "潜伏6：血域 4K WEB-DL"}
+    plain = {"title": "潜伏 电视剧全集 1080p"}
+    assert CandidateRanker.priority(plain, "潜伏", "tv") > CandidateRanker.priority(
+        sequel, "潜伏", "tv"
+    )
+    assert CandidateRanker.priority(sequel, "潜伏6", "movie") > CandidateRanker.priority(
+        plain, "潜伏6", "movie"
+    )
