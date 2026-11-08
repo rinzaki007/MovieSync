@@ -1,12 +1,12 @@
 """Regression corpus for title identity ranking against noisy resource names."""
 import json
-from pathlib import Path
+import pathlib
 
 from moviesync.services.candidate_ranker import CandidateRanker
 
 
 CASES = json.loads(
-    (Path(__file__).parent / "search_ranker_cases.json").read_text(encoding="utf-8")
+    (pathlib.Path(__file__).parent / "search_ranker_cases.json").read_text(encoding="utf-8")
 )
 
 
