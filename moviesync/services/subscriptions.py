@@ -17,7 +17,7 @@ from threading import Event, RLock, Thread
 from ..storage import JsonStore
 from .subscription_scheduler import SubscriptionSchedulerMixin
 from .subscription_utils import (
-    _clean_tv_filename,
+    _clean_tv_filename as _clean_tv_filename,
     _file_relative_folder,
     _normalize_fid,
     _normalize_resource_id,
