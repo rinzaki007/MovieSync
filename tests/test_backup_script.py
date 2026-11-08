@@ -31,6 +31,7 @@ def test_backup_script_preserves_secrets_and_cards_but_skips_cache_and_logs(tmp_
     assert result.returncode == 0, result.stderr
     archive_path = Path(result.stdout.strip())
     assert archive_path.is_file()
+    assert archive_path.stat().st_mode & 0o777 == 0o600
     with tarfile.open(archive_path, "r:gz") as archive:
         names = set(archive.getnames())
     assert "./.secret_key" in names
