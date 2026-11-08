@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import math
+import os
 import secrets
 from functools import wraps
 from urllib.parse import urlparse
@@ -257,26 +258,27 @@ def openlist():
 
 @api.post("/setup")
 def setup():
-    data = (
-        request.get_json(
-            silent=True
-        )
-        or {}
-    )
+    data = request.get_json(silent=True) or {}
+    services = _services()
 
-    username = str(
-        data.get("username", "")
-    )
+    if not current_app.testing:
+        expected_token = str(os.getenv("MOVIESYNC_SETUP_TOKEN", "")).strip()
+        if not expected_token:
+            try:
+                expected_token, _ = services["auth"].get_or_create_setup_token()
+            except OSError:
+                services["logger"].exception("读取首次初始化令牌失败")
+                return _json_error("首次初始化令牌不可用，请检查数据目录权限", 503)
+        supplied_token = str(data.get("setup_token") or "")
+        if not expected_token or not secrets.compare_digest(supplied_token, expected_token):
+            return _json_error("首次初始化令牌不正确", 403)
 
-    password = str(
-        data.get("password", "")
-    )
+    username = str(data.get("username", ""))
+    password = str(data.get("password", ""))
 
     try:
-        _services()["auth"].setup(
-            username,
-            password,
-        )
+        services["auth"].setup(username, password)
+        services["auth"].clear_setup_token()
 
     except ValueError as exc:
         return _json_error(
@@ -730,7 +732,9 @@ def uninstall_card_plugin(filename):
     try:
         safe_filename = plugin_manager.validate_filename(filename)
         services = _services()
-        card_id = safe_filename[:-3]
+        card_id = plugin_manager.resolve_card_id(safe_filename)
+        if not card_id:
+            return _json_error("无法安全识别卡片的 Manifest ID，已拒绝卸载", 409)
         default_target = services["config"].get_default_storage_target_id()
         if default_target and str(default_target) == card_id:
             return _json_error("该卡片是当前默认存储目标，请先切换默认目标后再卸载", 409)
