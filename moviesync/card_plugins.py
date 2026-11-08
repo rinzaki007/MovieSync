@@ -5,6 +5,7 @@ code, not a sandboxed data format; the web UI must warn users to install trusted
 """
 from __future__ import annotations
 
+import ast
 import hashlib
 import importlib.util
 import re
@@ -542,14 +543,53 @@ class CardFilePluginManager:
                 self._errors.pop(name, None)
                 raise
 
+    def resolve_card_id(self, filename: str) -> str | None:
+        """Resolve a card's stable manifest ID without executing an unloaded plugin."""
+        name = self.validate_filename(filename)
+        path = self.plugin_dir / name
+        if not path.is_file():
+            raise FileNotFoundError("卡片文件不存在")
+        loaded = self._loaded.get(name)
+        if loaded:
+            return loaded[0]
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=name)
+        except (OSError, UnicodeDecodeError, SyntaxError):
+            return None
+        manifest_ids = set()
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            is_manifest = (
+                isinstance(func, ast.Name) and func.id == "CardManifest"
+            ) or (
+                isinstance(func, ast.Attribute) and func.attr == "CardManifest"
+            )
+            if not is_manifest:
+                continue
+            for keyword in node.keywords:
+                if keyword.arg != "id":
+                    continue
+                try:
+                    value = ast.literal_eval(keyword.value)
+                except (ValueError, TypeError):
+                    continue
+                if isinstance(value, str) and value.strip():
+                    manifest_ids.add(value.strip())
+        return next(iter(manifest_ids)) if len(manifest_ids) == 1 else None
+
     def uninstall(self, filename: str) -> dict[str, str]:
         name = self.validate_filename(filename)
         path = self.plugin_dir / name
         with self._lock:
             if not path.is_file():
                 raise FileNotFoundError("卡片文件不存在")
+            card_id = self.resolve_card_id(name)
+            if not card_id:
+                raise ValueError("无法安全识别卡片的 Manifest ID，已拒绝卸载")
             loaded = self._loaded.pop(name, None)
-            card_id = loaded[0] if loaded else ""
+            card_id = loaded[0] if loaded else card_id
             module_name = loaded[1] if loaded else ""
             loaded_card = loaded[2] if loaded else None
             registry_owns_card = bool(

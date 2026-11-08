@@ -326,6 +326,21 @@ def test_bundled_pansou_can_be_disabled_without_marking_movie_sync_unhealthy():
     assert "/api/health" not in healthcheck
 
 
+def test_pansou_defaults_are_persistent_and_not_baked_into_docker_env():
+    root = Path(__file__).resolve().parents[1]
+    dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
+    entrypoint = (root / "docker-entrypoint.sh").read_text(encoding="utf-8")
+    defaults = (root / "pansou.defaults.env").read_text(encoding="utf-8")
+
+    assert "CHANNELS=" not in dockerfile
+    assert "ENABLED_PLUGINS=" not in dockerfile
+    assert "/app/data/pansou/pansou.env" in entrypoint
+    assert "cp /app/pansou.defaults.env" in entrypoint
+    assert "CHANNELS=" in defaults
+    assert "ENABLED_PLUGINS=" in defaults
+    assert 'CHANNELS="$CHANNELS_OVERRIDE"' in entrypoint
+
+
 
 def test_pansou_search_filters_aliyun_links_when_aliyun_storage_is_selected():
     http = FakeHttpClient(

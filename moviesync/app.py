@@ -233,7 +233,20 @@ def create_app(
         ),
     )
 
+    app.testing = test_config is not None
     app.secret_key = settings.secret_key
+
+    if not app.testing and not auth.is_initialized() and not os.getenv("MOVIESYNC_SETUP_TOKEN", "").strip():
+        try:
+            setup_token, created = auth.get_or_create_setup_token()
+            if created:
+                logger.warning(
+                    "MovieSync 首次初始化令牌：%s（也可从 %s 读取）",
+                    setup_token,
+                    auth.setup_token_path,
+                )
+        except OSError:
+            logger.exception("创建首次初始化令牌失败；请检查数据目录权限")
 
     app.config.update(
         MAX_CONTENT_LENGTH=1 * 1024 * 1024,

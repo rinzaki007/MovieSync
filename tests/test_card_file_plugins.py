@@ -65,6 +65,20 @@ def test_file_plugin_allows_filename_to_differ_from_manifest_id(tmp_path):
     assert registry.get("maccms") is None
 
 
+def test_unloaded_card_manifest_id_is_resolved_without_executing_plugin(tmp_path):
+    plugin_dir = tmp_path / "cards"
+    plugin_dir.mkdir()
+    source = _plugin_source("stable-card-id") + (
+        b"\nraise RuntimeError('plugin must not execute during identity lookup')\n"
+    )
+    (plugin_dir / "renamed-card.py").write_bytes(source)
+    manager = CardFilePluginManager(
+        plugin_dir, CardRegistry(), logging.getLogger("test-card-plugins")
+    )
+
+    assert manager.resolve_card_id("renamed-card.py") == "stable-card-id"
+    removed = manager.uninstall("renamed-card.py")
+    assert removed == {"filename": "renamed-card.py", "card_id": "stable-card-id"}
 @pytest.mark.parametrize("filename", ["../escape.py", "UPPER.py", "not-python.txt", ".hidden.py"])
 def test_file_plugin_rejects_unsafe_filenames(tmp_path, filename):
     manager = CardFilePluginManager(
@@ -667,7 +681,7 @@ def create_card(context): return MacCMSSourceManagerCard()
 '''
     legacy_custom_source = bundled_source.replace(
         'name="VOD source"', 'name="Customized legacy VOD source"'
-    ) + "# administrator customization\\n"
+    ) + "# administrator customization\n"
     (bundled_dir / "vod_source_manager.py").write_text(bundled_source, encoding="utf-8")
     (plugin_dir / "maccms.py").write_text(legacy_custom_source, encoding="utf-8")
     # Simulate a previously seeded new filename from an earlier startup after upgrade.
