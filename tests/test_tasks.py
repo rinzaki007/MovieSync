@@ -219,8 +219,9 @@ def test_restart_recovery_only_allows_retry_when_task_never_started(tmp_path):
     manager = TaskManager(path, logging.getLogger("test"))
     try:
         recovered = {task["id"]: task for task in manager.list_tasks()}
-        assert recovered["queued-before-restart"]["status"] == "failed"
+        assert recovered["queued-before-restart"]["status"] == "queued"
         assert recovered["queued-before-restart"]["recovery_uncertain"] is False
+        assert "自动执行" in recovered["queued-before-restart"]["message"]
         assert recovered["running-before-restart"]["status"] == "failed"
         assert recovered["running-before-restart"]["recovery_uncertain"] is True
         assert "检查目标网盘" in recovered["running-before-restart"]["message"]
@@ -230,14 +231,14 @@ def test_restart_recovery_only_allows_retry_when_task_never_started(tmp_path):
             lambda progress: (True, "不应执行", {"success": 1}),
         ) is None
 
-        retry = manager.retry_transfer(
-            "queued-before-restart",
-            lambda progress: (True, "安全重试成功", {"success": 1}),
+        resumed = manager.resume_queued_tasks(
+            lambda task: (
+                lambda progress: (True, "安全恢复成功", {"success": 1, "skipped": 0, "failed": 0})
+            )
         )
-        assert retry is not None
-        assert retry["status"] == "queued"
+        assert resumed == 1
         manager.executor.shutdown(wait=True)
-        assert manager.get_task(retry["id"])["status"] == "success"
+        assert manager.get_task("queued-before-restart")["status"] == "success"
     finally:
         manager.shutdown()
 
