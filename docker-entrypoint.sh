@@ -5,7 +5,10 @@
 if [ "${1:-}" != "--non-root" ] && [ "$(id -u)" = "0" ] && [ "${MOVIESYNC_RUN_AS_NON_ROOT:-true}" != "false" ]; then
     MOVIESYNC_UID="${MOVIESYNC_UID:-10001}"
     MOVIESYNC_GID="${MOVIESYNC_GID:-10001}"
-    chown -R "${MOVIESYNC_UID}:${MOVIESYNC_GID}" /app/data
+    if ! chown -R "${MOVIESYNC_UID}:${MOVIESYNC_GID}" /app/data; then
+        echo "无法调整 /app/data 的运行权限；请检查挂载目录，或设置 MOVIESYNC_RUN_AS_NON_ROOT=false" >&2
+        exit 1
+    fi
     exec gosu "${MOVIESYNC_UID}:${MOVIESYNC_GID}" "$0" --non-root
 fi
 if [ "${1:-}" = "--non-root" ]; then shift; fi
@@ -48,13 +51,20 @@ shutdown() {
 
 trap shutdown INT TERM
 
+process_running() {
+    pid="$1"
+    [ -r "/proc/$pid/stat" ] || return 1
+    IFS=' ' read -r _ _ PROCESS_STATE _ < "/proc/$pid/stat" || return 1
+    [ "$PROCESS_STATE" != "Z" ] && [ "$PROCESS_STATE" != "X" ]
+}
+
 # Supervise both processes. Repeated PanSou health failures exit the container,
 # allowing Docker's configured restart policy to recover the bundled service.
 STARTED_AT="$(date +%s)"
 PANSOU_FAILURES=0
-while kill -0 "$APP_PID" 2>/dev/null; do
+while process_running "$APP_PID"; do
     if [ -n "$PANSOU_PID" ]; then
-        if ! kill -0 "$PANSOU_PID" 2>/dev/null; then
+        if ! process_running "$PANSOU_PID"; then
             echo "PanSou 进程意外退出，停止 MovieSync 以触发容器重启" >&2
             kill -TERM "$APP_PID" 2>/dev/null || true
             wait "$APP_PID" 2>/dev/null || true
