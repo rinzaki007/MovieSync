@@ -187,6 +187,11 @@ def create_app(
             logger.exception("关闭任务执行器失败")
 
         try:
+            resource_sources.shutdown()
+        except Exception:
+            logger.exception("关闭资源来源执行器失败")
+
+        try:
             card_registry.close_all()
         except Exception:
             logger.exception("关闭卡片注册表失败")
@@ -220,6 +225,8 @@ def create_app(
         "csrf": lambda: secrets.token_urlsafe(32),
         "login_limiter": LoginRateLimiter(),
         "scheduler_enabled": bool(start_scheduler),
+        "pansou_enabled": os.getenv("MOVIESYNC_BUNDLED_PANSOU_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"},
+        "pansou_url": os.getenv("MOVIESYNC_PANSOU_URL", "http://127.0.0.1:8888").rstrip("/"),
         "shutdown": shutdown,
     }
 
