@@ -53,9 +53,18 @@ class CandidateRanker:
         )
         simplified_primary_title = CandidateRanker._simplify(primary_title_text)
         if simplified_title and simplified_title in simplified_primary_title:
-            # An explicit work-name match in the source title outranks generic episode,
-            # resolution, and codec markers. Quality is useful only after identity.
-            score += 80
+            # Do not treat a numbered sequel as an exact match for an unnumbered
+            # title (e.g. searching "潜伏" must not promote "潜伏6：血域").
+            suffix = simplified_primary_title.split(simplified_title, 1)[1]
+            numbered_sequel = bool(
+                suffix[:1].isdigit() and not simplified_title[-1:].isdigit()
+            )
+            if numbered_sequel:
+                score -= 12
+            else:
+                # An explicit work-name match in the source title outranks generic
+                # episode, resolution, and codec markers.
+                score += 80
         elif simplified_title and simplified_title in simplified_text:
             # A mention in descriptions/paths is weaker evidence than the source title.
             score += 5
