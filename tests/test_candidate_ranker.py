@@ -58,3 +58,26 @@ def test_candidate_ranker_fuzzy_match_is_conservative_and_never_hides_sequels():
     ) < CandidateRanker.priority(
         {"title": "潜伏6 4K WEB-DL"}, "潜伏6", "movie"
     )
+
+
+def test_base_title_does_not_strongly_match_numbered_sequel():
+    exact = {"title": "潜伏 4K WEB-DL"}
+    sequel = {"title": "潜伏6：血域 4K WEB-DL"}
+    subtitle = {"title": "潜伏：血域 4K WEB-DL"}
+
+    assert CandidateRanker.priority(exact, "潜伏", "movie") > CandidateRanker.priority(
+        sequel, "潜伏", "movie"
+    )
+    # A Chinese subtitle without a sequel number remains a valid title match.
+    assert CandidateRanker.priority(subtitle, "潜伏", "movie") > CandidateRanker.priority(
+        {"title": "完全无关的作品"}, "潜伏", "movie"
+    )
+
+
+def test_release_year_is_not_mistaken_for_a_sequel_number():
+    candidate = {"title": "The Matrix 1999 BluRay"}
+    unrelated = {"title": "Unrelated Movie"}
+
+    assert CandidateRanker.priority(candidate, "The Matrix", "movie") > CandidateRanker.priority(
+        unrelated, "The Matrix", "movie"
+    )
