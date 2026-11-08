@@ -73,15 +73,15 @@ class CandidateRanker:
             )
             title_variants = []
             for raw_title in primary_title_values:
-                cleaned = re.sub(r"(?<!\\d)(?:19|20)\\d{2}(?!\\d)", " ", raw_title)
+                cleaned = re.sub(r"(?<!\d)(?:19|20)\d{2}(?!\d)", " ", raw_title)
                 cleaned = re.sub(
-                    r"\\b(?:2160p|1080p|720p|480p|4k|uhd|web[- .]?dl|bluray|bdrip|remux)\\b",
+                    r"\b(?:2160p|1080p|720p|480p|4k|uhd|web[- .]?dl|bluray|bdrip|remux)\b",
                     " ",
                     cleaned,
                     flags=re.I,
                 )
                 cleaned = re.sub(
-                    r"(?:s\\d{1,2}\\s*e\\d{1,4}|第\\s*\\d+\\s*[集话]|(?:ep|e)\\s*\\d{1,4})",
+                    r"(?:s\d{1,2}\s*e\d{1,4}|第\s*\d+\s*[集话]|(?:ep|e)\s*\d{1,4})",
                     " ",
                     cleaned,
                     flags=re.I,
