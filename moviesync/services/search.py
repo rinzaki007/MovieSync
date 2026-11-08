@@ -115,8 +115,8 @@ def _candidate_match_explanation(
 
     reasons = [title_reason]
     year = str(movie.get("year") or movie.get("release_year") or "").strip()
-    year_match = re.search(r"(?:19|20)\\d{2}", year)
-    if year_match and re.search(rf"(?<!\\d){year_match.group(0)}(?!\\d)", source):
+    year_match = re.search(r"(?:19|20)\d{2}", year)
+    if year_match and re.search(rf"(?<!\d){year_match.group(0)}(?!\d)", source):
         reasons.append(f"年份匹配 {year_match.group(0)}")
     media_type = str(movie.get("media_type") or "").strip().lower()
     if media_type in {"tv", "tv_show", "series", "anime", "variety", "documentary", "short_drama"}:
