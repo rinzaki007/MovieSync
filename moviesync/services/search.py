@@ -5,14 +5,13 @@
 """
 from __future__ import annotations
 
-from .candidate_ranker import CandidateRanker
-
 import re
 import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from .candidate_ranker import CandidateRanker
 from .filename_rules import parse_media_filename, parse_tv_episode
 from .resource_sources import ResourceSourceManager
 from .storage_targets import StorageTargetManager
