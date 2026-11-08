@@ -47,11 +47,11 @@ jobs:
       - name: Install test dependencies
         run: pip install -r requirements-dev.txt
 
+      - name: Show Ruff import formatting diff
+        run: ruff check . --fix --diff
+
       - name: Run tests
         run: pytest -q --cov=moviesync --cov-report=term-missing --cov-fail-under=45
-
-      - name: Run Ruff
-        run: ruff check . --output-format=github
 
   build-pr:
     name: Build Docker image (PR validation)
