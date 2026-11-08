@@ -65,15 +65,14 @@ def test_file_plugin_allows_filename_to_differ_from_manifest_id(tmp_path):
     assert registry.get("maccms") is None
 
 
-
 def test_unloaded_card_manifest_id_is_resolved_without_executing_plugin(tmp_path):
     plugin_dir = tmp_path / "cards"
     plugin_dir.mkdir()
     (plugin_dir / "renamed-card.py").write_text(
-        "from moviesync.cards import Card, CardManifest\\n"
-        "raise RuntimeError('plugin must not execute during identity lookup')\\n"
-        "class DemoCard(Card):\\n"
-        "    manifest = CardManifest(id='stable-card-id', name='Demo')\\n",
+        "from moviesync.cards import Card, CardManifest\n"
+        "raise RuntimeError('plugin must not execute during identity lookup')\n"
+        "class DemoCard(Card):\n"
+        "    manifest = CardManifest(id='stable-card-id', name='Demo')\n",
         encoding="utf-8",
     )
     manager = CardFilePluginManager(
@@ -687,7 +686,7 @@ def create_card(context): return MacCMSSourceManagerCard()
 '''
     legacy_custom_source = bundled_source.replace(
         'name="VOD source"', 'name="Customized legacy VOD source"'
-    ) + "# administrator customization\\n"
+    ) + "# administrator customization\n"
     (bundled_dir / "vod_source_manager.py").write_text(bundled_source, encoding="utf-8")
     (plugin_dir / "maccms.py").write_text(legacy_custom_source, encoding="utf-8")
     # Simulate a previously seeded new filename from an earlier startup after upgrade.
