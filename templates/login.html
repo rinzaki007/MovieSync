@@ -55,6 +55,13 @@
         </div>
 
         <form id="auth-form" onsubmit="handleAuth(event)" class="mt-7 space-y-4">
+            {% if is_setup %}
+            <div class="space-y-1.5">
+                <label class="text-xs font-medium text-slate-200/90">首次初始化令牌</label>
+                <input type="password" id="setup-token" required autocomplete="off" placeholder="请输入服务日志或 data/setup.token 中的令牌"
+                       class="login-input w-full rounded-xl px-3.5 py-3 text-sm text-slate-100 focus:outline-none transition">
+            </div>
+            {% endif %}
             <div class="space-y-1.5">
                 <label class="text-xs font-medium text-slate-200/90">账号</label>
                 <input type="text" id="username" required placeholder="请输入管理员账号"
@@ -79,7 +86,9 @@
             const password = document.getElementById('password').value;
             const endpoint = isSetup ? '/api/setup' : '/api/login';
             try {
-                const resp = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({username, password}) });
+                const payload = {username, password};
+                if (isSetup) payload.setup_token = document.getElementById('setup-token').value;
+                const resp = await fetch(endpoint, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
                 const res = await resp.json();
                 if (res.success) window.location.href = '/';
                 else alert(res.message || '操作失败');
