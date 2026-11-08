@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from flask import Flask
 
-from moviesync.web.routes import _metadata_image_policy, api
+from moviesync.web.image_proxy import _metadata_image_policy, proxy_api
 
 
 class FakeResponse:
@@ -50,7 +50,7 @@ def _app(session):
         "http": SimpleNamespace(session=session),
         "logger": FakeLogger(),
     }
-    app.register_blueprint(api)
+    app.register_blueprint(proxy_api)
     return app
 
 
