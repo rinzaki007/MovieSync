@@ -45,7 +45,7 @@ def test_candidate_ranker_uses_alias_in_primary_title_as_strong_evidence():
 
 
 def test_candidate_ranker_fuzzy_match_is_conservative_and_never_hides_sequels():
-    near_match = {"title": "The Matr ix 1999 BluRay"}
+    near_match = {"title": "The Matriix 1999 BluRay"}
     sequel_mismatch = {"title": "潜伏 电视剧 S01E01"}
 
     assert CandidateRanker.priority(
