@@ -220,7 +220,10 @@ def create_app(
         "csrf": lambda: secrets.token_urlsafe(32),
         "login_limiter": LoginRateLimiter(),
         "scheduler_enabled": bool(start_scheduler),
-        "pansou_enabled": os.getenv("MOVIESYNC_BUNDLED_PANSOU_ENABLED", "false").strip().lower() in {"1", "true", "yes", "on"},
+        "pansou_enabled": (
+            os.getenv("MOVIESYNC_BUNDLED_PANSOU_ENABLED", "false").strip().lower()
+            in {"1", "true", "yes", "on"}
+        ),
         "pansou_url": os.getenv("MOVIESYNC_PANSOU_URL", "http://127.0.0.1:8888").rstrip("/"),
         "shutdown": shutdown,
     }
