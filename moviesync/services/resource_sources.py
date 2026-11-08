@@ -297,7 +297,7 @@ class ResourceSourceManager:
             ) as executor:
                 source_results = list(executor.map(search_one, eligible_sources))
 
-            for source, (source_items, diagnostic) in zip(eligible_sources, source_results):
+            for source, (source_items, diagnostic) in zip(eligible_sources, source_results, strict=True):
                 diagnostics_by_id[source.card_id] = diagnostic
                 items_by_id[source.card_id] = source_items
                 with self._search_state_lock:
