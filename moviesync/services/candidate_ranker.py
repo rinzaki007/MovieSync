@@ -13,6 +13,28 @@ class CandidateRanker:
         return re.sub(r"[^\w\u4e00-\u9fa5]", "", value or "")
 
     @staticmethod
+    def _matches_primary_title(target: str, title_values: list[str]) -> bool:
+        """Match a work title without treating a numbered sequel as its base title."""
+        normalized_target = CandidateRanker._simplify(target).lower()
+        if not normalized_target:
+            return False
+        for raw_title in title_values:
+            # A separated release year is metadata, while an immediately attached
+            # number (潜伏6) is part of the work identity.
+            cleaned = re.sub(
+                r"(?<!\\d)[\\s(（]+(?:19|20)\\d{2}(?!\\d)[)）]?", " ", raw_title
+            )
+            normalized = CandidateRanker._simplify(cleaned).lower()
+            position = normalized.find(normalized_target)
+            if position < 0:
+                continue
+            suffix = normalized[position + len(normalized_target):]
+            if suffix and suffix[0].isdigit():
+                continue
+            return True
+        return False
+
+    @staticmethod
     def priority(
         source: dict,
         movie_title: str,
@@ -55,7 +77,7 @@ class CandidateRanker:
         ]
         primary_title_text = " ".join(primary_title_values)
         simplified_primary_title = CandidateRanker._simplify(primary_title_text)
-        if simplified_title and simplified_title in simplified_primary_title:
+        if CandidateRanker._matches_primary_title(normalized_movie_title, primary_title_values):
             # An explicit work-name match in the source title outranks generic episode,
             # resolution, and codec markers. Quality is useful only after identity.
             score += 80
@@ -116,7 +138,7 @@ class CandidateRanker:
                 for alias in metadata_values(metadata.get(field))
             ]
             primary_alias_hit = any(
-                len(alias) >= 2 and alias in simplified_primary_title
+                len(alias) >= 2 and CandidateRanker._matches_primary_title(alias, primary_title_values)
                 for alias in alias_values
             )
             broader_alias_hit = any(
