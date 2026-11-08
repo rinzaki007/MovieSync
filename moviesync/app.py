@@ -43,6 +43,26 @@ def _load_optional_cards(logger, label: str, loader, context: dict) -> list[str]
         return []
 
 
+def _build_transfer_runner(app: Flask, payload: dict):
+    """Build the same transfer runner used by the API for restart recovery."""
+    movie = payload.get("movie") if isinstance(payload.get("movie"), dict) else {}
+    candidate = payload.get("candidate") if isinstance(payload.get("candidate"), dict) else {}
+    target_fid = payload.get("target_fid") or "0"
+
+    def runner(progress):
+        with app.app_context():
+            service = app.extensions["moviesync"]["search"]
+            return service.transfer_selected_resource_with_progress(
+                movie,
+                candidate,
+                target_fid,
+                {},
+                progress,
+            )
+
+    return runner
+
+
 def create_app(
     test_config: dict | None = None,
     *,
@@ -282,6 +302,13 @@ def create_app(
         }
 
     register_web(app, services)
+
+    if not app.testing:
+        resumed = tasks.resume_queued_tasks(
+            lambda task: _build_transfer_runner(app, task.get("retry_payload") or {})
+        )
+        if resumed:
+            logger.info("服务启动后自动恢复 %s 个排队转存任务", resumed)
 
     if start_scheduler and not app.testing:
         subscriptions.start_scheduler()
