@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from difflib import SequenceMatcher
 
 
 class CandidateRanker:
@@ -59,6 +60,20 @@ class CandidateRanker:
         elif simplified_title and simplified_title in simplified_text:
             # A mention in descriptions/paths is weaker evidence than the source title.
             score += 5
+        elif len(simplified_title) >= 5 and len(simplified_primary_title) >= 5:
+            # Conservative fuzzy evidence helps long Latin/translated titles tolerate
+            # minor punctuation or spelling differences. Never use it to collapse
+            # short Chinese titles or sequel identities such as 潜伏 vs 潜伏6.
+            sequel_number = re.search(r"(\\d+)$", simplified_title)
+            primary_sequel = re.search(r"(\\d+)", simplified_primary_title)
+            same_sequel_identity = not sequel_number or bool(
+                primary_sequel and primary_sequel.group(1) == sequel_number.group(1)
+            )
+            similarity = SequenceMatcher(
+                None, simplified_title, simplified_primary_title
+            ).ratio()
+            if same_sequel_identity and similarity >= 0.88:
+                score += 24
 
         # Metadata is soft evidence for ordering, never a hard filter. Share titles
         # often omit credits or years, so absent evidence must not hide a valid result.
@@ -72,13 +87,23 @@ class CandidateRanker:
             return []
 
         for field in ("original_title", "aliases", "alternative_titles", "aka"):
-            alias_hit = any(
-                len(normalized := CandidateRanker._simplify(alias).lower()) >= 2
-                and normalized in simplified_text
+            alias_values = [
+                CandidateRanker._simplify(alias).lower()
                 for alias in metadata_values(metadata.get(field))
+            ]
+            primary_alias_hit = any(
+                len(alias) >= 2 and alias in simplified_primary_title
+                for alias in alias_values
             )
-            if alias_hit:
-                score += 3
+            broader_alias_hit = any(
+                len(alias) >= 2 and alias in simplified_text
+                for alias in alias_values
+            )
+            if primary_alias_hit:
+                score += 42
+                break
+            if broader_alias_hit:
+                score += 6
                 break
 
         year = str(metadata.get("year") or metadata.get("release_year") or "").strip()
