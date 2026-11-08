@@ -77,7 +77,11 @@ def proxy_img():
                     continue
                 if response.status_code != 200:
                     host = urlparse(target).hostname or "unknown"
-                    _services()["logger"].warning("元数据海报上游请求失败: host=%s status=%s", host, response.status_code)
+                    _services()["logger"].warning(
+                        "元数据海报上游请求失败: host=%s status=%s",
+                        host,
+                        response.status_code,
+                    )
                     return Response(
                         f"Image upstream HTTP {response.status_code}", status=502,
                         headers={"X-MovieSync-Image-Error": f"upstream_http_{response.status_code}"},
