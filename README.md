@@ -38,7 +38,7 @@ services:
 docker compose up -d
 ```
 
-浏览器打开 `http://服务器IP:8099`，按页面提示创建管理员账号。若通过 HTTPS 反向代理提供服务，请按实际部署调整 Cookie 安全设置，并确保管理界面不会暴露给不可信的访问者。
+浏览器打开 `http://服务器IP:8099`，按页面提示创建管理员账号。首次初始化需要输入启动日志中输出的一次性初始化令牌；令牌同时保存在数据目录的 `setup.token` 文件中。也可通过环境变量 `MOVIESYNC_SETUP_TOKEN` 自行指定令牌。完成初始化后令牌文件会自动删除。若通过 HTTPS 反向代理提供服务，请按实际部署调整 Cookie 安全设置，并确保管理界面不会暴露给不可信的访问者。
 
 ### 数据与更新
 
@@ -50,6 +50,10 @@ docker compose up -d
 docker compose pull
 docker compose up -d
 ```
+
+### PanSou 配置
+
+PanSou 的频道和插件默认列表首次启动时会复制到数据目录的 `pansou/pansou.env`。后续更新镜像不会覆盖这份配置；可直接编辑该文件调整频道和插件。若 Docker Compose 显式设置了 `CHANNELS` 或 `ENABLED_PLUGINS` 环境变量，则对应环境变量优先。
 
 ### 部署后验收
 
