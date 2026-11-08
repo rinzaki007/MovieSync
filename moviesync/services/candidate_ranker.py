@@ -64,8 +64,8 @@ class CandidateRanker:
             # Conservative fuzzy evidence helps long Latin/translated titles tolerate
             # minor punctuation or spelling differences. Never use it to collapse
             # short Chinese titles or sequel identities such as 潜伏 vs 潜伏6.
-            sequel_number = re.search(r"(\\d+)$", simplified_title)
-            primary_sequel = re.search(r"(\\d+)", simplified_primary_title)
+            sequel_number = re.search(r"(\d+)$", simplified_title)
+            primary_sequel = re.search(r"(\d+)", simplified_primary_title)
             same_sequel_identity = not sequel_number or bool(
                 primary_sequel and primary_sequel.group(1) == sequel_number.group(1)
             )
