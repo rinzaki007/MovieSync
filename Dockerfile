@@ -22,7 +22,7 @@ RUN mkdir -p /out/licenses && cp LICENSE /out/licenses/PanSou-LICENSE
 FROM python:3.12-slim
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates tzdata \
+    && apt-get install -y --no-install-recommends ca-certificates tzdata gosu \
     && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -39,7 +39,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     ASYNC_MAX_BACKGROUND_WORKERS=20 \
     ASYNC_MAX_BACKGROUND_TASKS=100 \
     ASYNC_CACHE_TTL_HOURS=1 \
-    TZ=Asia/Shanghai
+    TZ=Asia/Shanghai \
+    MOVIESYNC_RUN_AS_NON_ROOT=true \
+    MOVIESYNC_UID=10001 \
+    MOVIESYNC_GID=10001
 
 WORKDIR /app
 
