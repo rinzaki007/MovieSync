@@ -522,11 +522,12 @@ def test_task_recovery_survives_malformed_counts_and_event_history(tmp_path):
         recovered = {task["id"]: task for task in manager.list_tasks()}
 
         queued = recovered["queued-corrupt-history"]
-        assert queued["status"] == "failed"
-        assert queued["failed_count"] == 1
-        assert isinstance(queued["events"], list)
-        assert all(isinstance(event, dict) for event in queued["events"])
-        assert "可安全重试" in queued["message"]
+        # Queued tasks have not crossed the remote-execution boundary. Preserve
+        # them for app startup to rebuild a runner and resume safely; malformed
+        # legacy metadata is normalized when the task is next updated.
+        assert queued["status"] == "queued"
+        assert queued["failed_count"] == "not-a-number"
+        assert queued["events"] == "legacy-invalid-value"
 
         running = recovered["running-corrupt-history"]
         assert running["status"] == "failed"
