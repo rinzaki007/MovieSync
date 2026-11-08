@@ -48,10 +48,12 @@ class CandidateRanker:
         ).strip()
         simplified_title = CandidateRanker._simplify(normalized_movie_title).lower()
         simplified_text = CandidateRanker._simplify(text)
-        primary_title_text = " ".join(
+        primary_title_values = [
             str(source.get(key) or "")
             for key in ("title", "name", "resource_name", "share_name")
-        )
+            if str(source.get(key) or "").strip()
+        ]
+        primary_title_text = " ".join(primary_title_values)
         simplified_primary_title = CandidateRanker._simplify(primary_title_text)
         if simplified_title and simplified_title in simplified_primary_title:
             # An explicit work-name match in the source title outranks generic episode,
@@ -69,9 +71,31 @@ class CandidateRanker:
             same_sequel_identity = not sequel_number or bool(
                 primary_sequel and primary_sequel.group(1) == sequel_number.group(1)
             )
-            similarity = SequenceMatcher(
-                None, simplified_title, simplified_primary_title
-            ).ratio()
+            title_variants = []
+            for raw_title in primary_title_values:
+                cleaned = re.sub(r"(?<!\\d)(?:19|20)\\d{2}(?!\\d)", " ", raw_title)
+                cleaned = re.sub(
+                    r"\\b(?:2160p|1080p|720p|480p|4k|uhd|web[- .]?dl|bluray|bdrip|remux)\\b",
+                    " ",
+                    cleaned,
+                    flags=re.I,
+                )
+                cleaned = re.sub(
+                    r"(?:s\\d{1,2}\\s*e\\d{1,4}|第\\s*\\d+\\s*[集话]|(?:ep|e)\\s*\\d{1,4})",
+                    " ",
+                    cleaned,
+                    flags=re.I,
+                )
+                normalized_variant = CandidateRanker._simplify(cleaned).lower()
+                if normalized_variant:
+                    title_variants.append(normalized_variant)
+            similarity = max(
+                (
+                    SequenceMatcher(None, simplified_title, variant).ratio()
+                    for variant in title_variants
+                ),
+                default=0.0,
+            )
             if same_sequel_identity and similarity >= 0.88:
                 score += 24
 
