@@ -1,6 +1,6 @@
 #!/bin/sh
 PANSOU_CONFIG_DIR="/app/data/pansou"
-PANSOU_CONFIG_FILE="$PANSOU_CONFIG_DIR/pansou.env"
+PANSOU_CONFIG_FILE="/app/data/pansou/pansou.env"
 mkdir -p "$PANSOU_CONFIG_DIR"
 if [ ! -f "$PANSOU_CONFIG_FILE" ]; then
     cp /app/pansou.defaults.env "$PANSOU_CONFIG_FILE"
