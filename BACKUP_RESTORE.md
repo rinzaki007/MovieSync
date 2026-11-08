@@ -20,7 +20,7 @@
 MOVIESYNC_DATA_DIR=/mnt/sata1-1/moviesync sh scripts/backup-data.sh /path/to/off-device-backups
 ```
 
-也可以先将数据卷只读挂载到备份环境，再运行脚本。备份文件建议复制到另一块磁盘或远端位置；不要只把备份留在 MovieSync 自己的数据卷中。
+也可以先将数据卷只读挂载到备份环境，再运行脚本。备份文件包含 Cookie、密钥和账号配置，脚本默认以仅当前用户可读写的权限创建归档。请将备份加密保存并限制访问，建议复制到另一块磁盘或远端位置；不要只把备份留在 MovieSync 自己的数据卷中。
 
 ## 恢复步骤
 
