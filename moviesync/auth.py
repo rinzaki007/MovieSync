@@ -121,10 +121,10 @@ class AuthStore:
         path.parent.mkdir(parents=True, exist_ok=True)
         try:
             descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-        except FileExistsError:
+        except FileExistsError as exc:
             token = path.read_text(encoding="utf-8").strip()
             if not token:
-                raise OSError("首次初始化令牌文件为空")
+                raise OSError("首次初始化令牌文件为空") from exc
             try:
                 path.chmod(0o600)
             except OSError:
