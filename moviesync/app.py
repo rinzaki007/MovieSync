@@ -187,11 +187,6 @@ def create_app(
             logger.exception("关闭任务执行器失败")
 
         try:
-            resource_sources.shutdown()
-        except Exception:
-            logger.exception("关闭资源来源执行器失败")
-
-        try:
             card_registry.close_all()
         except Exception:
             logger.exception("关闭卡片注册表失败")
