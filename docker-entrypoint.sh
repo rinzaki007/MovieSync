@@ -5,9 +5,12 @@
 if [ "${1:-}" != "--non-root" ] && [ "$(id -u)" = "0" ] && [ "${MOVIESYNC_RUN_AS_NON_ROOT:-true}" != "false" ]; then
     MOVIESYNC_UID="${MOVIESYNC_UID:-10001}"
     MOVIESYNC_GID="${MOVIESYNC_GID:-10001}"
-    if ! chown -R "${MOVIESYNC_UID}:${MOVIESYNC_GID}" /app/data; then
-        echo "无法调整 /app/data 的运行权限；请检查挂载目录，或设置 MOVIESYNC_RUN_AS_NON_ROOT=false" >&2
-        exit 1
+    CURRENT_OWNER="$(stat -c '%u:%g' /app/data 2>/dev/null || true)"
+    if [ "$CURRENT_OWNER" != "${MOVIESYNC_UID}:${MOVIESYNC_GID}" ]; then
+        if ! chown -R "${MOVIESYNC_UID}:${MOVIESYNC_GID}" /app/data; then
+            echo "无法调整 /app/data 的运行权限；请检查挂载目录，或设置 MOVIESYNC_RUN_AS_NON_ROOT=false" >&2
+            exit 1
+        fi
     fi
     exec gosu "${MOVIESYNC_UID}:${MOVIESYNC_GID}" "$0" --non-root
 fi
@@ -72,7 +75,14 @@ while process_running "$APP_PID"; do
         fi
         NOW="$(date +%s)"
         if [ $((NOW - STARTED_AT)) -ge 30 ]; then
-            if python -c 'import json, os, urllib.request; u=os.getenv("MOVIESYNC_PANSOU_URL", "http://127.0.0.1:8888").rstrip("/")+"/api/health"; d=json.load(urllib.request.urlopen(u, timeout=3)); raise SystemExit(0 if d.get("status") == "ok" else 1)' >/dev/null 2>&1; then
+            if python -c '
+import json
+import os
+import urllib.request
+url = os.getenv("MOVIESYNC_PANSOU_URL", "http://127.0.0.1:8888").rstrip("/") + "/api/health"
+payload = json.load(urllib.request.urlopen(url, timeout=3))
+raise SystemExit(0 if payload.get("status") == "ok" else 1)
+' >/dev/null 2>&1; then
                 PANSOU_FAILURES=0
             else
                 PANSOU_FAILURES=$((PANSOU_FAILURES + 1))
